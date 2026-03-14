@@ -59,8 +59,9 @@ async function buildHeaders(extraHeaders: HeadersInit = {}) {
 }
 
 function buildSelectUrl(table: string, query: string) {
-  const separator = query ? '&' : '';
-  return `${supabaseUrl}/rest/v1/${table}?${query}${separator}_ts=${Date.now()}`;
+  return query
+    ? `${supabaseUrl}/rest/v1/${table}?${query}`
+    : `${supabaseUrl}/rest/v1/${table}`;
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -230,3 +231,5 @@ export async function supabaseRpc<T>(fn: string, payload: Record<string, unknown
 
   return parseResponse<T>(response);
 }
+
+
