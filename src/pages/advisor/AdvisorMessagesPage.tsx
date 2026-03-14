@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { Mail, Search, Send, UserRound } from 'lucide-react';
+import { Check, Mail, Search, Send, UserRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
 
@@ -8,11 +8,10 @@ function formatTimestamp(value: string) {
 }
 
 function formatReceipt(sentAt: string, readAt: string | null) {
-  if (readAt) {
-    return `Read ${formatTimestamp(readAt)}`;
-  }
-
-  return `Sent ${formatTimestamp(sentAt)}`;
+  return {
+    label: readAt ? `Read ${formatTimestamp(readAt)}` : `Sent ${formatTimestamp(sentAt)}`,
+    read: Boolean(readAt),
+  };
 }
 
 export default function AdvisorMessagesPage() {
@@ -158,6 +157,7 @@ export default function AdvisorMessagesPage() {
                 conversation.map((message) => {
                   const isMine = message.senderId === advisorId;
                   const sender = users.find((account) => account.id === message.senderId);
+                  const receipt = formatReceipt(message.sentAt, message.readAt);
                   return (
                     <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-xl rounded-2xl px-4 py-3 shadow-sm ${isMine ? 'bg-[#2563eb] text-white' : 'bg-white text-slate-700'}`}>
@@ -168,7 +168,14 @@ export default function AdvisorMessagesPage() {
                         <p className="text-sm leading-relaxed">{message.body}</p>
                         <div className={`mt-2 space-y-1 text-[11px] ${isMine ? 'text-blue-100' : 'text-gray-400'}`}>
                           <p>{formatTimestamp(message.sentAt)}</p>
-                          {isMine ? <p>{formatReceipt(message.sentAt, message.readAt)}</p> : message.readAt ? <p>Read {formatTimestamp(message.readAt)}</p> : null}
+                          {isMine ? (
+                            <div className="inline-flex items-center gap-1.5">
+                              <Check className={`h-3.5 w-3.5 ${receipt.read ? 'rounded-full bg-white p-0.5 text-blue-600' : 'text-white'}`} />
+                              <span>{receipt.label}</span>
+                            </div>
+                          ) : message.readAt ? (
+                            <p>Read {formatTimestamp(message.readAt)}</p>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -190,7 +197,7 @@ export default function AdvisorMessagesPage() {
                 className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
               />
               <div className="flex flex-wrap items-center justify-between gap-3">
-                {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Unread counts update in the inbox, and outgoing messages show sent/read timestamps.</p>}
+                {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Messages sync between both inboxes. The check stays white until the message is read, then turns blue.</p>}
                 <button
                   onClick={() => { void handleSend(); }}
                   className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8]"

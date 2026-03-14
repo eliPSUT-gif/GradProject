@@ -123,7 +123,7 @@ interface AppDataContextValue {
   sendMessage: (input: SendMessageInput) => Promise<MessageSendResult>;
 }
 
-const STORAGE_KEY = 'smart-advisor-app-data-v3';
+const STORAGE_KEY = 'smart-advisor-app-data-v4';
 const MESSAGE_SYNC_INTERVAL_MS = 5000;
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -168,56 +168,7 @@ function mergeMessages(...sources: AdvisorMessage[][]) {
 }
 
 function buildSeedMessages(): AdvisorMessage[] {
-  return [
-    {
-      id: 'msg-20231001-1',
-      senderId: '20231001',
-      recipientId: 'ADV-1001',
-      body: 'I am considering Database Systems and Networks together. Could you review that workload?',
-      sentAt: '2026-03-12T08:15:00.000Z',
-      readAt: '2026-03-12T08:32:00.000Z',
-    },
-    {
-      id: 'msg-20231001-2',
-      senderId: 'ADV-1001',
-      recipientId: '20231001',
-      body: 'Yes. That combination is manageable if you avoid pairing it with another high-difficulty theory course.',
-      sentAt: '2026-03-12T08:32:00.000Z',
-      readAt: '2026-03-12T09:02:00.000Z',
-    },
-    {
-      id: 'msg-20221188-1',
-      senderId: 'ADV-1001',
-      recipientId: '20221188',
-      body: 'Your latest draft looks theory-heavy. Please consider replacing one hard course before registration closes.',
-      sentAt: '2026-03-13T07:45:00.000Z',
-      readAt: null,
-    },
-    {
-      id: 'msg-20221302-1',
-      senderId: '20221302',
-      recipientId: 'ADV-1002',
-      body: 'I can take Visual Programming and Webpage Design now. Do you recommend keeping both together?',
-      sentAt: '2026-03-13T08:05:00.000Z',
-      readAt: '2026-03-13T08:16:00.000Z',
-    },
-    {
-      id: 'msg-20221302-2',
-      senderId: 'ADV-1002',
-      recipientId: '20221302',
-      body: 'Yes, that pairing is reasonable. Keep the rest of the term lighter because Computer Architecture will raise the total load quickly.',
-      sentAt: '2026-03-13T08:16:00.000Z',
-      readAt: '2026-03-13T08:34:00.000Z',
-    },
-    {
-      id: 'msg-20220665-1',
-      senderId: 'ADV-1002',
-      recipientId: '20220665',
-      body: 'Your current draft still looks systems-heavy. Please consider swapping one theory course before saving your final registration plan.',
-      sentAt: '2026-03-13T09:10:00.000Z',
-      readAt: null,
-    },
-  ];
+  return [];
 }
 
 function createInitialState(): AppDataState {
@@ -791,20 +742,34 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const senderRemoteId = remoteUserIds[senderId];
     const recipientRemoteId = remoteUserIds[recipientId];
 
+    let persistedMessage = nextMessage;
+
     if (hasSupabaseConfig()) {
       if (!senderRemoteId || !recipientRemoteId) {
         return { success: false, error: 'Messaging is still syncing user records. Please try again in a few seconds.' };
       }
 
       try {
-        await supabaseInsert('messages', {
-          id: nextMessage.id,
+        const insertedRows = await supabaseInsert<Array<{ id: string; body: string; sent_at: string; read_at: string | null }>>('messages', {
           sender_id: senderRemoteId,
           recipient_id: recipientRemoteId,
           body: nextMessage.body,
           sent_at: nextMessage.sentAt,
           read_at: null,
         });
+
+        const insertedMessage = insertedRows?.[0];
+        if (!insertedMessage) {
+          return { success: false, error: 'The message was not saved by the server. Please try again.' };
+        }
+
+        persistedMessage = {
+          ...nextMessage,
+          id: insertedMessage.id,
+          body: insertedMessage.body,
+          sentAt: insertedMessage.sent_at,
+          readAt: insertedMessage.read_at,
+        };
       } catch (error) {
         console.error('Unable to save message to Supabase.', error);
         return { success: false, error: 'Unable to save the message right now. Please try again.' };
@@ -813,7 +778,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
     setState((current) => ({
       ...current,
-      messages: mergeMessages(current.messages, [nextMessage]),
+      messages: mergeMessages(current.messages, [persistedMessage]),
     }));
 
     return { success: true };
