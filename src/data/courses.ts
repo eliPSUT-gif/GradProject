@@ -36,7 +36,20 @@ export interface EvaluationFactor { label: string; score: number; detail: string
 export interface ScheduleEvaluation { id: string; studentId: string; totalScore: number; riskLabel: RiskLabel; totalCredits: number; evaluatedAt: string; modelVersion: string; explanation: string[]; factors: EvaluationFactor[]; recommendations: Recommendation[]; topCourses: string[]; }
 export interface ScheduleDraft { id: string; studentId: string; name: string; courseCodes: string[]; savedAt: string; evaluation: ScheduleEvaluation; }
 export interface StudentProfile { id: string; name: string; gpa: number; creditsCompleted: number; department: string; advisorId: string; completedCourseCodes: string[]; }
-export interface ManagedUser { id: string; name: string; role: Role; subtitle: string; initials: string; password: string; status: 'active' | 'inactive'; lastLogin: string; }
+export interface ManagedUser {
+  id: string;
+  name: string;
+  role: Role;
+  subtitle: string;
+  initials: string;
+  password: string;
+  status: 'active' | 'inactive';
+  lastLogin: string;
+  email?: string;
+  appUserId?: string;
+  authUserId?: string | null;
+  lastSeenAt?: string | null;
+}
 export interface ImportError { rowNumber: number; reason: string; }
 export interface ImportJob { id: string; fileName: string; format: 'csv' | 'json'; importedRows: number; rejectedRows: number; status: 'completed' | 'completed_with_errors' | 'failed'; validationMessages: string[]; errors: ImportError[]; createdAt: string; }
 export interface StudentInsight extends StudentProfile { difficulty: number; status: RiskStatus; latestEvaluation: ScheduleEvaluation | null; activeDraft: ScheduleDraft | null; }
@@ -82,14 +95,14 @@ const BASE_COURSES: CourseBlueprint[] = [
 ];
 
 export const SEED_MANAGED_USERS: ManagedUser[] = [
-  { id: '20231001', name: 'Ahmad Hassan', role: 'student', subtitle: 'Student | Computer Science', initials: 'AH', password: 'Student@123', status: 'active', lastLogin: '2026-03-13T07:55:00.000Z' },
-  { id: '20221045', name: 'Omar Al-Rashid', role: 'student', subtitle: 'Student | Computer Science', initials: 'OR', password: 'Student@123', status: 'active', lastLogin: '2026-03-12T10:22:00.000Z' },
-  { id: '20221188', name: 'Sara Khalil', role: 'student', subtitle: 'Student | Computer Science', initials: 'SK', password: 'Student@123', status: 'active', lastLogin: '2026-03-12T08:18:00.000Z' },
-  { id: '20220877', name: 'Lina Nasser', role: 'student', subtitle: 'Student | Computer Science', initials: 'LN', password: 'Student@123', status: 'active', lastLogin: '2026-03-11T11:10:00.000Z' },
-  { id: 'ADV-1001', name: 'Prof. Layla Hamdan', role: 'advisor', subtitle: 'Academic Advisor | CS Department', initials: 'LH', password: 'Advisor@123', status: 'active', lastLogin: '2026-03-13T08:50:00.000Z' },
-  { id: 'ADV-1002', name: 'Dr. Mona Issa', role: 'advisor', subtitle: 'Academic Advisor | CS Department', initials: 'MI', password: 'Advisor@123', status: 'active', lastLogin: '2026-03-12T13:32:00.000Z' },
-  { id: 'ADM-1001', name: 'Dr. Anas Abu Taleb', role: 'admin', subtitle: 'System Administrator', initials: 'AT', password: 'Admin@123', status: 'active', lastLogin: '2026-03-13T09:14:00.000Z' },
-  { id: 'ADM-1002', name: 'Eng. Rana Shoman', role: 'admin', subtitle: 'Registrar Operations Admin', initials: 'RS', password: 'Admin@123', status: 'active', lastLogin: '2026-03-12T14:08:00.000Z' }
+  { id: '20231001', name: 'Ahmad Hassan', role: 'student', subtitle: 'Student | Computer Science', initials: 'AH', password: 'Student@123', status: 'active', lastLogin: '2026-03-13T07:55:00.000Z', email: 'ahmad.hassan@example.edu', lastSeenAt: null },
+  { id: '20221045', name: 'Omar Al-Rashid', role: 'student', subtitle: 'Student | Computer Science', initials: 'OR', password: 'Student@123', status: 'active', lastLogin: '2026-03-12T10:22:00.000Z', email: 'omar.alrashid@example.edu', lastSeenAt: null },
+  { id: '20221188', name: 'Sara Khalil', role: 'student', subtitle: 'Student | Computer Science', initials: 'SK', password: 'Student@123', status: 'active', lastLogin: '2026-03-12T08:18:00.000Z', email: 'sara.khalil@example.edu', lastSeenAt: null },
+  { id: '20220877', name: 'Lina Nasser', role: 'student', subtitle: 'Student | Computer Science', initials: 'LN', password: 'Student@123', status: 'active', lastLogin: '2026-03-11T11:10:00.000Z', email: 'lina.nasser@example.edu', lastSeenAt: null },
+  { id: 'ADV-1001', name: 'Prof. Layla Hamdan', role: 'advisor', subtitle: 'Academic Advisor | CS Department', initials: 'LH', password: 'Advisor@123', status: 'active', lastLogin: '2026-03-13T08:50:00.000Z', email: 'layla.hamdan@example.edu', lastSeenAt: null },
+  { id: 'ADV-1002', name: 'Dr. Mona Issa', role: 'advisor', subtitle: 'Academic Advisor | CS Department', initials: 'MI', password: 'Advisor@123', status: 'active', lastLogin: '2026-03-12T13:32:00.000Z', email: 'mona.issa@example.edu', lastSeenAt: null },
+  { id: 'ADM-1001', name: 'Dr. Anas Abu Taleb', role: 'admin', subtitle: 'System Administrator', initials: 'AT', password: 'Admin@123', status: 'active', lastLogin: '2026-03-13T09:14:00.000Z', email: 'anas.abutaleb@example.edu', lastSeenAt: null },
+  { id: 'ADM-1002', name: 'Eng. Rana Shoman', role: 'admin', subtitle: 'Registrar Operations Admin', initials: 'RS', password: 'Admin@123', status: 'active', lastLogin: '2026-03-12T14:08:00.000Z', email: 'rana.shoman@example.edu', lastSeenAt: null }
 ];
 
 export const STUDENT_PROFILES: StudentProfile[] = [
@@ -273,5 +286,6 @@ export function buildStudentInsights(profiles: StudentProfile[], drafts: Schedul
   });
 }
 export function getRiskStatus(score: number, gpa: number): RiskStatus { if (score >= 75 || (score >= 68 && gpa < 3.1)) return 'at-risk'; if (score >= 50 || (score >= 42 && gpa < 3.25)) return 'monitor'; return 'good'; }
+
 
 

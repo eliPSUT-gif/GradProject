@@ -31,6 +31,7 @@ import {
   type StudentInsight,
 } from '../data/courses';
 import { getSupabaseClient, hasSupabaseConfig, supabaseDelete, supabaseInsert, supabasePatch, supabaseSelect, supabaseUpsert } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 interface CourseInput {
   code: string;
@@ -510,6 +511,7 @@ function bumpModelVersion(currentVersion: string) {
 }
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isAuthReady } = useAuth();
   const [state, setState] = useState<AppDataState>(loadInitialState);
   const [remoteUserIds, setRemoteUserIds] = useState<Record<string, string>>({});
   const [remoteCourseIds, setRemoteCourseIds] = useState<Record<string, string>>({});
@@ -522,6 +524,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hasSupabaseConfig()) {
+      return;
+    }
+
+    if (!isAuthReady || !isAuthenticated) {
       return;
     }
 
@@ -723,7 +729,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       messageChannelRef.current = null;
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [isAuthReady, isAuthenticated]);
 
   const modelCoverage = useMemo(() => {
     if (state.courses.length === 0) {
@@ -1341,6 +1347,8 @@ export function useAppData() {
 
   return context;
 }
+
+
 
 
 

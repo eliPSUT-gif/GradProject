@@ -42,3 +42,4 @@ Then I can replace the current `localStorage` demo state with real Supabase read
   - Supabase Auth signup/login wiring
   - Row Level Security policies for production
   - TypeScript types and data-access layer
+

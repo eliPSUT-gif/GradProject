@@ -1,4 +1,10 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+  createClient,
+  type AuthChangeEvent,
+  type Session,
+  type SupabaseClient,
+  type User,
+} from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? '';
@@ -6,8 +12,9 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? '';
 const supabaseClient: SupabaseClient | null = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
       },
       realtime: {
         params: {
@@ -23,10 +30,24 @@ const supabaseClient: SupabaseClient | null = supabaseUrl && supabaseAnonKey
     })
   : null;
 
-function buildHeaders(extraHeaders: HeadersInit = {}) {
+async function getAccessToken() {
+  if (!supabaseClient) {
+    return null;
+  }
+
+  const {
+    data: { session },
+  } = await supabaseClient.auth.getSession();
+
+  return session?.access_token ?? null;
+}
+
+async function buildHeaders(extraHeaders: HeadersInit = {}) {
+  const accessToken = await getAccessToken();
+
   return {
     apikey: supabaseAnonKey,
-    Authorization: `Bearer ${supabaseAnonKey}`,
+    Authorization: `Bearer ${accessToken ?? supabaseAnonKey}`,
     'Cache-Control': 'no-cache',
     Pragma: 'no-cache',
     ...extraHeaders,
@@ -56,10 +77,69 @@ export function getSupabaseClient() {
   return supabaseClient;
 }
 
+export async function getSupabaseSession() {
+  if (!supabaseClient) {
+    return { data: { session: null as Session | null }, error: null };
+  }
+
+  return supabaseClient.auth.getSession();
+}
+
+export async function getSupabaseUser() {
+  if (!supabaseClient) {
+    return { data: { user: null as User | null }, error: null };
+  }
+
+  return supabaseClient.auth.getUser();
+}
+
+export async function supabaseSignInWithPassword(email: string, password: string) {
+  if (!supabaseClient) {
+    return {
+      data: { session: null as Session | null, user: null as User | null },
+      error: new Error('Supabase is not configured.'),
+    };
+  }
+
+  return supabaseClient.auth.signInWithPassword({ email, password });
+}
+
+export async function supabaseSignOut() {
+  if (!supabaseClient) {
+    return { error: null };
+  }
+
+  return supabaseClient.auth.signOut();
+}
+
+export async function supabaseUpdateCurrentUserPassword(password: string) {
+  if (!supabaseClient) {
+    return { data: { user: null as User | null }, error: new Error('Supabase is not configured.') };
+  }
+
+  return supabaseClient.auth.updateUser({ password });
+}
+
+export function onSupabaseAuthStateChange(
+  callback: (event: AuthChangeEvent, session: Session | null) => void
+) {
+  if (!supabaseClient) {
+    return {
+      data: {
+        subscription: {
+          unsubscribe: () => undefined,
+        },
+      },
+    };
+  }
+
+  return supabaseClient.auth.onAuthStateChange(callback);
+}
+
 export async function supabaseSelect<T>(table: string, query: string) {
   const response = await fetch(buildSelectUrl(table, query), {
     cache: 'no-store',
-    headers: buildHeaders(),
+    headers: await buildHeaders(),
   });
 
   return parseResponse<T>(response);
@@ -69,7 +149,7 @@ export async function supabaseInsert<T>(table: string, payload: unknown) {
   const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
     method: 'POST',
     cache: 'no-store',
-    headers: buildHeaders({
+    headers: await buildHeaders({
       'Content-Type': 'application/json',
       Prefer: 'return=representation',
     }),
@@ -84,7 +164,7 @@ export async function supabaseUpsert<T>(table: string, payload: unknown, onConfl
   const response = await fetch(`${supabaseUrl}/rest/v1/${table}${query}`, {
     method: 'POST',
     cache: 'no-store',
-    headers: buildHeaders({
+    headers: await buildHeaders({
       'Content-Type': 'application/json',
       Prefer: 'resolution=merge-duplicates,return=representation',
     }),
@@ -98,7 +178,7 @@ export async function supabasePatch<T>(table: string, query: string, payload: un
   const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${query}`, {
     method: 'PATCH',
     cache: 'no-store',
-    headers: buildHeaders({
+    headers: await buildHeaders({
       'Content-Type': 'application/json',
       Prefer: 'return=representation',
     }),
@@ -112,11 +192,25 @@ export async function supabaseDelete(table: string, query: string) {
   const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${query}`, {
     method: 'DELETE',
     cache: 'no-store',
-    headers: buildHeaders({ Prefer: 'return=minimal' }),
+    headers: await buildHeaders({ Prefer: 'return=minimal' }),
   });
 
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Supabase delete failed with ${response.status}`);
   }
+}
+
+export async function supabaseRpc<T>(fn: string, payload: Record<string, unknown> = {}) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: await buildHeaders({
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    }),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<T>(response);
 }

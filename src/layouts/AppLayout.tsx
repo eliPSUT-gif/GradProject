@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useAppData } from '../context/AppDataContext';
+import { useMessaging } from '../context/MessagingContext';
 import type { Role } from '../data/courses';
 
 interface NavItem {
@@ -119,7 +119,7 @@ function formatNotificationTime(value: string) {
 
 export default function AppLayout() {
   const { logout, user, users } = useAuth();
-  const { getUnreadMessageCount, messages } = useAppData();
+  const { getUnreadMessageCount, messages } = useMessaging();
   const location = useLocation();
   const navigate = useNavigate();
   const notificationPanelRef = useRef<HTMLDivElement | null>(null);
@@ -205,9 +205,9 @@ export default function AppLayout() {
     navigate(messageRoute);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     handleNavAction();
-    logout();
+    await logout();
     navigate('/login', { replace: true, state: { authError: 'You have been signed out. Sign in again to continue.' } });
   };
 
@@ -303,7 +303,7 @@ export default function AppLayout() {
 
         <div className="px-3 pb-5 pt-1">
           <button
-            onClick={handleSignOut}
+            onClick={() => { void handleSignOut(); }}
             title={collapsed ? 'Sign out' : undefined}
             className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-blue-pale/60 transition-colors hover:bg-white/5 hover:text-white ${collapsed ? 'lg:justify-center lg:px-2' : ''}`}
           >
@@ -379,3 +379,4 @@ export default function AppLayout() {
     </div>
   );
 }
+

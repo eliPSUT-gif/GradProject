@@ -60,7 +60,7 @@ export default function LoginPage() {
       const token = await executeRecaptcha(RECAPTCHA_ACTION);
       await verifyRecaptchaToken(token, RECAPTCHA_ACTION);
 
-      const result = login({ role: selectedRole, id: userId, password, rememberMe });
+      const result = await login({ role: selectedRole, id: userId, password, rememberMe });
       if (!result.success) {
         setError(result.error ?? 'Unable to sign in.');
         return;
@@ -214,3 +214,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
