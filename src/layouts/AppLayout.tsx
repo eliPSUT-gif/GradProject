@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -31,6 +31,14 @@ interface NavItem {
 interface NavSection {
   title: string;
   items: NavItem[];
+}
+
+interface NotificationSummary {
+  senderId: string;
+  senderName: string;
+  preview: string;
+  sentAt: string;
+  unreadCount: number;
 }
 
 const NAV: Record<Role, NavSection[]> = {
@@ -105,16 +113,19 @@ const PAGE_TITLES: Record<string, string> = {
   '/app/admin/settings': 'Settings',
 };
 
+function formatNotificationTime(value: string) {
+  return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 export default function AppLayout() {
-  const { logout, user } = useAuth();
-  const { getUnreadMessageCount } = useAppData();
+  const { logout, user, users } = useAuth();
+  const { getUnreadMessageCount, messages } = useAppData();
   const location = useLocation();
   const navigate = useNavigate();
-  const previousUnreadRef = useRef(0);
-  const hideTimerRef = useRef<number | null>(null);
-  const [messagePopup, setMessagePopup] = useState<string | null>(null);
+  const notificationPanelRef = useRef<HTMLDivElement | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const role = user?.role ?? 'student';
   const sections = NAV[role];
@@ -123,36 +134,75 @@ export default function AppLayout() {
   const messageRoute = role === 'advisor' ? '/app/advisor/messages' : role === 'student' ? '/app/messages' : null;
   const sidebarWidth = mobileOpen || !collapsed ? 240 : 64;
 
-  useEffect(() => {
-    if (!user || !messageRoute) {
-      previousUnreadRef.current = unreadCount;
-      return;
+  const unreadSummaries = useMemo(() => {
+    if (!user) {
+      return [] as NotificationSummary[];
     }
 
-    const increasedBy = unreadCount - previousUnreadRef.current;
-    const isOnInbox = location.pathname === messageRoute;
-    if (increasedBy > 0 && !isOnInbox) {
-      setMessagePopup(`${increasedBy} new message${increasedBy === 1 ? '' : 's'} in your inbox`);
-      if (hideTimerRef.current) {
-        window.clearTimeout(hideTimerRef.current);
+    const grouped = new Map<string, NotificationSummary>();
+
+    messages.forEach((message) => {
+      if (message.recipientId !== user.id || message.readAt) {
+        return;
       }
-      hideTimerRef.current = window.setTimeout(() => {
-        setMessagePopup(null);
-      }, 4500);
-    }
 
-    previousUnreadRef.current = unreadCount;
-  }, [location.pathname, messageRoute, unreadCount, user]);
+      const senderName = users.find((account) => account.id === message.senderId)?.name ?? 'Someone';
+      const existing = grouped.get(message.senderId);
+      if (!existing) {
+        grouped.set(message.senderId, {
+          senderId: message.senderId,
+          senderName,
+          preview: message.body,
+          sentAt: message.sentAt,
+          unreadCount: 1,
+        });
+        return;
+      }
 
-  useEffect(() => () => {
-    if (hideTimerRef.current) {
-      window.clearTimeout(hideTimerRef.current);
-    }
+      const isNewer = existing.sentAt.localeCompare(message.sentAt) < 0;
+      grouped.set(message.senderId, {
+        senderId: message.senderId,
+        senderName,
+        preview: isNewer ? message.body : existing.preview,
+        sentAt: isNewer ? message.sentAt : existing.sentAt,
+        unreadCount: existing.unreadCount + 1,
+      });
+    });
+
+    return [...grouped.values()].sort((left, right) => right.sentAt.localeCompare(left.sentAt));
+  }, [messages, user, users]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!notificationPanelRef.current?.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
-
 
   const handleNavAction = () => {
     setMobileOpen(false);
+  };
+
+  const handleOpenMessageThread = (senderId?: string) => {
+    if (!messageRoute) {
+      return;
+    }
+
+    handleNavAction();
+    setNotificationsOpen(false);
+
+    if (role === 'advisor' && senderId) {
+      navigate(messageRoute, { state: { focusUserId: senderId } });
+      return;
+    }
+
+    navigate(messageRoute);
   };
 
   const handleSignOut = () => {
@@ -163,19 +213,16 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg">
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden bg-navy transition-all duration-200 ease-in-out lg:static lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{ width: sidebarWidth, minWidth: sidebarWidth, maxWidth: sidebarWidth, flexBasis: sidebarWidth }}
       >
-        {/* Logo */}
         <div className="flex items-center justify-between px-4 pb-4 pt-6 lg:px-5">
           <div className="flex items-center gap-2 overflow-hidden">
             <Sparkles className="h-6 w-6 shrink-0 text-blue-lt" />
@@ -188,7 +235,6 @@ export default function AppLayout() {
           </button>
         </div>
 
-        {/* User card */}
         <div className={`mx-3 mb-4 rounded-xl bg-white/5 px-3 py-3 ${collapsed ? 'lg:mx-2 lg:px-0 lg:py-2' : ''}`}>
           <div className={`flex items-center gap-3 ${collapsed ? 'lg:justify-center' : ''}`}>
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue text-sm font-bold text-white">
@@ -201,7 +247,6 @@ export default function AppLayout() {
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 space-y-5 overflow-y-auto px-3">
           {sections.map((section) => (
             <div key={section.title}>
@@ -209,34 +254,43 @@ export default function AppLayout() {
                 {collapsed ? section.title.charAt(0) : section.title}
               </p>
               <ul className="space-y-0.5">
-                {section.items.map((item) => (
-                  <li key={item.to}>
-                    <NavLink
-                      to={item.to}
-                      end={item.to === '/app/advisor' || item.to === '/app/admin' || item.to === '/app/dashboard'}
-                      title={collapsed ? item.label : undefined}
-                      onClick={handleNavAction}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                          collapsed ? 'lg:justify-center lg:px-2' : ''
-                        } ${
-                          isActive
-                            ? 'bg-[rgba(37,99,235,0.3)] text-white'
-                            : 'text-blue-pale/60 hover:bg-white/5 hover:text-white'
-                        }`
-                      }
-                    >
-                      <item.icon className="h-[18px] w-[18px] shrink-0" />
-                      <span className={collapsed ? 'lg:hidden' : ''}>{item.label}</span>
-                    </NavLink>
-                  </li>
-                ))}
+                {section.items.map((item) => {
+                  const showMessageBadge = item.to === messageRoute && unreadCount > 0;
+                  return (
+                    <li key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        end={item.to === '/app/advisor' || item.to === '/app/admin' || item.to === '/app/dashboard'}
+                        title={collapsed ? item.label : undefined}
+                        onClick={handleNavAction}
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                            collapsed ? 'lg:justify-center lg:px-2' : ''
+                          } ${
+                            isActive
+                              ? 'bg-[rgba(37,99,235,0.3)] text-white'
+                              : 'text-blue-pale/60 hover:bg-white/5 hover:text-white'
+                          }`
+                        }
+                      >
+                        <span className="relative shrink-0">
+                          <item.icon className="h-[18px] w-[18px]" />
+                          {showMessageBadge && (
+                            <span className="absolute -right-2 -top-2 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-red px-1 text-[9px] font-bold text-white">
+                              {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                          )}
+                        </span>
+                        <span className={collapsed ? 'lg:hidden' : ''}>{item.label}</span>
+                      </NavLink>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
         </nav>
 
-        {/* Collapse toggle (desktop only) */}
         <div className="hidden px-3 pt-2 lg:block">
           <button
             onClick={() => setCollapsed((prev) => !prev)}
@@ -247,7 +301,6 @@ export default function AppLayout() {
           </button>
         </div>
 
-        {/* Sign out */}
         <div className="px-3 pb-5 pt-1">
           <button
             onClick={handleSignOut}
@@ -260,7 +313,6 @@ export default function AppLayout() {
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-white px-4 sm:h-16 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -269,42 +321,61 @@ export default function AppLayout() {
             </button>
             <h1 className="font-display text-base font-bold text-navy sm:text-lg lg:text-xl">{pageTitle}</h1>
           </div>
-          <button
-            onClick={() => {
-              if (messageRoute) {
-                handleNavAction();
-                navigate(messageRoute);
-              }
-            }}
-            className="relative rounded-lg p-2 transition hover:bg-bg"
-          >
-            <Bell className="h-5 w-5 text-slate" />
-            {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 text-[10px] font-bold text-white">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
+          <div className="relative" ref={notificationPanelRef}>
+            <button
+              onClick={() => setNotificationsOpen((prev) => !prev)}
+              className="relative rounded-lg p-2 transition hover:bg-bg"
+            >
+              <Bell className="h-5 w-5 text-slate" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 text-[10px] font-bold text-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+            {notificationsOpen && (
+              <div className="absolute right-0 top-full z-20 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-gray-200 bg-white p-3 shadow-xl">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-[#0f1e3c]">Unread messages</p>
+                  <span className="text-xs text-gray-400">{unreadCount}</span>
+                </div>
+                <div className="max-h-80 space-y-2 overflow-y-auto">
+                  {unreadSummaries.length > 0 ? (
+                    unreadSummaries.map((summary) => (
+                      <button
+                        key={`${summary.senderId}-${summary.sentAt}`}
+                        onClick={() => handleOpenMessageThread(summary.senderId)}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-[#0f1e3c]">{summary.senderName}</p>
+                            <p className="mt-1 line-clamp-2 text-xs text-gray-500">{summary.preview}</p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 text-[10px] font-bold text-white">
+                              {summary.unreadCount > 9 ? '9+' : summary.unreadCount}
+                            </span>
+                            <p className="mt-1 text-[10px] text-gray-400">{formatNotificationTime(summary.sentAt)}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-gray-200 px-3 py-6 text-center text-sm text-gray-500">
+                      No new messages right now.
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
-          </button>
+          </div>
         </header>
 
         <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-5 lg:p-8">
-          {messagePopup && messageRoute && (
-            <button
-              onClick={() => { handleNavAction(); navigate(messageRoute); }}
-              className="mb-4 inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
-            >
-              <MessageSquare className="h-4 w-4" />
-              {messagePopup}
-            </button>
-          )}
           <Outlet />
         </main>
       </div>
     </div>
   );
 }
-
-
-
-
-

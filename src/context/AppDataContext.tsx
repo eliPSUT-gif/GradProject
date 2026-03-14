@@ -124,7 +124,7 @@ interface AppDataContextValue {
 }
 
 const STORAGE_KEY = 'smart-advisor-app-data-v4';
-const MESSAGE_SYNC_INTERVAL_MS = 5000;
+const MESSAGE_SYNC_INTERVAL_MS = 1500;
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
 
@@ -611,7 +611,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setRemoteCourseIds(courseIdByCode);
         setState((current) => ({
           ...current,
-          messages: remoteMessages.length > 0 ? mergeMessages(current.messages, remoteMessages) : current.messages,
+          messages: remoteMessages,
           scheduleDrafts: remoteDrafts.length > 0 ? remoteDrafts : current.scheduleDrafts,
           recentEvaluations: remoteDrafts.length > 0
             ? remoteDrafts
@@ -1218,6 +1218,10 @@ export function useAppData() {
 
   return context;
 }
+
+
+
+
 
 
 

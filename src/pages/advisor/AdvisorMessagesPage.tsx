@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Check, Mail, Search, Send, UserRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
@@ -16,6 +17,7 @@ function formatReceipt(sentAt: string, readAt: string | null) {
 
 export default function AdvisorMessagesPage() {
   const { user, users } = useAuth();
+  const location = useLocation();
   const { getAdviseeIds, getConversationMessages, markConversationRead, sendMessage, studentInsights } = useAppData();
   const [search, setSearch] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState('');
@@ -38,8 +40,11 @@ export default function AdvisorMessagesPage() {
     });
   }, [advisees, deferredSearch]);
 
-  const activeStudentId = filteredStudents.some((student) => student.id === selectedStudentId)
-    ? selectedStudentId
+  const focusedStudentId = (location.state as { focusUserId?: string } | null)?.focusUserId ?? '';
+  const preferredStudentId = selectedStudentId || focusedStudentId;
+
+  const activeStudentId = filteredStudents.some((student) => student.id === preferredStudentId)
+    ? preferredStudentId
     : filteredStudents[0]?.id ?? advisees[0]?.id ?? '';
 
   const studentThreads = useMemo(() => {
@@ -79,6 +84,12 @@ export default function AdvisorMessagesPage() {
       markConversationRead(advisorId, activeStudentId);
     }
   }, [activeStudentId, advisorId, markConversationRead, unreadFromStudent]);
+
+  const handleSelectStudent = (studentId: string) => {
+    setSelectedStudentId(studentId);
+    setDraft('');
+    setFeedback(null);
+  };
 
   const handleSend = async () => {
     if (!activeStudentId) {
@@ -120,7 +131,7 @@ export default function AdvisorMessagesPage() {
             studentThreads.map(({ student, lastMessage, unreadCount }) => (
               <button
                 key={student.id}
-                onClick={() => setSelectedStudentId(student.id)}
+                onClick={() => handleSelectStudent(student.id)}
                 className={`w-full rounded-xl border p-3 text-left transition-colors ${activeStudentId === student.id ? 'border-[#2563eb] bg-blue-50' : 'border-gray-200 hover:border-gray-300 hover:bg-slate-50'}`}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -197,7 +208,7 @@ export default function AdvisorMessagesPage() {
                 className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm sm:px-4 sm:py-3 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
               />
               <div className="flex flex-wrap items-center justify-between gap-3">
-                {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Messages sync between both inboxes. The check stays white until the message is read, then turns blue.</p>}
+                {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Messages refresh automatically, and unread counts update in the sidebar and notification widget.</p>}
                 <button
                   onClick={() => { void handleSend(); }}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] sm:w-auto"
@@ -217,4 +228,5 @@ export default function AdvisorMessagesPage() {
     </div>
   );
 }
+
 
