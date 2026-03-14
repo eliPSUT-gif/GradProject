@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, GraduationCap, RefreshCcw, Shield, Sparkles, Users } from 'lucide-react';
+import { Eye, EyeOff, GraduationCap, Shield, Sparkles, Users } from 'lucide-react';
 import { getHomeRoute, useAuth } from '../context/AuthContext';
 import type { Role } from '../data/courses';
+import { executeRecaptcha, hasRecaptchaSiteKey, verifyRecaptchaToken } from '../lib/recaptcha';
 
 const ROLES: { key: Role; label: string; icon: ReactNode }[] = [
   { key: 'student', label: 'Student', icon: <GraduationCap className="h-4 w-4" /> },
@@ -11,15 +12,7 @@ const ROLES: { key: Role; label: string; icon: ReactNode }[] = [
   { key: 'admin', label: 'Admin', icon: <Shield className="h-4 w-4" /> },
 ];
 
-function createCaptchaChallenge() {
-  const left = Math.floor(Math.random() * 8) + 2;
-  const right = Math.floor(Math.random() * 8) + 2;
-
-  return {
-    prompt: `${left} + ${right}`,
-    answer: String(left + right),
-  };
-}
+const RECAPTCHA_ACTION = 'login';
 
 export default function LoginPage() {
   const { isAuthenticated, login, user } = useAuth();
@@ -31,9 +24,8 @@ export default function LoginPage() {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
-  const [captcha, setCaptcha] = useState(createCaptchaChallenge);
-  const [captchaInput, setCaptchaInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,34 +40,38 @@ export default function LoginPage() {
     }
   }, [authError, location.pathname, navigate]);
 
-  const refreshCaptcha = () => {
-    setCaptcha(createCaptchaChallenge());
-    setCaptchaInput('');
-  };
-
   const handleRoleChange = (role: Role) => {
     setSelectedRole(role);
     setError(null);
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
 
-    if (captchaInput.trim() !== captcha.answer) {
-      setError('Captcha verification failed. Please try again.');
-      refreshCaptcha();
+    if (!hasRecaptchaSiteKey()) {
+      setError('reCAPTCHA is not configured yet. Add the site key before logging in.');
       return;
     }
 
-    const result = login({ role: selectedRole, id: userId, password, rememberMe });
-    if (!result.success) {
-      setError(result.error ?? 'Unable to sign in.');
-      refreshCaptcha();
-      return;
-    }
+    setIsSubmitting(true);
 
-    navigate(getHomeRoute(selectedRole), { replace: true });
+    try {
+      const token = await executeRecaptcha(RECAPTCHA_ACTION);
+      await verifyRecaptchaToken(token, RECAPTCHA_ACTION);
+
+      const result = login({ role: selectedRole, id: userId, password, rememberMe });
+      if (!result.success) {
+        setError(result.error ?? 'Unable to sign in.');
+        return;
+      }
+
+      navigate(getHomeRoute(selectedRole), { replace: true });
+    } catch (submissionError) {
+      setError(submissionError instanceof Error ? submissionError.message : 'Unable to verify reCAPTCHA.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const activeError = error ?? authError;
@@ -141,7 +137,7 @@ export default function LoginPage() {
               ))}
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={(event) => { void handleSubmit(event); }} className="space-y-4">
               <div>
                 <label htmlFor="userId" className="mb-1.5 block text-sm font-medium text-navy">
                   {selectedRole === 'student' ? 'Student' : selectedRole === 'advisor' ? 'Faculty' : 'Admin'} ID
@@ -184,36 +180,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-slate-50 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-navy">Captcha</p>
-                    <p className="text-xs text-slate">Solve the challenge before signing in.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={refreshCaptcha}
-                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-slate transition hover:border-blue/20 hover:text-blue"
-                  >
-                    <RefreshCcw className="h-3.5 w-3.5" />
-                    New challenge
-                  </button>
-                </div>
-                <label htmlFor="captcha" className="mb-1.5 block text-sm font-medium text-navy">
-                  What is {captcha.prompt}?
-                </label>
-                <input
-                  id="captcha"
-                  type="text"
-                  required
-                  inputMode="numeric"
-                  value={captchaInput}
-                  onChange={(event) => setCaptchaInput(event.target.value)}
-                  placeholder="Enter the answer"
-                  className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-ink transition placeholder:text-slate/50 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/30"
-                />
-              </div>
-
               <label className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-slate">
                 <input
                   type="checkbox"
@@ -228,13 +194,18 @@ export default function LoginPage() {
                 Passwords must be at least 10 characters and include uppercase, lowercase, a number, and a special character.
               </div>
 
+              <div className="rounded-xl border border-gray-200 bg-slate-50 p-4 text-xs text-slate">
+                This sign-in is protected by reCAPTCHA v3. Google may collect device and interaction data to detect abuse.
+              </div>
+
               {activeError && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{activeError}</div>}
 
               <button
                 type="submit"
-                className="w-full rounded-xl bg-blue py-2.5 font-semibold text-white shadow-lg shadow-blue/25 transition hover:bg-blue-lt active:scale-[0.98]"
+                disabled={isSubmitting}
+                className="w-full rounded-xl bg-blue py-2.5 font-semibold text-white shadow-lg shadow-blue/25 transition hover:bg-blue-lt active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Sign in
+                {isSubmitting ? 'Verifying...' : 'Sign in'}
               </button>
             </form>
           </div>
