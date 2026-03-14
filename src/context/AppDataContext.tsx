@@ -120,10 +120,11 @@ interface AppDataContextValue {
   getConversationMessages: (userId: string, otherUserId: string) => AdvisorMessage[];
   getUnreadMessageCount: (userId: string) => number;
   markConversationRead: (viewerId: string, otherUserId: string) => void;
-  sendMessage: (input: SendMessageInput) => MessageSendResult;
+  sendMessage: (input: SendMessageInput) => Promise<MessageSendResult>;
 }
 
 const STORAGE_KEY = 'smart-advisor-app-data-v3';
+const MESSAGE_SYNC_INTERVAL_MS = 5000;
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
 
@@ -686,9 +687,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     };
 
     void loadRemoteSnapshot();
+    const intervalId = window.setInterval(() => {
+      void loadRemoteSnapshot();
+    }, MESSAGE_SYNC_INTERVAL_MS);
 
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, []);
 
@@ -764,7 +769,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   }, [remoteUserIds]);
 
-  const sendMessage = useCallback(({ senderId, recipientId, body }: SendMessageInput): MessageSendResult => {
+  const sendMessage = useCallback(async ({ senderId, recipientId, body }: SendMessageInput): Promise<MessageSendResult> => {
     const trimmedBody = body.trim();
     if (!trimmedBody) {
       return { success: false, error: 'Message cannot be empty.' };
@@ -783,25 +788,33 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       readAt: null,
     };
 
-    setState((current) => ({
-      ...current,
-      messages: [...current.messages, nextMessage],
-    }));
-
     const senderRemoteId = remoteUserIds[senderId];
     const recipientRemoteId = remoteUserIds[recipientId];
-    if (hasSupabaseConfig() && senderRemoteId && recipientRemoteId) {
-      void supabaseInsert('messages', {
-        id: nextMessage.id,
-        sender_id: senderRemoteId,
-        recipient_id: recipientRemoteId,
-        body: nextMessage.body,
-        sent_at: nextMessage.sentAt,
-        read_at: null,
-      }).catch((error) => {
+
+    if (hasSupabaseConfig()) {
+      if (!senderRemoteId || !recipientRemoteId) {
+        return { success: false, error: 'Messaging is still syncing user records. Please try again in a few seconds.' };
+      }
+
+      try {
+        await supabaseInsert('messages', {
+          id: nextMessage.id,
+          sender_id: senderRemoteId,
+          recipient_id: recipientRemoteId,
+          body: nextMessage.body,
+          sent_at: nextMessage.sentAt,
+          read_at: null,
+        });
+      } catch (error) {
         console.error('Unable to save message to Supabase.', error);
-      });
+        return { success: false, error: 'Unable to save the message right now. Please try again.' };
+      }
     }
+
+    setState((current) => ({
+      ...current,
+      messages: mergeMessages(current.messages, [nextMessage]),
+    }));
 
     return { success: true };
   }, [remoteUserIds]);
@@ -1240,6 +1253,7 @@ export function useAppData() {
 
   return context;
 }
+
 
 
 

@@ -7,6 +7,14 @@ function formatTimestamp(value: string) {
   return new Date(value).toLocaleString();
 }
 
+function formatReceipt(sentAt: string, readAt: string | null) {
+  if (readAt) {
+    return `Read ${formatTimestamp(readAt)}`;
+  }
+
+  return `Sent ${formatTimestamp(sentAt)}`;
+}
+
 export default function StudentMessagesPage() {
   const { user, users } = useAuth();
   const { getAssignedAdvisorId, getConversationMessages, markConversationRead, sendMessage } = useAppData();
@@ -31,13 +39,13 @@ export default function StudentMessagesPage() {
     }
   }, [advisorId, markConversationRead, studentId, unreadFromAdvisor]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!advisorId) {
       setFeedback('No advisor is assigned to this account yet.');
       return;
     }
 
-    const result = sendMessage({ senderId: studentId, recipientId: advisorId, body: draft });
+    const result = await sendMessage({ senderId: studentId, recipientId: advisorId, body: draft });
     setFeedback(result.success ? 'Message sent to your advisor.' : result.error ?? 'Unable to send message.');
     if (result.success) {
       setDraft('');
@@ -91,7 +99,10 @@ export default function StudentMessagesPage() {
                       {isMine ? 'You' : advisor?.name ?? 'Advisor'}
                     </div>
                     <p className="text-sm leading-relaxed">{message.body}</p>
-                    <p className={`mt-2 text-[11px] ${isMine ? 'text-blue-100' : 'text-gray-400'}`}>{formatTimestamp(message.sentAt)}</p>
+                    <div className={`mt-2 space-y-1 text-[11px] ${isMine ? 'text-blue-100' : 'text-gray-400'}`}>
+                      <p>{formatTimestamp(message.sentAt)}</p>
+                      {isMine ? <p>{formatReceipt(message.sentAt, message.readAt)}</p> : message.readAt ? <p>Read {formatTimestamp(message.readAt)}</p> : null}
+                    </div>
                   </div>
                 </div>
               );
@@ -112,9 +123,9 @@ export default function StudentMessagesPage() {
             className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Messages stay available in the app for both sides.</p>}
+            {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Messages sync between both inboxes. Outgoing bubbles show sent/read timestamps.</p>}
             <button
-              onClick={handleSend}
+              onClick={() => { void handleSend(); }}
               disabled={!advisorId}
               className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"
             >

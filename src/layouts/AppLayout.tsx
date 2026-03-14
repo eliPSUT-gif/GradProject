@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -105,12 +106,42 @@ export default function AppLayout() {
   const { getUnreadMessageCount } = useAppData();
   const location = useLocation();
   const navigate = useNavigate();
+  const previousUnreadRef = useRef(0);
+  const hideTimerRef = useRef<number | null>(null);
+  const [messagePopup, setMessagePopup] = useState<string | null>(null);
 
   const role = user?.role ?? 'student';
   const sections = NAV[role];
   const pageTitle = PAGE_TITLES[location.pathname] ?? 'Dashboard';
   const unreadCount = user ? getUnreadMessageCount(user.id) : 0;
   const messageRoute = role === 'advisor' ? '/app/advisor/messages' : role === 'student' ? '/app/messages' : null;
+
+  useEffect(() => {
+    if (!user || !messageRoute) {
+      previousUnreadRef.current = unreadCount;
+      return;
+    }
+
+    const increasedBy = unreadCount - previousUnreadRef.current;
+    const isOnInbox = location.pathname === messageRoute;
+    if (increasedBy > 0 && !isOnInbox) {
+      setMessagePopup(`${increasedBy} new message${increasedBy === 1 ? '' : 's'} in your inbox`);
+      if (hideTimerRef.current) {
+        window.clearTimeout(hideTimerRef.current);
+      }
+      hideTimerRef.current = window.setTimeout(() => {
+        setMessagePopup(null);
+      }, 4500);
+    }
+
+    previousUnreadRef.current = unreadCount;
+  }, [location.pathname, messageRoute, unreadCount, user]);
+
+  useEffect(() => () => {
+    if (hideTimerRef.current) {
+      window.clearTimeout(hideTimerRef.current);
+    }
+  }, []);
 
   const handleSignOut = () => {
     logout();
@@ -201,6 +232,15 @@ export default function AppLayout() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-8">
+          {messagePopup && messageRoute && (
+            <button
+              onClick={() => navigate(messageRoute)}
+              className="mb-4 inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
+            >
+              <MessageSquare className="h-4 w-4" />
+              {messagePopup}
+            </button>
+          )}
           <Outlet />
         </main>
       </div>
