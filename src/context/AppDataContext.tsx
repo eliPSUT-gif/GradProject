@@ -5,9 +5,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   buildCourses,
   buildSeedDrafts,
@@ -28,7 +30,7 @@ import {
   type SelectionStatus,
   type StudentInsight,
 } from '../data/courses';
-import { hasSupabaseConfig, supabaseDelete, supabaseInsert, supabasePatch, supabaseSelect, supabaseUpsert } from '../lib/supabase';
+import { getSupabaseClient, hasSupabaseConfig, supabaseDelete, supabaseInsert, supabasePatch, supabaseSelect, supabaseUpsert } from '../lib/supabase';
 
 interface CourseInput {
   code: string;
@@ -123,8 +125,8 @@ interface AppDataContextValue {
   sendMessage: (input: SendMessageInput) => Promise<MessageSendResult>;
 }
 
-const STORAGE_KEY = 'smart-advisor-app-data-v4';
-const MESSAGE_SYNC_INTERVAL_MS = 1500;
+const STORAGE_KEY = 'smart-advisor-app-data-v5';
+const MESSAGE_CHANNEL = 'smart-advisor-messages';
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
 
@@ -154,21 +156,60 @@ function createClientId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+type RemoteMessageRow = {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  body: string;
+  sent_at: string;
+  read_at: string | null;
+};
+
+interface MessageCreatedBroadcast {
+  message: AdvisorMessage;
+}
+
+interface ConversationReadBroadcast {
+  viewerId: string;
+  otherUserId: string;
+  readAt: string;
+}
+
+function getMessageMergeKey(message: AdvisorMessage) {
+  return message.id || `${message.senderId}|${message.recipientId}|${message.sentAt}|${message.body}`;
+}
+
 function mergeMessages(...sources: AdvisorMessage[][]) {
   const deduped = new Map<string, AdvisorMessage>();
 
   sources.forEach((source) => {
     source.forEach((message) => {
-      const key = `${message.senderId}|${message.recipientId}|${message.sentAt}|${message.body}`;
-      deduped.set(key, message);
+      deduped.set(getMessageMergeKey(message), message);
     });
   });
 
   return [...deduped.values()].sort((left, right) => left.sentAt.localeCompare(right.sentAt));
 }
 
-function buildSeedMessages(): AdvisorMessage[] {
-  return [];
+function applyConversationRead(messages: AdvisorMessage[], viewerId: string, otherUserId: string, readAt: string) {
+  return messages.map((message) =>
+    message.recipientId === viewerId && message.senderId === otherUserId && !message.readAt
+      ? { ...message, readAt }
+      : message
+  );
+}
+
+function mapRemoteMessages(messageRows: RemoteMessageRow[], universityIdByUserId: Record<string, string>) {
+  return messageRows
+    .map((row) => ({
+      id: row.id,
+      senderId: universityIdByUserId[row.sender_id],
+      recipientId: universityIdByUserId[row.recipient_id],
+      body: row.body,
+      sentAt: row.sent_at,
+      readAt: row.read_at,
+    }))
+    .filter((message) => message.senderId && message.recipientId) as AdvisorMessage[];
 }
 
 function createInitialState(): AppDataState {
@@ -214,7 +255,7 @@ function createInitialState(): AppDataState {
     recentEvaluations,
     currentEvaluations,
     plannerSelections: { ...STUDENT_PLAN_SEEDS },
-    messages: buildSeedMessages(),
+    messages: [],
     modelVersion: DEFAULT_MODEL_VERSION,
     modelLastCalculatedAt: MODEL_LAST_CALCULATED_AT,
   };
@@ -239,7 +280,7 @@ function loadInitialState() {
       ...parsed,
       currentEvaluations: parsed.currentEvaluations ?? initialState.currentEvaluations,
       plannerSelections: parsed.plannerSelections ?? initialState.plannerSelections,
-      messages: parsed.messages ?? initialState.messages,
+      messages: initialState.messages,
     };
   } catch {
     return createInitialState();
@@ -472,13 +513,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppDataState>(loadInitialState);
   const [remoteUserIds, setRemoteUserIds] = useState<Record<string, string>>({});
   const [remoteCourseIds, setRemoteCourseIds] = useState<Record<string, string>>({});
+  const messageChannelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const persistedState = Object.fromEntries(Object.entries(state).filter(([key]) => key !== 'messages'));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedState));
   }, [state]);
 
   useEffect(() => {
     if (!hasSupabaseConfig()) {
+      return;
+    }
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
       return;
     }
 
@@ -503,7 +551,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             'courses',
             'select=id,course_code'
           ),
-          supabaseSelect<Array<{ id: string; sender_id: string; recipient_id: string; body: string; sent_at: string; read_at: string | null }>>(
+          supabaseSelect<RemoteMessageRow[]>(
             'messages',
             'select=id,sender_id,recipient_id,body,sent_at,read_at&order=sent_at.asc'
           ),
@@ -533,17 +581,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const universityIdByUserId = Object.fromEntries(userRows.map((row) => [row.id, row.university_id]));
         const courseIdByCode = Object.fromEntries(courseRows.map((row) => [row.course_code, row.id]));
         const courseCodeById = Object.fromEntries(courseRows.map((row) => [row.id, row.course_code]));
-
-        const remoteMessages = messageRows
-          .map((row) => ({
-            id: row.id,
-            senderId: universityIdByUserId[row.sender_id],
-            recipientId: universityIdByUserId[row.recipient_id],
-            body: row.body,
-            sentAt: row.sent_at,
-            readAt: row.read_at,
-          }))
-          .filter((message) => message.senderId && message.recipientId) as AdvisorMessage[];
+        const remoteMessages = mapRemoteMessages(messageRows, universityIdByUserId);
 
         const courseCodesBySchedule = draftCourseRows.reduce<Record<string, string[]>>((accumulator, row) => {
           const code = courseCodeById[row.course_id];
@@ -638,13 +676,52 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     };
 
     void loadRemoteSnapshot();
-    const intervalId = window.setInterval(() => {
-      void loadRemoteSnapshot();
-    }, MESSAGE_SYNC_INTERVAL_MS);
+
+    const channel = supabase.channel(MESSAGE_CHANNEL, {
+      config: {
+        broadcast: {
+          self: false,
+        },
+      },
+    });
+
+    messageChannelRef.current = channel;
+
+    channel
+      .on('broadcast', { event: 'message_created' }, ({ payload }) => {
+        const message = (payload as MessageCreatedBroadcast | null)?.message;
+        if (!message) {
+          return;
+        }
+
+        setState((current) => ({
+          ...current,
+          messages: mergeMessages(current.messages, [message]),
+        }));
+      })
+      .on('broadcast', { event: 'conversation_read' }, ({ payload }) => {
+        const readPayload = payload as ConversationReadBroadcast | null;
+        if (!readPayload) {
+          return;
+        }
+
+        setState((current) => ({
+          ...current,
+          messages: applyConversationRead(current.messages, readPayload.viewerId, readPayload.otherUserId, readPayload.readAt),
+        }));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+        void loadRemoteSnapshot();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () => {
+        void loadRemoteSnapshot();
+      })
+      .subscribe();
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      messageChannelRef.current = null;
+      void supabase.removeChannel(channel);
     };
   }, []);
 
@@ -697,28 +774,63 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   );
 
   const markConversationRead = useCallback((viewerId: string, otherUserId: string) => {
+    const hasUnreadMessages = state.messages.some(
+      (message) => message.recipientId === viewerId && message.senderId === otherUserId && !message.readAt
+    );
+
+    if (!hasUnreadMessages) {
+      return;
+    }
+
     const readAt = new Date().toISOString();
-    setState((current) => ({
-      ...current,
-      messages: current.messages.map((message) =>
-        message.recipientId === viewerId && message.senderId === otherUserId && !message.readAt
-          ? { ...message, readAt }
-          : message
-      ),
-    }));
+    const applyReadState = () => {
+      setState((current) => ({
+        ...current,
+        messages: applyConversationRead(current.messages, viewerId, otherUserId, readAt),
+      }));
+    };
+
+    const broadcastReadState = () => {
+      const channel = messageChannelRef.current;
+      if (!channel) {
+        return;
+      }
+
+      void channel.send({
+        type: 'broadcast',
+        event: 'conversation_read',
+        payload: {
+          viewerId,
+          otherUserId,
+          readAt,
+        } satisfies ConversationReadBroadcast,
+      });
+    };
 
     const viewerRemoteId = remoteUserIds[viewerId];
     const otherRemoteId = remoteUserIds[otherUserId];
-    if (hasSupabaseConfig() && viewerRemoteId && otherRemoteId) {
+    if (hasSupabaseConfig()) {
+      if (!viewerRemoteId || !otherRemoteId) {
+        return;
+      }
+
       void supabasePatch(
         'messages',
         `recipient_id=eq.${encodeURIComponent(viewerRemoteId)}&sender_id=eq.${encodeURIComponent(otherRemoteId)}&read_at=is.null`,
         { read_at: readAt }
-      ).catch((error) => {
-        console.error('Unable to update read state in Supabase.', error);
-      });
+      )
+        .then(() => {
+          applyReadState();
+          broadcastReadState();
+        })
+        .catch((error) => {
+          console.error('Unable to update read state in Supabase.', error);
+        });
+      return;
     }
-  }, [remoteUserIds]);
+
+    applyReadState();
+  }, [remoteUserIds, state.messages]);
 
   const sendMessage = useCallback(async ({ senderId, recipientId, body }: SendMessageInput): Promise<MessageSendResult> => {
     const trimmedBody = body.trim();
@@ -780,6 +892,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       ...current,
       messages: mergeMessages(current.messages, [persistedMessage]),
     }));
+
+    const channel = messageChannelRef.current;
+    if (channel) {
+      void channel.send({
+        type: 'broadcast',
+        event: 'message_created',
+        payload: {
+          message: persistedMessage,
+        } satisfies MessageCreatedBroadcast,
+      });
+    }
 
     return { success: true };
   }, [remoteUserIds]);
@@ -1218,6 +1341,9 @@ export function useAppData() {
 
   return context;
 }
+
+
+
 
 
 

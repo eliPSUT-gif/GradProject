@@ -1,5 +1,27 @@
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? '';
+
+const supabaseClient: SupabaseClient | null = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
+      global: {
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      },
+    })
+  : null;
 
 function buildHeaders(extraHeaders: HeadersInit = {}) {
   return {
@@ -28,6 +50,10 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
 export function hasSupabaseConfig() {
   return Boolean(supabaseUrl && supabaseAnonKey);
+}
+
+export function getSupabaseClient() {
+  return supabaseClient;
 }
 
 export async function supabaseSelect<T>(table: string, query: string) {
