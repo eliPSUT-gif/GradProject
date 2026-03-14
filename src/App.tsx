@@ -32,7 +32,7 @@ function ProtectedRoute({
   const { isAuthenticated, user } = useAuth();
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ authError: 'Your session has expired or you must sign in to continue.' }} />;
   }
 
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
@@ -87,4 +87,3 @@ export default function App() {
     </BrowserRouter>
   );
 }
-

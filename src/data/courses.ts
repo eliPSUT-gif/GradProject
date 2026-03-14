@@ -82,14 +82,14 @@ const BASE_COURSES: CourseBlueprint[] = [
 ];
 
 export const SEED_MANAGED_USERS: ManagedUser[] = [
-  { id: '20231001', name: 'Ahmad Hassan', role: 'student', subtitle: 'Student | Computer Science', initials: 'AH', password: 'student123', status: 'active', lastLogin: '2026-03-13T07:55:00.000Z' },
-  { id: '20221045', name: 'Omar Al-Rashid', role: 'student', subtitle: 'Student | Computer Science', initials: 'OR', password: 'student123', status: 'active', lastLogin: '2026-03-12T10:22:00.000Z' },
-  { id: '20221188', name: 'Sara Khalil', role: 'student', subtitle: 'Student | Computer Science', initials: 'SK', password: 'student123', status: 'active', lastLogin: '2026-03-12T08:18:00.000Z' },
-  { id: '20220877', name: 'Lina Nasser', role: 'student', subtitle: 'Student | Computer Science', initials: 'LN', password: 'student123', status: 'active', lastLogin: '2026-03-11T11:10:00.000Z' },
-  { id: 'ADV-1001', name: 'Prof. Layla Hamdan', role: 'advisor', subtitle: 'Academic Advisor | CS Department', initials: 'LH', password: 'advisor123', status: 'active', lastLogin: '2026-03-13T08:50:00.000Z' },
-  { id: 'ADV-1002', name: 'Dr. Mona Issa', role: 'advisor', subtitle: 'Academic Advisor | CS Department', initials: 'MI', password: 'advisor123', status: 'active', lastLogin: '2026-03-12T13:32:00.000Z' },
-  { id: 'ADM-1001', name: 'Dr. Anas Abu Taleb', role: 'admin', subtitle: 'System Administrator', initials: 'AT', password: 'admin123', status: 'active', lastLogin: '2026-03-13T09:14:00.000Z' },
-  { id: 'ADM-1002', name: 'Eng. Rana Shoman', role: 'admin', subtitle: 'Registrar Operations Admin', initials: 'RS', password: 'admin123', status: 'active', lastLogin: '2026-03-12T14:08:00.000Z' }
+  { id: '20231001', name: 'Ahmad Hassan', role: 'student', subtitle: 'Student | Computer Science', initials: 'AH', password: 'Student@123', status: 'active', lastLogin: '2026-03-13T07:55:00.000Z' },
+  { id: '20221045', name: 'Omar Al-Rashid', role: 'student', subtitle: 'Student | Computer Science', initials: 'OR', password: 'Student@123', status: 'active', lastLogin: '2026-03-12T10:22:00.000Z' },
+  { id: '20221188', name: 'Sara Khalil', role: 'student', subtitle: 'Student | Computer Science', initials: 'SK', password: 'Student@123', status: 'active', lastLogin: '2026-03-12T08:18:00.000Z' },
+  { id: '20220877', name: 'Lina Nasser', role: 'student', subtitle: 'Student | Computer Science', initials: 'LN', password: 'Student@123', status: 'active', lastLogin: '2026-03-11T11:10:00.000Z' },
+  { id: 'ADV-1001', name: 'Prof. Layla Hamdan', role: 'advisor', subtitle: 'Academic Advisor | CS Department', initials: 'LH', password: 'Advisor@123', status: 'active', lastLogin: '2026-03-13T08:50:00.000Z' },
+  { id: 'ADV-1002', name: 'Dr. Mona Issa', role: 'advisor', subtitle: 'Academic Advisor | CS Department', initials: 'MI', password: 'Advisor@123', status: 'active', lastLogin: '2026-03-12T13:32:00.000Z' },
+  { id: 'ADM-1001', name: 'Dr. Anas Abu Taleb', role: 'admin', subtitle: 'System Administrator', initials: 'AT', password: 'Admin@123', status: 'active', lastLogin: '2026-03-13T09:14:00.000Z' },
+  { id: 'ADM-1002', name: 'Eng. Rana Shoman', role: 'admin', subtitle: 'Registrar Operations Admin', initials: 'RS', password: 'Admin@123', status: 'active', lastLogin: '2026-03-12T14:08:00.000Z' }
 ];
 
 export const STUDENT_PROFILES: StudentProfile[] = [
@@ -273,4 +273,5 @@ export function buildStudentInsights(profiles: StudentProfile[], drafts: Schedul
   });
 }
 export function getRiskStatus(score: number, gpa: number): RiskStatus { if (score >= 75 || (score >= 68 && gpa < 3.1)) return 'at-risk'; if (score >= 50 || (score >= 42 && gpa < 3.25)) return 'monitor'; return 'good'; }
+
 

@@ -41,7 +41,8 @@ export default function StudentSettingsPage() {
         </h2>
         <div className="space-y-3 text-sm text-gray-700">
           <div className="rounded-xl bg-slate-50 p-4">Accounts are temporarily locked after 3 failed login attempts.</div>
-          <div className="rounded-xl bg-slate-50 p-4">Passwords must be at least 8 characters long.</div>
+          <div className="rounded-xl bg-slate-50 p-4">Passwords must be at least 10 characters and include uppercase, lowercase, a number, and a special character.</div>
+          <div className="rounded-xl bg-slate-50 p-4">Sign-in now requires manual credentials, captcha verification, and respects the remember-me choice on the current device.</div>
           <div className="rounded-xl bg-slate-50 p-4">Role-based access is enforced for student, advisor, and admin routes.</div>
         </div>
       </div>

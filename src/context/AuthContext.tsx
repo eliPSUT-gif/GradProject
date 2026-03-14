@@ -46,19 +46,23 @@ interface UserFormInput {
 interface AuthContextType {
   user: AuthSession | null;
   users: ManagedUser[];
-  login: (credentials: { role: Role; id: string; password: string }) => LoginResult;
+  login: (credentials: { role: Role; id: string; password: string; rememberMe?: boolean }) => LoginResult;
   logout: () => void;
   isAuthenticated: boolean;
   changePassword: (userId: string, currentPassword: string, nextPassword: string) => PasswordChangeResult;
-  upsertUser: (input: UserFormInput) => void;
+  upsertUser: (input: UserFormInput) => PasswordChangeResult;
   updateUserStatus: (userId: string, status: ManagedUser['status']) => void;
 }
 
-const USERS_KEY = 'smart-advisor-users';
-const SESSION_KEY = 'smart-advisor-session';
-const ATTEMPTS_KEY = 'smart-advisor-login-attempts';
+const USERS_KEY = 'smart-advisor-users-v2';
+const LOCAL_SESSION_KEY = 'smart-advisor-session-local-v2';
+const SESSION_SESSION_KEY = 'smart-advisor-session-session-v2';
+const REMEMBER_ME_KEY = 'smart-advisor-remember-me-v2';
+const ATTEMPTS_KEY = 'smart-advisor-login-attempts-v2';
 const MAX_ATTEMPTS = 3;
 const LOCKOUT_MS = 30_000;
+const MIN_PASSWORD_LENGTH = 10;
+const DEFAULT_PASSWORD = 'ChangeMe@123';
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -67,7 +71,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
   isAuthenticated: false,
   changePassword: () => ({ success: false, error: 'Auth provider not ready.' }),
-  upsertUser: () => {},
+  upsertUser: () => ({ success: false, error: 'Auth provider not ready.' }),
   updateUserStatus: () => {},
 });
 
@@ -88,20 +92,60 @@ function mergeManagedUsers(...sources: ManagedUser[][]) {
   return orderedIds.map((id) => merged.get(id)!);
 }
 
+function getPasswordValidationError(password: string) {
+  if (password.trim().length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`;
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must include at least one uppercase letter.';
+  }
+
+  if (!/[a-z]/.test(password)) {
+    return 'Password must include at least one lowercase letter.';
+  }
+
+  if (!/\d/.test(password)) {
+    return 'Password must include at least one number.';
+  }
+
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    return 'Password must include at least one special character.';
+  }
+
+  return null;
+}
+
+function normalizeManagedUser(account: ManagedUser) {
+  if (!getPasswordValidationError(account.password)) {
+    return account;
+  }
+
+  const seedUser = SEED_MANAGED_USERS.find((seedAccount) => seedAccount.id === account.id);
+  const fallbackPassword = seedUser?.password ?? DEFAULT_PASSWORD;
+
+  return {
+    ...account,
+    password: getPasswordValidationError(fallbackPassword) ? DEFAULT_PASSWORD : fallbackPassword,
+  };
+}
+
 function loadUsers() {
+  const normalizedSeedUsers = SEED_MANAGED_USERS.map(normalizeManagedUser);
+
   if (typeof window === 'undefined') {
-    return SEED_MANAGED_USERS;
+    return normalizedSeedUsers;
   }
 
   const saved = window.localStorage.getItem(USERS_KEY);
   if (!saved) {
-    return SEED_MANAGED_USERS;
+    return normalizedSeedUsers;
   }
 
   try {
-    return mergeManagedUsers(SEED_MANAGED_USERS, JSON.parse(saved) as ManagedUser[]);
+    return mergeManagedUsers(normalizedSeedUsers, JSON.parse(saved) as ManagedUser[]).map(normalizeManagedUser);
   } catch {
-    return SEED_MANAGED_USERS;
+    return normalizedSeedUsers;
   }
 }
 
@@ -110,7 +154,9 @@ function loadSession() {
     return null;
   }
 
-  const saved = window.localStorage.getItem(SESSION_KEY);
+  const persisted = window.localStorage.getItem(LOCAL_SESSION_KEY);
+  const sessionOnly = window.sessionStorage.getItem(SESSION_SESSION_KEY);
+  const saved = persisted ?? sessionOnly;
   if (!saved) {
     return null;
   }
@@ -120,6 +166,18 @@ function loadSession() {
   } catch {
     return null;
   }
+}
+
+function loadRememberSession() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  if (window.localStorage.getItem(LOCAL_SESSION_KEY)) {
+    return true;
+  }
+
+  return window.localStorage.getItem(REMEMBER_ME_KEY) === 'true';
 }
 
 function loadAttempts() {
@@ -164,19 +222,25 @@ export function getHomeRoute(role: Role) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<ManagedUser[]>(loadUsers);
   const [user, setUser] = useState<AuthSession | null>(loadSession);
+  const [rememberSession, setRememberSession] = useState(loadRememberSession);
   const [attempts, setAttempts] = useState<Record<string, { count: number; lockedUntil?: string }>>(loadAttempts);
 
   useEffect(() => {
-    window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    window.localStorage.setItem(USERS_KEY, JSON.stringify(users.map(normalizeManagedUser)));
   }, [users]);
 
   useEffect(() => {
+    window.localStorage.removeItem(LOCAL_SESSION_KEY);
+    window.sessionStorage.removeItem(SESSION_SESSION_KEY);
+
     if (user) {
-      window.localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      const target = rememberSession ? window.localStorage : window.sessionStorage;
+      target.setItem(rememberSession ? LOCAL_SESSION_KEY : SESSION_SESSION_KEY, JSON.stringify(user));
+      window.localStorage.setItem(REMEMBER_ME_KEY, rememberSession ? 'true' : 'false');
     } else {
-      window.localStorage.removeItem(SESSION_KEY);
+      window.localStorage.removeItem(REMEMBER_ME_KEY);
     }
-  }, [user]);
+  }, [rememberSession, user]);
 
   useEffect(() => {
     window.localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
@@ -213,19 +277,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const remoteMappedUsers = remoteUsers.map((remoteUser) => {
             const seedUser = SEED_MANAGED_USERS.find((account) => account.id === remoteUser.university_id);
 
-            return {
+            return normalizeManagedUser({
               id: remoteUser.university_id,
               name: remoteUser.full_name,
               role: remoteUser.role,
               subtitle: remoteUser.subtitle,
               initials: remoteUser.initials,
-              password: passwordById.get(remoteUser.university_id) ?? seedUser?.password ?? 'password123',
+              password: passwordById.get(remoteUser.university_id) ?? seedUser?.password ?? DEFAULT_PASSWORD,
               status: remoteUser.status,
               lastLogin: remoteUser.last_login_at ?? seedUser?.lastLogin ?? 'Never',
-            } satisfies ManagedUser;
+            } satisfies ManagedUser);
           });
 
-          return mergeManagedUsers(SEED_MANAGED_USERS, current, remoteMappedUsers);
+          return mergeManagedUsers(SEED_MANAGED_USERS.map(normalizeManagedUser), current, remoteMappedUsers).map(normalizeManagedUser);
         });
 
         if (user) {
@@ -253,12 +317,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const login = useCallback(
-    ({ role, id, password }: { role: Role; id: string; password: string }): LoginResult => {
+    ({ role, id, password, rememberMe = false }: { role: Role; id: string; password: string; rememberMe?: boolean }): LoginResult => {
       const normalizedId = id.trim();
       const attemptKey = normalizedId || `role:${role}`;
       const attemptState = attempts[attemptKey];
       if (attemptState?.lockedUntil && new Date(attemptState.lockedUntil).getTime() > Date.now()) {
         return { success: false, error: formatRemainingLockout(attemptState.lockedUntil) };
+      }
+
+      if (!normalizedId || !password) {
+        return { success: false, error: 'Enter both your ID and password.' };
       }
 
       const matchedUser = users.find((account) => account.id.toLowerCase() === normalizedId.toLowerCase());
@@ -286,8 +354,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'This account is inactive. Contact an administrator.' };
       }
 
-      const nextUser = { ...matchedUser, lastLogin: new Date().toISOString() };
+      const nextUser = normalizeManagedUser({ ...matchedUser, lastLogin: new Date().toISOString() });
       setUsers((current) => current.map((account) => (account.id === matchedUser.id ? nextUser : account)));
+      setRememberSession(Boolean(rememberMe));
+
       if (hasSupabaseConfig()) {
         void supabasePatch('app_users', `university_id=eq.${encodeURIComponent(matchedUser.id)}`, {
           last_login_at: nextUser.lastLogin,
@@ -296,6 +366,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('Unable to update Supabase login metadata.', error);
         });
       }
+
       setAttempts((current) => {
         const next = { ...current };
         delete next[attemptKey];
@@ -309,6 +380,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     setUser(null);
+    setRememberSession(false);
   }, []);
 
   const changePassword = useCallback(
@@ -322,8 +394,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'Current password is incorrect.' };
       }
 
-      if (nextPassword.trim().length < 8) {
-        return { success: false, error: 'New password must be at least 8 characters long.' };
+      const validationError = getPasswordValidationError(nextPassword);
+      if (validationError) {
+        return { success: false, error: validationError };
       }
 
       setUsers((current) =>
@@ -336,13 +409,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [users]
   );
 
-  const upsertUser = useCallback((input: UserFormInput) => {
+  const upsertUser = useCallback((input: UserFormInput): PasswordChangeResult => {
+    const validationError = getPasswordValidationError(input.password);
+    if (validationError) {
+      return { success: false, error: validationError };
+    }
+
     setUsers((current) => {
-      const nextUser: ManagedUser = {
+      const nextUser = normalizeManagedUser({
         ...input,
         initials: getInitials(input.name),
         lastLogin: current.find((account) => account.id === input.id)?.lastLogin ?? 'Never',
-      };
+      });
 
       const exists = current.some((account) => account.id === input.id);
       const nextUsers = exists
@@ -372,6 +450,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('Unable to upsert Supabase user.', error);
       });
     }
+
+    return { success: true };
   }, [user?.id]);
 
   const updateUserStatus = useCallback((userId: string, status: ManagedUser['status']) => {
@@ -387,6 +467,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (user?.id === userId && status !== 'active') {
       setUser(null);
+      setRememberSession(false);
     }
   }, [user?.id]);
 
@@ -408,10 +489,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
-export type { AuthSession, LoginResult, UserFormInput };
-
-
-
-
-
-
+export type { AuthSession, LoginResult, PasswordChangeResult, UserFormInput };

@@ -114,7 +114,7 @@ export default function AppLayout() {
 
   const handleSignOut = () => {
     logout();
-    navigate('/login');
+    navigate('/login', { replace: true, state: { authError: 'You have been signed out. Sign in again to continue.' } });
   };
 
   return (

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UserPlus, Users } from 'lucide-react';
+import { ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useAuth, type UserFormInput } from '../../context/AuthContext';
 import type { Role } from '../../data/courses';
 
@@ -8,7 +8,7 @@ const EMPTY_FORM: UserFormInput = {
   name: '',
   role: 'student',
   subtitle: 'Student | Computer Science',
-  password: 'changeme123',
+  password: 'ChangeMe@123',
   status: 'active',
 };
 
@@ -16,10 +16,19 @@ export default function UserManagementPage() {
   const { updateUserStatus, upsertUser, users } = useAuth();
   const [form, setForm] = useState<UserFormInput>(EMPTY_FORM);
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    upsertUser(form);
+    setMessage(null);
+    setError(null);
+
+    const result = upsertUser(form);
+    if (!result.success) {
+      setError(result.error ?? 'Unable to save user.');
+      return;
+    }
+
     setMessage(`User ${form.id} saved successfully.`);
     setForm(EMPTY_FORM);
   };
@@ -31,6 +40,12 @@ export default function UserManagementPage() {
           <UserPlus className="h-5 w-5 text-[#2563eb]" />
           Add or Edit User
         </h2>
+        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
+          <div className="flex items-start gap-2">
+            <ShieldCheck className="mt-0.5 h-4 w-4 text-blue-600" />
+            <p>Passwords must be at least 10 characters and include uppercase, lowercase, a number, and a special character.</p>
+          </div>
+        </div>
         <div className="space-y-4 text-sm text-gray-700">
           <label className="block">
             User ID
@@ -73,6 +88,7 @@ export default function UserManagementPage() {
           <label className="block">
             Temporary password
             <input
+              type="password"
               value={form.password}
               onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
               className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
@@ -80,6 +96,7 @@ export default function UserManagementPage() {
           </label>
         </div>
 
+        {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         {message && <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
 
         <button type="submit" className="mt-5 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8]">
