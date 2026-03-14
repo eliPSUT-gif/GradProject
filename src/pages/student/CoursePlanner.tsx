@@ -54,10 +54,10 @@ export default function CoursePlanner() {
   };
 
   return (
-    <div className="flex items-start gap-6 max-lg:flex-col">
-      <div className="min-w-0 flex-1 space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[220px] flex-1">
+    <div className="flex items-start gap-4 max-lg:flex-col sm:gap-6">
+      <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input type="text" placeholder="Search courses..." value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm transition-all focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30" />
           </div>
@@ -72,14 +72,14 @@ export default function CoursePlanner() {
 
         {plannerError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{plannerError}</div>}
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((course) => {
             const isSelected = selectedCodes.has(course.code);
             const status = getCourseSelectionState(studentId, course.code);
             const diff = getDiffLabel(course.diffScore);
             const locked = !isSelected && !status.eligible;
             return (
-              <button key={course.code} onClick={() => handleToggle(course.code)} className={`group relative rounded-xl border bg-white p-4 text-left transition-all duration-200 hover:shadow-md ${isSelected ? 'border-[#2563eb] ring-2 ring-[#2563eb]/20 shadow-sm' : locked ? 'border-gray-200 opacity-75' : 'border-gray-200 hover:border-gray-300'}`}>
+              <button key={course.code} onClick={() => handleToggle(course.code)} className={`group relative h-full rounded-xl border bg-white p-4 text-left transition-all duration-200 hover:shadow-md ${isSelected ? 'border-[#2563eb] ring-2 ring-[#2563eb]/20 shadow-sm' : locked ? 'border-gray-200 opacity-75' : 'border-gray-200 hover:border-gray-300'}`}>
                 {isSelected && <div className="absolute right-3 top-3"><CheckCircle2 className="h-5 w-5 text-[#2563eb]" /></div>}
                 {locked && <div className="absolute right-3 top-3"><Lock className="h-4 w-4 text-red-500" /></div>}
                 <div className="mb-2 flex items-center gap-2"><span className="font-mono text-xs font-bold text-[#0f1e3c]">{course.code}</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${typeTag(course.type)}`}>{course.type}</span></div>
@@ -97,10 +97,10 @@ export default function CoursePlanner() {
         </div>
       </div>
 
-      <div className="sticky top-6 w-full shrink-0 space-y-4 lg:w-96">
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
+      <div className="w-full shrink-0 space-y-3 sm:space-y-4 lg:w-96 xl:sticky xl:top-6">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between"><h3 className="text-sm font-bold text-[#0f1e3c]">My Selection ({selectedCourses.length})</h3><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${totalCredits > MAX_SEMESTER_CREDITS ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{totalCredits} / {MAX_SEMESTER_CREDITS} cr</span></div>
-          {selectedCourses.length === 0 ? <p className="py-6 text-center text-xs text-gray-400">Click eligible courses to add them here.</p> : <div className="mb-4 space-y-2">{selectedCourses.map((course) => (<div key={course.code} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2"><div><span className="font-mono text-xs font-bold text-[#0f1e3c]">{course.code}</span><span className="ml-2 text-xs text-gray-500">{course.name}</span></div><button onClick={() => handleToggle(course.code)} className="rounded-md p-1 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>))}</div>}
+          {selectedCourses.length === 0 ? <p className="py-6 text-center text-xs text-gray-400">Click eligible courses to add them here.</p> : <div className="mb-4 space-y-2">{selectedCourses.map((course) => (<div key={course.code} className="flex items-start justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2"><div className="min-w-0"><span className="font-mono text-xs font-bold text-[#0f1e3c]">{course.code}</span><span className="ml-2 break-words text-xs text-gray-500">{course.name}</span></div><button onClick={() => handleToggle(course.code)} className="shrink-0 rounded-md p-1 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>))}</div>}
           <div className="space-y-2">
             <button onClick={handleAnalyze} disabled={selectedCourses.length === 0} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"><Sparkles className="h-4 w-4" />Analyze My Schedule</button>
             <div className="flex gap-2"><input type="text" value={draftName} onChange={(event) => setDraftName(event.target.value)} placeholder="Draft name" className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30" /><button onClick={handleSaveDraft} disabled={selectedCourses.length === 0} className="inline-flex items-center gap-1 rounded-lg border border-[#2563eb]/20 bg-[#2563eb]/5 px-3 py-2 text-xs font-semibold text-[#2563eb] transition-colors hover:bg-[#2563eb]/10 disabled:cursor-not-allowed disabled:opacity-40"><Save className="h-3.5 w-3.5" />Save</button></div>
@@ -115,3 +115,4 @@ export default function CoursePlanner() {
     </div>
   );
 }
+

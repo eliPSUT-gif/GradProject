@@ -89,16 +89,16 @@ export default function CourseAnalysis() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Model version</p>
           <p className="mt-2 font-display text-3xl font-bold text-[#0f1e3c]">{modelVersion}</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Coverage</p>
           <p className="mt-2 font-display text-3xl font-bold text-[#0f1e3c]">{modelCoverage}%</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Last scoring run</p>
           <p className="mt-2 text-sm font-semibold text-[#0f1e3c]">{new Date(modelLastCalculatedAt).toLocaleString()}</p>
         </div>
@@ -119,14 +119,14 @@ export default function CourseAnalysis() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-4 sm:px-6">
+          <h2 className="flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:text-lg">
             <BookOpen className="h-5 w-5 text-[#2563eb]" />
             Course Difficulty Overview
           </h2>
           <button
             onClick={handleDownload}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8]"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] sm:w-auto"
           >
             <Download className="h-4 w-4" />
             Download Report
@@ -183,3 +183,4 @@ export default function CourseAnalysis() {
     </div>
   );
 }
+

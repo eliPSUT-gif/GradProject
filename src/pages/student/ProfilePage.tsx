@@ -12,15 +12,15 @@ export default function ProfilePage() {
   const drafts = getStudentDrafts(user?.id ?? '');
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_3fr]">
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-lg font-bold text-[#2563eb]">
+    <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[2fr_3fr]">
+      <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+        <div className="mb-4 flex items-center gap-3 sm:mb-5">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-100 text-base font-bold text-[#2563eb] sm:h-14 sm:w-14 sm:text-lg">
             {user?.initials}
           </div>
           <div>
-            <h2 className="text-xl font-bold text-[#0f1e3c]">{user?.name}</h2>
-            <p className="text-sm text-gray-500">{user?.subtitle}</p>
+            <h2 className="text-lg font-bold text-[#0f1e3c] sm:text-xl">{user?.name}</h2>
+            <p className="text-xs text-gray-500 sm:text-sm">{user?.subtitle}</p>
           </div>
         </div>
 
@@ -41,32 +41,32 @@ export default function ProfilePage() {
       </div>
 
       <div className="space-y-6">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-gray-400">
-              <GraduationCap className="h-4 w-4" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider">GPA</span>
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+            <div className="flex items-center gap-1.5 text-gray-400 sm:gap-2">
+              <GraduationCap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider sm:text-[11px]">GPA</span>
             </div>
-            <p className="mt-3 font-display text-3xl font-bold text-[#0f1e3c]">{insight?.gpa.toFixed(2) ?? '0.00'}</p>
+            <p className="mt-2 font-display text-2xl font-bold text-[#0f1e3c] sm:mt-3 sm:text-3xl">{insight?.gpa.toFixed(2) ?? '0.00'}</p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-gray-400">
-              <BookOpen className="h-4 w-4" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider">Saved Drafts</span>
+          <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+            <div className="flex items-center gap-1.5 text-gray-400 sm:gap-2">
+              <BookOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider sm:text-[11px]">Drafts</span>
             </div>
-            <p className="mt-3 font-display text-3xl font-bold text-[#0f1e3c]">{drafts.length}</p>
+            <p className="mt-2 font-display text-2xl font-bold text-[#0f1e3c] sm:mt-3 sm:text-3xl">{drafts.length}</p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-gray-400">
-              <ShieldCheck className="h-4 w-4" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider">Latest Risk</span>
+          <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+            <div className="flex items-center gap-1.5 text-gray-400 sm:gap-2">
+              <ShieldCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider sm:text-[11px]">Risk</span>
             </div>
-            <p className="mt-3 font-display text-3xl font-bold text-[#0f1e3c]">{insight?.difficulty ?? 0}</p>
+            <p className="mt-2 font-display text-2xl font-bold text-[#0f1e3c] sm:mt-3 sm:text-3xl">{insight?.difficulty ?? 0}</p>
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
             <UserCircle2 className="h-5 w-5 text-[#2563eb]" />
             Academic Profile
           </h2>
@@ -85,6 +85,7 @@ export default function ProfilePage() {
     </div>
   );
 }
+
 
 
 

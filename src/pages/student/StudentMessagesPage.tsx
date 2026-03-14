@@ -52,8 +52,8 @@ export default function StudentMessagesPage() {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
-      <aside className="rounded-xl border border-gray-200 bg-white p-6">
+    <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <aside className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
           <Mail className="h-5 w-5 text-[#2563eb]" />
           Advisor Contact
@@ -77,8 +77,8 @@ export default function StudentMessagesPage() {
         )}
       </aside>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-6">
-        <div className="mb-5 flex items-center justify-between gap-3">
+      <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-[#0f1e3c]">Conversation</h2>
             <p className="text-sm text-gray-500">Send messages directly to your assigned advisor.</p>
@@ -86,14 +86,14 @@ export default function StudentMessagesPage() {
           {advisor && <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#2563eb]">{advisor.name}</span>}
         </div>
 
-        <div className="mb-5 h-[420px] space-y-3 overflow-y-auto rounded-xl bg-slate-50 p-4">
+        <div className="mb-5 h-[280px] space-y-3 overflow-y-auto rounded-xl bg-slate-50 p-3 sm:h-[420px] sm:p-4">
           {conversation.length > 0 ? (
             conversation.map((message) => {
               const isMine = message.senderId === studentId;
               const receipt = formatReceipt(message.sentAt, message.readAt);
               return (
                 <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-xl rounded-2xl px-4 py-3 shadow-sm ${isMine ? 'bg-[#2563eb] text-white' : 'bg-white text-slate-700'}`}>
+                  <div className={`max-w-[88%] rounded-2xl px-3 py-2.5 shadow-sm sm:max-w-xl sm:px-4 sm:py-3 ${isMine ? 'bg-[#2563eb] text-white' : 'bg-white text-slate-700'}`}>
                     <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider opacity-80">
                       <UserRound className="h-3.5 w-3.5" />
                       {isMine ? 'You' : advisor?.name ?? 'Advisor'}
@@ -126,15 +126,15 @@ export default function StudentMessagesPage() {
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Write a message to your advisor"
-            rows={5}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+            rows={3}
+            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm sm:px-4 sm:py-3 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
             {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Messages sync between both inboxes. The check stays white until the message is read, then turns blue.</p>}
             <button
               onClick={() => { void handleSend(); }}
               disabled={!advisorId}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
             >
               <Send className="h-4 w-4" />
               Send to advisor
@@ -145,3 +145,4 @@ export default function StudentMessagesPage() {
     </div>
   );
 }
+

@@ -4,14 +4,18 @@ import {
   Bell,
   BookOpen,
   Bot,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   LayoutDashboard,
   LogOut,
+  Menu,
   MessageSquare,
   Settings,
   Sparkles,
   User,
   Users,
+  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -109,12 +113,15 @@ export default function AppLayout() {
   const previousUnreadRef = useRef(0);
   const hideTimerRef = useRef<number | null>(null);
   const [messagePopup, setMessagePopup] = useState<string | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   const role = user?.role ?? 'student';
   const sections = NAV[role];
   const pageTitle = PAGE_TITLES[location.pathname] ?? 'Dashboard';
   const unreadCount = user ? getUnreadMessageCount(user.id) : 0;
   const messageRoute = role === 'advisor' ? '/app/advisor/messages' : role === 'student' ? '/app/messages' : null;
+  const sidebarWidth = mobileOpen || !collapsed ? 240 : 64;
 
   useEffect(() => {
     if (!user || !messageRoute) {
@@ -143,38 +150,63 @@ export default function AppLayout() {
     }
   }, []);
 
+
+  const handleNavAction = () => {
+    setMobileOpen(false);
+  };
+
   const handleSignOut = () => {
+    handleNavAction();
     logout();
     navigate('/login', { replace: true, state: { authError: 'You have been signed out. Sign in again to continue.' } });
   };
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg">
-      <aside className="flex w-60 shrink-0 flex-col bg-navy">
-        <div className="flex items-center gap-2 px-6 pb-4 pt-6">
-          <Sparkles className="h-6 w-6 text-blue-lt" />
-          <span className="font-display text-lg font-bold text-white">
-            Smart<span className="text-blue-pale">Advisor</span>
-          </span>
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setMobileOpen(false)} />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden bg-navy transition-all duration-200 ease-in-out lg:static lg:translate-x-0 ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        style={{ width: sidebarWidth, minWidth: sidebarWidth, maxWidth: sidebarWidth, flexBasis: sidebarWidth }}
+      >
+        {/* Logo */}
+        <div className="flex items-center justify-between px-4 pb-4 pt-6 lg:px-5">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <Sparkles className="h-6 w-6 shrink-0 text-blue-lt" />
+            <span className={`whitespace-nowrap font-display text-lg font-bold text-white transition-opacity duration-200 ${collapsed ? 'lg:hidden' : ''}`}>
+              Smart<span className="text-blue-pale">Advisor</span>
+            </span>
+          </div>
+          <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1 text-blue-pale/60 transition-colors hover:text-white lg:hidden">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        <div className="mx-3 mb-4 rounded-xl bg-white/5 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue text-sm font-bold text-white">
+        {/* User card */}
+        <div className={`mx-3 mb-4 rounded-xl bg-white/5 px-3 py-3 ${collapsed ? 'lg:mx-2 lg:px-0 lg:py-2' : ''}`}>
+          <div className={`flex items-center gap-3 ${collapsed ? 'lg:justify-center' : ''}`}>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue text-sm font-bold text-white">
               {user?.initials ?? '??'}
             </div>
-            <div className="min-w-0">
+            <div className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
               <p className="truncate text-sm font-semibold text-white">{user?.name ?? 'User'}</p>
               <p className="truncate text-xs text-blue-pale/70">{user?.subtitle ?? ''}</p>
             </div>
           </div>
         </div>
 
+        {/* Navigation */}
         <nav className="flex-1 space-y-5 overflow-y-auto px-3">
           {sections.map((section) => (
             <div key={section.title}>
-              <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-blue-pale/40">
-                {section.title}
+              <p className={`mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-blue-pale/40 ${collapsed ? 'lg:text-center lg:px-0' : ''}`}>
+                {collapsed ? section.title.charAt(0) : section.title}
               </p>
               <ul className="space-y-0.5">
                 {section.items.map((item) => (
@@ -182,16 +214,20 @@ export default function AppLayout() {
                     <NavLink
                       to={item.to}
                       end={item.to === '/app/advisor' || item.to === '/app/admin' || item.to === '/app/dashboard'}
+                      title={collapsed ? item.label : undefined}
+                      onClick={handleNavAction}
                       className={({ isActive }) =>
                         `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          collapsed ? 'lg:justify-center lg:px-2' : ''
+                        } ${
                           isActive
                             ? 'bg-[rgba(37,99,235,0.3)] text-white'
                             : 'text-blue-pale/60 hover:bg-white/5 hover:text-white'
                         }`
                       }
                     >
-                      <item.icon className="h-[18px] w-[18px]" />
-                      {item.label}
+                      <item.icon className="h-[18px] w-[18px] shrink-0" />
+                      <span className={collapsed ? 'lg:hidden' : ''}>{item.label}</span>
                     </NavLink>
                   </li>
                 ))}
@@ -200,23 +236,43 @@ export default function AppLayout() {
           ))}
         </nav>
 
-        <div className="px-3 pb-5 pt-2">
+        {/* Collapse toggle (desktop only) */}
+        <div className="hidden px-3 pt-2 lg:block">
+          <button
+            onClick={() => setCollapsed((prev) => !prev)}
+            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-blue-pale/60 transition-colors hover:bg-white/5 hover:text-white ${collapsed ? 'justify-center px-2' : ''}`}
+          >
+            {collapsed ? <ChevronRight className="h-[18px] w-[18px]" /> : <ChevronLeft className="h-[18px] w-[18px]" />}
+            {!collapsed && <span>Collapse</span>}
+          </button>
+        </div>
+
+        {/* Sign out */}
+        <div className="px-3 pb-5 pt-1">
           <button
             onClick={handleSignOut}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-blue-pale/60 transition-colors hover:bg-white/5 hover:text-white"
+            title={collapsed ? 'Sign out' : undefined}
+            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-blue-pale/60 transition-colors hover:bg-white/5 hover:text-white ${collapsed ? 'lg:justify-center lg:px-2' : ''}`}
           >
-            <LogOut className="h-[18px] w-[18px]" />
-            Sign out
+            <LogOut className="h-[18px] w-[18px] shrink-0" />
+            <span className={collapsed ? 'lg:hidden' : ''}>Sign out</span>
           </button>
         </div>
       </aside>
 
+      {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-white px-8">
-          <h1 className="font-display text-xl font-bold text-navy">{pageTitle}</h1>
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-white px-4 sm:h-16 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setMobileOpen(true)} className="rounded-lg p-1.5 text-slate transition hover:bg-bg lg:hidden">
+              <Menu className="h-5 w-5" />
+            </button>
+            <h1 className="font-display text-base font-bold text-navy sm:text-lg lg:text-xl">{pageTitle}</h1>
+          </div>
           <button
             onClick={() => {
               if (messageRoute) {
+                handleNavAction();
                 navigate(messageRoute);
               }
             }}
@@ -231,10 +287,10 @@ export default function AppLayout() {
           </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-5 lg:p-8">
           {messagePopup && messageRoute && (
             <button
-              onClick={() => navigate(messageRoute)}
+              onClick={() => { handleNavAction(); navigate(messageRoute); }}
               className="mb-4 inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
             >
               <MessageSquare className="h-4 w-4" />
@@ -247,3 +303,8 @@ export default function AppLayout() {
     </div>
   );
 }
+
+
+
+
+

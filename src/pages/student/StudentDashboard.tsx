@@ -105,26 +105,26 @@ export default function StudentDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {kpis.map((item) => {
           const Icon = item.icon;
           return (
-            <div key={item.label} className="relative overflow-hidden rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md">
+            <div key={item.label} className="relative overflow-hidden rounded-xl border border-gray-200 bg-white p-3 transition-shadow hover:shadow-md sm:p-5">
               <div className="absolute inset-x-0 top-0 h-[3px]" style={{ backgroundColor: item.accent }} />
-              <div className="mb-3 flex items-center gap-2">
-                <Icon className="h-4 w-4 text-gray-400" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{item.label}</span>
+              <div className="mb-2 flex items-center gap-1.5 sm:mb-3 sm:gap-2">
+                <Icon className="h-3.5 w-3.5 text-gray-400 sm:h-4 sm:w-4" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 sm:text-[11px]">{item.label}</span>
               </div>
-              <p className="font-display text-3xl font-bold text-[#0f1e3c]">{item.value}</p>
-              <p className="mt-1 text-xs text-gray-500">{item.subtitle}</p>
+              <p className="font-display text-2xl font-bold text-[#0f1e3c] sm:text-3xl">{item.value}</p>
+              <p className="mt-0.5 text-[10px] text-gray-500 sm:mt-1 sm:text-xs">{item.subtitle}</p>
             </div>
           );
         })}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]">
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
             <BookOpen className="h-5 w-5 text-[#2563eb]" />
             My Schedule This Semester
           </h2>
@@ -178,13 +178,13 @@ export default function StudentDashboard() {
           )}
         </div>
 
-        <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-6 flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
+        <div className="min-w-0 flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-6 sm:text-lg">
             <Gauge className="h-5 w-5 text-[#2563eb]" />
             Difficulty Meter
           </h2>
 
-          <p className="mb-2 font-display text-6xl font-bold" style={{ color: diffInfo?.color ?? '#94a3b8' }}>
+          <p className="mb-2 font-display text-4xl font-bold sm:text-6xl" style={{ color: diffInfo?.color ?? '#94a3b8' }}>
             {score !== null ? score : '-'}
           </p>
 
@@ -222,14 +222,14 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+            <h2 className="flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:text-lg">
               <Lightbulb className="h-5 w-5 text-amber-500" />
               Recommendations
             </h2>
-            <Link to="/app/messages" className="inline-flex items-center gap-2 text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8]">
+            <Link to="/app/messages" className="hidden items-center gap-2 text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8] sm:inline-flex">
               <MessageSquare className="h-4 w-4" />
               Message advisor
             </Link>
@@ -258,24 +258,24 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
             <BarChart3 className="h-5 w-5 text-[#2563eb]" />
             Past Semester Performance
           </h2>
-          <div className="flex h-48 items-end gap-3">
+          <div className="flex h-36 items-end gap-2 sm:h-48 sm:gap-3">
             {PAST_SEMESTER_GPA.map((semester) => {
               const pct = ((semester.gpa - 2.5) / 1.5) * 100;
               return (
                 <div key={semester.label} className="flex flex-1 flex-col items-center gap-1">
-                  <span className="text-xs font-semibold text-[#0f1e3c]">{semester.gpa.toFixed(2)}</span>
-                  <div className="flex h-[140px] w-full items-end">
+                  <span className="text-[10px] font-semibold text-[#0f1e3c] sm:text-xs">{semester.gpa.toFixed(2)}</span>
+                  <div className="flex h-[100px] w-full items-end sm:h-[140px]">
                     <div
                       className="w-full rounded-t-md bg-gradient-to-t from-[#2563eb] to-[#3b82f6] transition-all duration-500"
                       style={{ height: `${clamp(pct, 10, 100)}%` }}
                     />
                   </div>
-                  <span className="text-[10px] font-medium text-gray-400">{semester.label}</span>
+                  <span className="text-[9px] font-medium text-gray-400 sm:text-[10px]">{semester.label}</span>
                 </div>
               );
             })}
@@ -283,10 +283,10 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <div className="mb-3 flex items-center justify-between sm:mb-4">
+            <h2 className="flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:text-lg">
               <Save className="h-5 w-5 text-[#2563eb]" />
               Saved Drafts
             </h2>
@@ -298,7 +298,7 @@ export default function StudentDashboard() {
             {drafts.length > 0 ? (
               drafts.slice(0, 4).map((draft) => (
                 <div key={draft.id} className="rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-[#0f1e3c]">{draft.name}</p>
                       <p className="mt-1 text-xs text-gray-500">
@@ -326,8 +326,8 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
             <TrendingUp className="h-5 w-5 text-[#2563eb]" />
             Recent Evaluations
           </h2>
@@ -335,7 +335,7 @@ export default function StudentDashboard() {
             {evaluationHistory.length > 0 ? (
               evaluationHistory.map((evaluation) => (
                 <div key={evaluation.id} className="rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-semibold text-[#0f1e3c]">{new Date(evaluation.evaluatedAt).toLocaleString()}</p>
                       <p className="text-xs text-gray-500">Model {evaluation.modelVersion}</p>
@@ -358,3 +358,4 @@ export default function StudentDashboard() {
     </div>
   );
 }
+
