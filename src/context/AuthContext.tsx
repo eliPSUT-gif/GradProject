@@ -262,6 +262,48 @@ function mapRemoteUser(row: RemoteAppUserRow, passwordById: Map<string, string>)
   } satisfies ManagedUser);
 }
 
+function areManagedUsersEqual(left: ManagedUser[], right: ManagedUser[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((account, index) => {
+    const other = right[index];
+    return Boolean(other)
+      && account.id === other.id
+      && account.name === other.name
+      && account.role === other.role
+      && account.subtitle === other.subtitle
+      && account.initials === other.initials
+      && account.password === other.password
+      && account.status === other.status
+      && account.lastLogin === other.lastLogin
+      && (account.email ?? null) === (other.email ?? null)
+      && (account.appUserId ?? null) === (other.appUserId ?? null)
+      && (account.authUserId ?? null) === (other.authUserId ?? null)
+      && (account.lastSeenAt ?? null) === (other.lastSeenAt ?? null);
+  });
+}
+
+function areAuthSessionsEqual(left: AuthSession | null, right: AuthSession | null) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return left.id === right.id
+    && left.name === right.name
+    && left.role === right.role
+    && left.initials === right.initials
+    && left.subtitle === right.subtitle
+    && (left.email ?? null) === (right.email ?? null)
+    && (left.appUserId ?? null) === (right.appUserId ?? null)
+    && (left.authUserId ?? null) === (right.authUserId ?? null);
+}
+
 function formatRemainingLockout(lockedUntil: string) {
   const diff = new Date(lockedUntil).getTime() - Date.now();
   const seconds = Math.max(Math.ceil(diff / 1000), 1);
@@ -294,7 +336,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsers((current) => {
       const passwordById = new Map(current.map((account) => [account.id, account.password]));
       const remoteMappedUsers = remoteUsers.map((remoteUser) => mapRemoteUser(remoteUser, passwordById));
-      return mergeManagedUsers(SEED_MANAGED_USERS.map(normalizeManagedUser), current, remoteMappedUsers).map(normalizeManagedUser);
+      const nextUsers = mergeManagedUsers(SEED_MANAGED_USERS.map(normalizeManagedUser), current, remoteMappedUsers).map(normalizeManagedUser);
+      return areManagedUsersEqual(current, nextUsers) ? current : nextUsers;
     });
 
     setUser((current) => {
@@ -307,7 +350,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return current;
       }
 
-      return {
+      const nextUser = {
         id: matchedUser.university_id,
         name: matchedUser.full_name,
         role: matchedUser.role,
@@ -316,11 +359,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: matchedUser.email ?? current.email,
         appUserId: matchedUser.id,
         authUserId: matchedUser.auth_user_id,
-      };
+      } satisfies AuthSession;
+
+      return areAuthSessionsEqual(current, nextUser) ? current : nextUser;
     });
 
     return remoteUsers;
-  }, []);  const fetchRemoteUserByUniversityId = useCallback(async (universityId: string) => {
+  }, []);
+
+  const fetchRemoteUserByUniversityId = useCallback(async (universityId: string) => {
     if (!hasSupabaseConfig()) {
       return null;
     }
@@ -338,7 +385,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const passwordById = new Map(users.map((account) => [account.id, account.password]));
     const mapped = mapRemoteUser(resolved, passwordById);
-    setUsers((current) => mergeManagedUsers(SEED_MANAGED_USERS.map(normalizeManagedUser), current, [mapped]).map(normalizeManagedUser));
+    setUsers((current) => {
+      const nextUsers = mergeManagedUsers(SEED_MANAGED_USERS.map(normalizeManagedUser), current, [mapped]).map(normalizeManagedUser);
+      return areManagedUsersEqual(current, nextUsers) ? current : nextUsers;
+    });
     return mapped;
   }, [users]);
 
@@ -380,7 +430,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const passwordById = new Map(users.map((account) => [account.id, account.password]));
     const mapped = mapRemoteUser(resolved, passwordById);
 
-    setUsers((current) => mergeManagedUsers(SEED_MANAGED_USERS.map(normalizeManagedUser), current, [mapped]).map(normalizeManagedUser));
+    setUsers((current) => {
+      const nextUsers = mergeManagedUsers(SEED_MANAGED_USERS.map(normalizeManagedUser), current, [mapped]).map(normalizeManagedUser);
+      return areManagedUsersEqual(current, nextUsers) ? current : nextUsers;
+    });
 
     return toSessionUser(mapped);
   }, [users]);
@@ -760,6 +813,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => useContext(AuthContext);
 export type { AuthSession, LoginResult, PasswordChangeResult, UserFormInput };
+
+
 
 
 
