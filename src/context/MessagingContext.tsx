@@ -18,9 +18,7 @@ import {
   getSupabaseConfigError,
   hasSupabaseConfig,
   isLocalDemoModeEnabled,
-  supabaseInsert,
   supabaseRpc,
-  supabaseSelect,
 } from '../lib/supabase';
 
 export interface AdvisorMessage {
@@ -195,9 +193,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const [relationships, setRelationships] = useState<StudentProfileRelation[]>([]);
   const [onlineAppUserIds, setOnlineAppUserIds] = useState<Set<string>>(new Set());
   const [isMessagingReady, setIsMessagingReady] = useState(hasSupabaseConfig() || isLocalDemoModeEnabled());
-  const messagesChannelRef = useRef<RealtimeChannel | null>(null);
-  const presenceChannelRef = useRef<RealtimeChannel | null>(null);
-  const heartbeatRef = useRef<number | null>(null);
+  const loadSnapshotRef = useRef<(() => Promise<void>) | null>(null);
   const pendingDeliveryRef = useRef<Set<string>>(new Set());
   const pendingReadRef = useRef<Set<string>>(new Set());
   const appUserMapsRef = useRef<{
@@ -383,6 +379,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hasSupabaseConfig()) {
+      loadSnapshotRef.current = null;
       if (isLocalDemoModeEnabled()) {
         setRelationships(
           FALLBACK_RELATIONSHIPS.map((profile) => ({ user_id: profile.userId, advisor_id: profile.advisorId }))
@@ -398,11 +395,13 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     }
 
     if (!isAuthReady) {
+      loadSnapshotRef.current = null;
       setIsMessagingReady(false);
       return;
     }
 
     if (!isAuthenticated || !user || !currentAppUserId) {
+      loadSnapshotRef.current = null;
       setMessages([]);
       setRelationships([]);
       setOnlineAppUserIds(new Set());
@@ -412,39 +411,53 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
     const supabase = getSupabaseClient();
     if (!supabase) {
+      loadSnapshotRef.current = null;
       setIsMessagingReady(true);
       return;
     }
 
     let cancelled = false;
+    let messagesChannel: RealtimeChannel | null = null;
+    let presenceChannel: RealtimeChannel | null = null;
+    let lastSeenInterval: number | null = null;
     setIsMessagingReady(false);
 
     const loadSnapshot = async () => {
-      try {
-        const [messageRows, relationRows] = await Promise.all([
-          supabaseSelect<RemoteMessageRow[]>(
-            'messages',
-            `select=id,sender_id,recipient_id,body,sent_at,delivered_at,read_at,client_message_id&or=(sender_id.eq.${encodeURIComponent(currentAppUserId)},recipient_id.eq.${encodeURIComponent(currentAppUserId)})&order=sent_at.asc`
-          ),
-          supabaseSelect<StudentProfileRelation[]>('student_profiles', 'select=user_id,advisor_id'),
-        ]);
+      const [{ data: messageRows, error: messageError }, { data: relationRows, error: relationError }] = await Promise.all([
+        supabase
+          .from('messages')
+          .select('id,sender_id,recipient_id,body,sent_at,delivered_at,read_at,client_message_id')
+          .or(`sender_id.eq.${currentAppUserId},recipient_id.eq.${currentAppUserId}`)
+          .order('sent_at', { ascending: true }),
+        supabase
+          .from('student_profiles')
+          .select('user_id,advisor_id'),
+      ]);
 
-        if (cancelled) {
-          return;
-        }
-
-        startTransition(() => {
-          setRelationships(relationRows);
-          setMessages(messageRows.map((row) => mapRemoteMessage(row, userIdByAppUserId)).filter(Boolean) as AdvisorMessage[]);
-          setIsMessagingReady(true);
-        });
-      } catch (error) {
-        console.error('Unable to load messaging snapshot.', error);
-        if (!cancelled) {
-          setIsMessagingReady(true);
-        }
+      if (cancelled) {
+        return;
       }
+
+      if (messageError) {
+        throw messageError;
+      }
+
+      if (relationError) {
+        throw relationError;
+      }
+
+      const nextMessages = (messageRows ?? [])
+        .map((row) => mapRemoteMessage(row as RemoteMessageRow, userIdByAppUserId))
+        .filter(Boolean) as AdvisorMessage[];
+
+      startTransition(() => {
+        setRelationships((relationRows ?? []) as StudentProfileRelation[]);
+        setMessages(nextMessages);
+        setIsMessagingReady(true);
+      });
     };
+
+    loadSnapshotRef.current = loadSnapshot;
 
     const upsertRemoteMessage = (row: RemoteMessageRow | null | undefined) => {
       if (!row) {
@@ -466,12 +479,15 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    void loadSnapshot();
+    void loadSnapshot().catch((error) => {
+      console.error('Unable to load messaging snapshot.', error);
+      if (!cancelled) {
+        setIsMessagingReady(true);
+      }
+    });
 
-    const messagesChannel = supabase.channel(`${MESSAGES_CHANNEL}:${currentAppUserId}`);
+    messagesChannel = supabase.channel(`${MESSAGES_CHANNEL}:${currentAppUserId}`);
     const encodedCurrentAppUserId = encodeURIComponent(currentAppUserId);
-
-    messagesChannelRef.current = messagesChannel;
 
     messagesChannel
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${encodedCurrentAppUserId}` }, ({ new: next }) => {
@@ -487,23 +503,20 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         upsertRemoteMessage(next as RemoteMessageRow);
       })
       .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Supabase messages channel failed to subscribe.', status);
-        }
-
         if (status === 'SUBSCRIBED') {
           setIsMessagingReady(true);
+          return;
+        }
+
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Supabase messages channel failed to subscribe.', status);
+          void loadSnapshot().catch((error) => {
+            console.error('Unable to recover messaging snapshot after subscription failure.', error);
+          });
         }
       });
 
-    const handlePresenceSync = () => {
-      const state = presenceChannelRef.current?.presenceState() ?? {};
-      startTransition(() => {
-        setOnlineAppUserIds(new Set(Object.keys(state)));
-      });
-    };
-
-    const presenceChannel = supabase.channel(PRESENCE_CHANNEL, {
+    presenceChannel = supabase.channel(PRESENCE_CHANNEL, {
       config: {
         presence: {
           key: currentAppUserId,
@@ -511,48 +524,61 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    presenceChannelRef.current = presenceChannel;
-
     presenceChannel
-      .on('presence', { event: 'sync' }, handlePresenceSync)
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel?.presenceState() ?? {};
+        startTransition(() => {
+          setOnlineAppUserIds(new Set(Object.keys(state)));
+        });
+      })
       .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Supabase presence channel failed to subscribe.', status);
-        }
-
-        if (status !== 'SUBSCRIBED') {
+        if (status === 'SUBSCRIBED') {
+          void presenceChannel?.track({ universityId: user.id, connectedAt: new Date().toISOString() });
+          void touchLastSeen();
           return;
         }
 
-        void presenceChannel.track({ universityId: user.id, connectedAt: new Date().toISOString() });
-        void touchLastSeen();
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Supabase presence channel failed to subscribe.', status);
+        }
       });
 
-    heartbeatRef.current = window.setInterval(() => {
+    lastSeenInterval = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') {
+        return;
+      }
+
       void touchLastSeen();
     }, LAST_SEEN_TOUCH_INTERVAL_MS);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         void touchLastSeen();
+        return;
       }
+
+      void loadSnapshot().catch((error) => {
+        console.error('Unable to refresh messaging snapshot on visibility change.', error);
+      });
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       cancelled = true;
+      loadSnapshotRef.current = null;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (heartbeatRef.current) {
-        window.clearInterval(heartbeatRef.current);
-        heartbeatRef.current = null;
+      if (lastSeenInterval) {
+        window.clearInterval(lastSeenInterval);
       }
-      messagesChannelRef.current = null;
-      presenceChannelRef.current = null;
       setOnlineAppUserIds(new Set());
       void touchLastSeen();
-      void supabase.removeChannel(messagesChannel);
-      void supabase.removeChannel(presenceChannel);
+      if (messagesChannel) {
+        void supabase.removeChannel(messagesChannel);
+      }
+      if (presenceChannel) {
+        void supabase.removeChannel(presenceChannel);
+      }
     };
   }, [currentAppUserId, isAuthenticated, isAuthReady, markConversationDelivered, touchLastSeen, user, userIdByAppUserId]);
 
@@ -622,6 +648,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       };
     }
 
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setMessages((current) => current.filter((message) => message.clientMessageId !== clientMessageId));
+      return { success: false, error: 'Supabase client is not available right now.' };
+    }
+
     const senderAppUserId = appUserIdByUserId[senderId];
     const recipientAppUserId = appUserIdByUserId[recipientId];
     if (!senderAppUserId || !recipientAppUserId) {
@@ -630,18 +662,23 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const insertedRows = await supabaseInsert<RemoteMessageRow[]>('messages', {
-        sender_id: senderAppUserId,
-        recipient_id: recipientAppUserId,
-        body: optimisticMessage.body,
-        sent_at: optimisticMessage.sentAt,
-        client_message_id: clientMessageId,
-      });
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: senderAppUserId,
+          recipient_id: recipientAppUserId,
+          body: optimisticMessage.body,
+          sent_at: optimisticMessage.sentAt,
+          client_message_id: clientMessageId,
+        })
+        .select('id,sender_id,recipient_id,body,sent_at,delivered_at,read_at,client_message_id')
+        .single();
 
-      const insertedMessage = insertedRows
-        .map((row) => mapRemoteMessage(row, userIdByAppUserId))
-        .find(Boolean) as AdvisorMessage | undefined;
+      if (error) {
+        throw error;
+      }
 
+      const insertedMessage = data ? mapRemoteMessage(data as RemoteMessageRow, userIdByAppUserId) : null;
       if (!insertedMessage) {
         throw new Error('The server did not return the saved message.');
       }
@@ -651,7 +688,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Unable to save message to Supabase.', error);
       setMessages((current) => current.filter((message) => message.clientMessageId !== clientMessageId));
-      return { success: false, error: 'Unable to save the message right now. Please try again.' };
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unable to save the message right now. Please try again.',
+      };
     }
   }, [appUserIdByUserId, isMessagePairAllowed, userIdByAppUserId]);
 
