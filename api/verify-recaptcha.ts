@@ -1,4 +1,5 @@
 const MIN_RECAPTCHA_SCORE = 0.5;
+const VERIFY_TIMEOUT_MS = 10000;
 
 export default async function handler(request: Request) {
   if (request.method !== 'POST') {
@@ -27,6 +28,9 @@ export default async function handler(request: Request) {
     response: payload.token,
   });
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS);
+
   try {
     const googleResponse = await fetch('https://www.google.com/recaptcha/api/siteverify', {
       method: 'POST',
@@ -34,6 +38,7 @@ export default async function handler(request: Request) {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: verificationBody.toString(),
+      signal: controller.signal,
     });
 
     const result = (await googleResponse.json()) as {
@@ -69,7 +74,13 @@ export default async function handler(request: Request) {
       score,
       action: result.action,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return Response.json({ success: false, error: 'Timed out while talking to Google reCAPTCHA.' }, { status: 504 });
+    }
+
     return Response.json({ success: false, error: 'Unable to verify reCAPTCHA right now.' }, { status: 502 });
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
