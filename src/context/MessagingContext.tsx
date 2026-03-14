@@ -209,40 +209,44 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
   const getAssignedAdvisorId = useCallback(
     (studentId: string) => {
+      const fallbackAdvisorId = FALLBACK_RELATIONSHIPS.find((profile) => profile.userId === studentId)?.advisorId ?? null;
       if (relationships.length === 0) {
-        return FALLBACK_RELATIONSHIPS.find((profile) => profile.userId === studentId)?.advisorId ?? null;
+        return fallbackAdvisorId;
       }
 
       const studentAppUserId = appUserIdByUserId[studentId];
       if (!studentAppUserId) {
-        return null;
+        return fallbackAdvisorId;
       }
 
       const relation = relationships.find((profile) => profile.user_id === studentAppUserId);
       if (!relation?.advisor_id) {
-        return null;
+        return fallbackAdvisorId;
       }
 
-      return userIdByAppUserId[relation.advisor_id] ?? null;
+      return userIdByAppUserId[relation.advisor_id] ?? fallbackAdvisorId;
     },
     [appUserIdByUserId, relationships, userIdByAppUserId]
   );
 
   const getAdviseeIds = useCallback(
     (advisorId: string) => {
+      const fallbackAdviseeIds = FALLBACK_RELATIONSHIPS.filter((profile) => profile.advisorId === advisorId).map((profile) => profile.userId);
       if (relationships.length === 0) {
-        return FALLBACK_RELATIONSHIPS.filter((profile) => profile.advisorId === advisorId).map((profile) => profile.userId);
+        return fallbackAdviseeIds;
       }
 
       const advisorAppUserId = appUserIdByUserId[advisorId];
       if (!advisorAppUserId) {
-        return [] as string[];
+        return fallbackAdviseeIds;
       }
 
-      return relationships
+      const remoteAdviseeIds = relationships
         .filter((profile) => profile.advisor_id === advisorAppUserId)
         .map((profile) => userIdByAppUserId[profile.user_id])
         .filter(Boolean) as string[];
+
+      return remoteAdviseeIds.length > 0 ? remoteAdviseeIds : fallbackAdviseeIds;
     },
     [appUserIdByUserId, relationships, userIdByAppUserId]
   );
@@ -596,4 +600,5 @@ export function useMessaging() {
 
   return context;
 }
+
 
