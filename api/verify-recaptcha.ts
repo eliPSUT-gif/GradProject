@@ -1,5 +1,13 @@
 const MIN_RECAPTCHA_SCORE = 0.5;
-const VERIFY_TIMEOUT_MS = 10000;
+const VERIFY_TIMEOUT_MS = 8000;
+
+function timeoutAfter<T>(ms: number, response: T) {
+  return new Promise<T>((resolve) => {
+    setTimeout(() => resolve(response), ms);
+  });
+}
+
+export const maxDuration = 10;
 
 export default async function handler(request: Request) {
   if (request.method !== 'POST') {
@@ -28,59 +36,66 @@ export default async function handler(request: Request) {
     response: payload.token,
   });
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS);
-
   try {
-    const googleResponse = await fetch('https://www.google.com/recaptcha/api/siteverify', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: verificationBody.toString(),
-      signal: controller.signal,
-    });
+    const googleResult = await Promise.race([
+      fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: verificationBody.toString(),
+      }).then(async (googleResponse) => {
+        if (!googleResponse.ok) {
+          throw new Error(`Google verification failed with status ${googleResponse.status}.`);
+        }
 
-    const result = (await googleResponse.json()) as {
-      success?: boolean;
-      score?: number;
-      action?: string;
-      ['error-codes']?: string[];
-    };
+        return (await googleResponse.json()) as {
+          success?: boolean;
+          score?: number;
+          action?: string;
+          ['error-codes']?: string[];
+        };
+      }),
+      timeoutAfter(VERIFY_TIMEOUT_MS, {
+        success: false,
+        score: 0,
+        action: payload.action,
+        ['error-codes']: ['verification-timeout'],
+      }),
+    ]);
 
-    const score = Number(result.score ?? 0);
-    const isActionMatch = result.action === payload.action;
-    const isVerified = Boolean(result.success) && isActionMatch && score >= MIN_RECAPTCHA_SCORE;
+    const score = Number(googleResult.score ?? 0);
+    const isActionMatch = googleResult.action === payload.action;
+    const isVerified = Boolean(googleResult.success) && isActionMatch && score >= MIN_RECAPTCHA_SCORE;
 
     if (!isVerified) {
+      const timeoutHit = googleResult['error-codes']?.includes('verification-timeout');
+
       return Response.json(
         {
           success: false,
           score,
-          action: result.action,
-          errors: result['error-codes'] ?? [],
-          error: !isActionMatch
-            ? 'reCAPTCHA action mismatch.'
-            : score < MIN_RECAPTCHA_SCORE
-              ? 'Suspicious activity detected. Please try again.'
-              : 'reCAPTCHA verification failed.',
+          action: googleResult.action,
+          errors: googleResult['error-codes'] ?? [],
+          error: timeoutHit
+            ? 'Timed out while talking to Google reCAPTCHA.'
+            : !isActionMatch
+              ? 'reCAPTCHA action mismatch.'
+              : score < MIN_RECAPTCHA_SCORE
+                ? 'Suspicious activity detected. Please try again.'
+                : 'reCAPTCHA verification failed.',
         },
-        { status: 400 }
+        { status: timeoutHit ? 504 : 400 }
       );
     }
 
     return Response.json({
       success: true,
       score,
-      action: result.action,
+      action: googleResult.action,
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      return Response.json({ success: false, error: 'Timed out while talking to Google reCAPTCHA.' }, { status: 504 });
-    }
-
-    return Response.json({ success: false, error: 'Unable to verify reCAPTCHA right now.' }, { status: 502 });
-  } finally {
-    clearTimeout(timeoutId);
+    const message = error instanceof Error ? error.message : 'Unable to verify reCAPTCHA right now.';
+    return Response.json({ success: false, error: message }, { status: 502 });
   }
 }
