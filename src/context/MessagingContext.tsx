@@ -79,14 +79,17 @@ interface StudentProfileRelation {
   advisor_id: string | null;
 }
 
+const MESSAGES_CHANNEL = 'messaging-realtime';
+const PRESENCE_CHANNEL = 'messaging-presence';
+
 const MessagingContext = createContext<MessagingContextValue | null>(null);
 
-function createClientId(prefix: string) {
+function createClientId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
   }
 
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function choosePreferredMessage(existing: AdvisorMessage, incoming: AdvisorMessage) {
@@ -180,7 +183,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const [relationships, setRelationships] = useState<StudentProfileRelation[]>([]);
   const [onlineAppUserIds, setOnlineAppUserIds] = useState<Set<string>>(new Set());
   const [isMessagingReady, setIsMessagingReady] = useState(!hasSupabaseConfig());
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const messagesChannelRef = useRef<RealtimeChannel | null>(null);
+  const presenceChannelRef = useRef<RealtimeChannel | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const pendingDeliveryRef = useRef<Set<string>>(new Set());
   const pendingReadRef = useRef<Set<string>>(new Set());
@@ -365,32 +369,6 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     setIsMessagingReady(false);
 
-    const handlePresenceSync = () => {
-      const state = channelRef.current?.presenceState() ?? {};
-      startTransition(() => {
-        setOnlineAppUserIds(new Set(Object.keys(state)));
-      });
-    };
-
-    const upsertRemoteMessage = (row: RemoteMessageRow | null | undefined) => {
-      if (!row) {
-        return;
-      }
-
-      const mapped = mapRemoteMessage(row, userIdByAppUserId);
-      if (!mapped) {
-        return;
-      }
-
-      startTransition(() => {
-        setMessages((current) => mergeMessages(current, [mapped]));
-      });
-
-      if (mapped.recipientId === user.id && !mapped.deliveredAt) {
-        void markConversationDelivered(mapped.senderId);
-      }
-    };
-
     const loadSnapshot = async () => {
       try {
         const [messageRows, relationRows] = await Promise.all([
@@ -418,31 +396,79 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const upsertRemoteMessage = (row: RemoteMessageRow | null | undefined) => {
+      if (!row) {
+        return;
+      }
+
+      const mapped = mapRemoteMessage(row, userIdByAppUserId);
+      if (!mapped) {
+        void loadSnapshot();
+        return;
+      }
+
+      startTransition(() => {
+        setMessages((current) => mergeMessages(current, [mapped]));
+      });
+
+      if (mapped.recipientId === user.id && !mapped.deliveredAt) {
+        void markConversationDelivered(mapped.senderId);
+      }
+    };
+
     void loadSnapshot();
 
-    const channel = supabase.channel(`messaging:${currentAppUserId}`, {
+    const messagesChannel = supabase.channel(`${MESSAGES_CHANNEL}:${currentAppUserId}`);
+    const encodedCurrentAppUserId = encodeURIComponent(currentAppUserId);
+
+    messagesChannelRef.current = messagesChannel;
+
+    messagesChannel
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${encodedCurrentAppUserId}` }, ({ new: next }) => {
+        upsertRemoteMessage(next as RemoteMessageRow);
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `recipient_id=eq.${encodedCurrentAppUserId}` }, ({ new: next }) => {
+        upsertRemoteMessage(next as RemoteMessageRow);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `sender_id=eq.${encodedCurrentAppUserId}` }, ({ new: next }) => {
+        upsertRemoteMessage(next as RemoteMessageRow);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `recipient_id=eq.${encodedCurrentAppUserId}` }, ({ new: next }) => {
+        upsertRemoteMessage(next as RemoteMessageRow);
+      })
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          return;
+        }
+
+        setIsMessagingReady(true);
+      });
+
+    const handlePresenceSync = () => {
+      const state = presenceChannelRef.current?.presenceState() ?? {};
+      startTransition(() => {
+        setOnlineAppUserIds(new Set(Object.keys(state)));
+      });
+    };
+
+    const presenceChannel = supabase.channel(PRESENCE_CHANNEL, {
       config: {
         presence: {
           key: currentAppUserId,
         },
       },
     });
-    channelRef.current = channel;
 
-    channel
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, ({ new: next }) => {
-        upsertRemoteMessage(next as RemoteMessageRow);
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, ({ new: next }) => {
-        upsertRemoteMessage(next as RemoteMessageRow);
-      })
+    presenceChannelRef.current = presenceChannel;
+
+    presenceChannel
       .on('presence', { event: 'sync' }, handlePresenceSync)
       .subscribe((status) => {
         if (status !== 'SUBSCRIBED') {
           return;
         }
 
-        void channel.track({ universityId: user.id, connectedAt: new Date().toISOString() });
+        void presenceChannel.track({ universityId: user.id, connectedAt: new Date().toISOString() });
         void touchLastSeen();
       });
 
@@ -465,10 +491,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         window.clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
       }
-      channelRef.current = null;
+      messagesChannelRef.current = null;
+      presenceChannelRef.current = null;
       setOnlineAppUserIds(new Set());
       void touchLastSeen();
-      void supabase.removeChannel(channel);
+      void supabase.removeChannel(messagesChannel);
+      void supabase.removeChannel(presenceChannel);
     };
   }, [currentAppUserId, isAuthenticated, isAuthReady, markConversationDelivered, touchLastSeen, user, userIdByAppUserId]);
 
@@ -510,7 +538,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return { success: false, error: 'Messages can only be exchanged between a student and their assigned advisor.' };
     }
 
-    const clientMessageId = createClientId('msg');
+    const clientMessageId = createClientId();
     const optimisticMessage: AdvisorMessage = {
       id: `optimistic-${clientMessageId}`,
       clientMessageId,
@@ -600,5 +628,3 @@ export function useMessaging() {
 
   return context;
 }
-
-
