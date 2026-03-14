@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -94,7 +95,7 @@ const MAX_ATTEMPTS = 3;
 const LOCKOUT_MS = 30_000;
 const MIN_PASSWORD_LENGTH = 10;
 const DEFAULT_PASSWORD = 'ChangeMe@123';
-const USER_SYNC_INTERVAL_MS = 5000;
+const USER_SYNC_INTERVAL_MS = 30000;
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -323,6 +324,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [attempts, setAttempts] = useState<Record<string, { count: number; lockedUntil?: string }>>(loadAttempts);
   const [isAuthReady, setIsAuthReady] = useState(!hasSupabaseConfig());
 
+  const usersRef = useRef(users);
+  usersRef.current = users;
+
   const syncUsersFromSupabase = useCallback(async () => {
     if (!hasSupabaseConfig()) {
       return [] as RemoteAppUserRow[];
@@ -383,14 +387,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
-    const passwordById = new Map(users.map((account) => [account.id, account.password]));
+    const passwordById = new Map(usersRef.current.map((account) => [account.id, account.password]));
     const mapped = mapRemoteUser(resolved, passwordById);
     setUsers((current) => {
       const nextUsers = mergeManagedUsers(SEED_MANAGED_USERS.map(normalizeManagedUser), current, [mapped]).map(normalizeManagedUser);
       return areManagedUsersEqual(current, nextUsers) ? current : nextUsers;
     });
     return mapped;
-  }, [users]);
+  }, []);
 
 
   const resolveAppUserFromAuth = useCallback(async (authUser: User | null) => {
@@ -427,7 +431,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
-    const passwordById = new Map(users.map((account) => [account.id, account.password]));
+    const passwordById = new Map(usersRef.current.map((account) => [account.id, account.password]));
     const mapped = mapRemoteUser(resolved, passwordById);
 
     setUsers((current) => {
@@ -436,7 +440,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return toSessionUser(mapped);
-  }, [users]);
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(USERS_KEY, JSON.stringify(users.map(normalizeManagedUser)));
@@ -508,19 +512,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void hydrate();
 
-    const { data: authListener } = onSupabaseAuthStateChange((_event, session) => {
-      void (async () => {
-        if (!session?.user) {
-          setUser(null);
-          setIsAuthReady(true);
-          return;
-        }
+    const { data: authListener } = onSupabaseAuthStateChange((event, session) => {
+      if (cancelled) return;
 
-        const resolved = await resolveAppUserFromAuth(session.user);
-        setUser(resolved);
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
         setIsAuthReady(true);
-        void syncUsersFromSupabase();
-      })();
+        return;
+      }
+
+      // Ignore transient null sessions (e.g. during TOKEN_REFRESHED)
+      if (!session?.user) {
+        return;
+      }
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        void (async () => {
+          if (cancelled) return;
+          const resolved = await resolveAppUserFromAuth(session.user);
+          if (cancelled) return;
+          if (resolved) {
+            setUser(resolved);
+          }
+          setIsAuthReady(true);
+        })();
+      }
     });
 
     const syncInterval = window.setInterval(() => {
@@ -585,7 +601,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (hasSupabaseConfig()) {
-        let matchedUser = users.find((account) => account.id.toLowerCase() === normalizedId.toLowerCase());
+        let matchedUser = usersRef.current.find((account) => account.id.toLowerCase() === normalizedId.toLowerCase());
         const remoteMatchedUser = await fetchRemoteUserByUniversityId(normalizedId);
         if (remoteMatchedUser) {
           matchedUser = remoteMatchedUser;
@@ -602,7 +618,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { success: false, error: 'This account is missing an email address in public.app_users. Add the email in Supabase and try again.' };
         }
 
-        setIsAuthReady(false);
         const signInResult = await supabaseSignInWithPassword(matchedUser.email, password);
         if (signInResult.error) {
           setIsAuthReady(true);
@@ -647,7 +662,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: true };
       }
 
-      const matchedUser = users.find((account) => account.id.toLowerCase() === normalizedId.toLowerCase());
+      const matchedUser = usersRef.current.find((account) => account.id.toLowerCase() === normalizedId.toLowerCase());
       if (!matchedUser || matchedUser.role !== role || matchedUser.password !== password) {
         return { success: false, error: registerFailedAttempt() };
       }
@@ -667,7 +682,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(toSessionUser(nextUser));
       return { success: true };
     },
-    [attempts, fetchRemoteUserByUniversityId, resolveAppUserFromAuth, syncUsersFromSupabase, users]
+    [attempts, fetchRemoteUserByUniversityId, resolveAppUserFromAuth, syncUsersFromSupabase]
   );
 
   const logout = useCallback(async () => {

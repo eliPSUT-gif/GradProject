@@ -196,6 +196,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const pendingDeliveryRef = useRef<Set<string>>(new Set());
   const pendingReadRef = useRef<Set<string>>(new Set());
   const snapshotRef = useRef<(() => Promise<void>) | null>(null);
+  const markConversationDeliveredRef = useRef<typeof markConversationDelivered>(null!);
+  const touchLastSeenRef = useRef<typeof touchLastSeen>(null!);
+  const userRef = useRef(user);
   const appUserMapsRef = useRef<{
     key: string;
     appUserIdByUserId: Record<string, string>;
@@ -361,6 +364,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     }
   }, [appUserIdByUserId, user]);
 
+  markConversationDeliveredRef.current = markConversationDelivered;
+  touchLastSeenRef.current = touchLastSeen;
+  userRef.current = user;
+
   useEffect(() => {
     if (!user) {
       return;
@@ -402,7 +409,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (!isAuthenticated || !user || !currentAppUserId) {
+    if (!isAuthenticated || !currentAppUserId) {
       snapshotRef.current = null;
       setMessages([]);
       setRelationships([]);
@@ -480,8 +487,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         setMessages((current) => mergeMessages(current, [mapped]));
       });
 
-      if (mapped.recipientId === user.id && !mapped.deliveredAt) {
-        void markConversationDelivered(mapped.senderId);
+      if (mapped.recipientId === userRef.current?.id && !mapped.deliveredAt) {
+        void markConversationDeliveredRef.current(mapped.senderId);
       }
     };
 
@@ -520,8 +527,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          void presenceChannel.track({ universityId: user.id, connectedAt: new Date().toISOString() });
-          void touchLastSeen();
+          void presenceChannel.track({ universityId: userRef.current?.id ?? '', connectedAt: new Date().toISOString() });
+          void touchLastSeenRef.current();
           return;
         }
 
@@ -543,12 +550,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      void touchLastSeen();
+      void touchLastSeenRef.current();
     }, LAST_SEEN_TOUCH_INTERVAL_MS);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        void touchLastSeen();
+        void touchLastSeenRef.current();
         return;
       }
 
@@ -569,11 +576,11 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.clearInterval(lastSeenInterval);
       setOnlineAppUserIds(new Set());
-      void touchLastSeen();
+      void touchLastSeenRef.current();
       void supabase.removeChannel(messagesChannel);
       void supabase.removeChannel(presenceChannel);
     };
-  }, [currentAppUserId, isAuthenticated, isAuthReady, markConversationDelivered, touchLastSeen, user, userIdByAppUserId]);
+  }, [currentAppUserId, isAuthenticated, isAuthReady, userIdByAppUserId]);
 
   const getConversationMessages = useCallback(
     (userId: string, otherUserId: string) =>
