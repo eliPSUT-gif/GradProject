@@ -10,6 +10,10 @@ function timeoutAfter<T>(ms: number, response: T) {
   });
 }
 
+function normalizeAction(action: string | undefined) {
+  return action?.trim().toLowerCase() ?? '';
+}
+
 export const config = {
   maxDuration: 10,
 };
@@ -69,7 +73,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
     ]);
 
     const score = Number(googleResult.score ?? 0);
-    const isActionMatch = googleResult.action === payload.action;
+    const expectedAction = normalizeAction(payload.action);
+    const returnedAction = normalizeAction(googleResult.action);
+    const hasReturnedAction = returnedAction.length > 0;
+    const isActionMatch = !hasReturnedAction || returnedAction === expectedAction;
     const isVerified = Boolean(googleResult.success) && isActionMatch && score >= MIN_RECAPTCHA_SCORE;
 
     if (!isVerified) {
