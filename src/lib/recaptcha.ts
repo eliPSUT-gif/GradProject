@@ -10,6 +10,7 @@ declare global {
 const RECAPTCHA_SCRIPT_ID = 'google-recaptcha-v3';
 const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 const RECAPTCHA_TIMEOUT_MS = 10000;
+const RECAPTCHA_HOST = 'https://www.recaptcha.net';
 
 let scriptPromise: Promise<void> | null = null;
 
@@ -54,7 +55,7 @@ function loadRecaptchaScript() {
 
     const script = document.createElement('script');
     script.id = RECAPTCHA_SCRIPT_ID;
-    script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(RECAPTCHA_SITE_KEY ?? '')}`;
+    script.src = `${RECAPTCHA_HOST}/recaptcha/api.js?render=${encodeURIComponent(RECAPTCHA_SITE_KEY ?? '')}`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();

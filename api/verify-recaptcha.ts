@@ -1,5 +1,6 @@
 const MIN_RECAPTCHA_SCORE = 0.5;
 const VERIFY_TIMEOUT_MS = 8000;
+const RECAPTCHA_VERIFY_URL = 'https://www.recaptcha.net/recaptcha/api/siteverify';
 
 function timeoutAfter<T>(ms: number, response: T) {
   return new Promise<T>((resolve) => {
@@ -38,7 +39,7 @@ export default async function handler(request: Request) {
 
   try {
     const googleResult = await Promise.race([
-      fetch('https://www.google.com/recaptcha/api/siteverify', {
+      fetch(RECAPTCHA_VERIFY_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
