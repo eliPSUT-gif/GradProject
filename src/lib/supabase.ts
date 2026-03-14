@@ -5,8 +5,15 @@ function buildHeaders(extraHeaders: HeadersInit = {}) {
   return {
     apikey: supabaseAnonKey,
     Authorization: `Bearer ${supabaseAnonKey}`,
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
     ...extraHeaders,
   };
+}
+
+function buildSelectUrl(table: string, query: string) {
+  const separator = query ? '&' : '';
+  return `${supabaseUrl}/rest/v1/${table}?${query}${separator}_ts=${Date.now()}`;
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -24,7 +31,8 @@ export function hasSupabaseConfig() {
 }
 
 export async function supabaseSelect<T>(table: string, query: string) {
-  const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${query}`, {
+  const response = await fetch(buildSelectUrl(table, query), {
+    cache: 'no-store',
     headers: buildHeaders(),
   });
 
@@ -34,6 +42,7 @@ export async function supabaseSelect<T>(table: string, query: string) {
 export async function supabaseInsert<T>(table: string, payload: unknown) {
   const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
     method: 'POST',
+    cache: 'no-store',
     headers: buildHeaders({
       'Content-Type': 'application/json',
       Prefer: 'return=representation',
@@ -48,6 +57,7 @@ export async function supabaseUpsert<T>(table: string, payload: unknown, onConfl
   const query = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : '';
   const response = await fetch(`${supabaseUrl}/rest/v1/${table}${query}`, {
     method: 'POST',
+    cache: 'no-store',
     headers: buildHeaders({
       'Content-Type': 'application/json',
       Prefer: 'resolution=merge-duplicates,return=representation',
@@ -61,6 +71,7 @@ export async function supabaseUpsert<T>(table: string, payload: unknown, onConfl
 export async function supabasePatch<T>(table: string, query: string, payload: unknown) {
   const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${query}`, {
     method: 'PATCH',
+    cache: 'no-store',
     headers: buildHeaders({
       'Content-Type': 'application/json',
       Prefer: 'return=representation',
@@ -74,6 +85,7 @@ export async function supabasePatch<T>(table: string, query: string, payload: un
 export async function supabaseDelete(table: string, query: string) {
   const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${query}`, {
     method: 'DELETE',
+    cache: 'no-store',
     headers: buildHeaders({ Prefer: 'return=minimal' }),
   });
 
