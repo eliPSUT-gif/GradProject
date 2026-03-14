@@ -156,7 +156,7 @@ export default function StudentMessagesPage() {
             className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm sm:px-4 sm:py-3 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Messages sync across browsers and devices. Checks move from sent to delivered to read.</p>}
+            {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Messages sync across browsers and devices within a few seconds. Checks move from sent to delivered to read.</p>}
             <button
               onClick={() => { void handleSend(); }}
               disabled={!advisorId || !isMessagingReady}
@@ -171,5 +171,6 @@ export default function StudentMessagesPage() {
     </div>
   );
 }
+
 
 

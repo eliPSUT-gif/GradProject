@@ -10,11 +10,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { RealtimeChannel } from '@supabase/supabase-js';
 import { STUDENT_PROFILES } from '../data/courses';
 import { useAuth } from './AuthContext';
 import {
-  getSupabaseClient,
   hasSupabaseConfig,
   supabaseInsert,
   supabaseRpc,
@@ -79,8 +77,9 @@ interface StudentProfileRelation {
   advisor_id: string | null;
 }
 
-const MESSAGES_CHANNEL = 'messaging-realtime';
-const PRESENCE_CHANNEL = 'messaging-presence';
+const MESSAGE_POLL_INTERVAL_MS = 2500;
+const LAST_SEEN_TOUCH_INTERVAL_MS = 15000;
+const ONLINE_WINDOW_MS = 45000;
 
 const MessagingContext = createContext<MessagingContextValue | null>(null);
 
@@ -172,6 +171,14 @@ function applyRead(messages: AdvisorMessage[], viewerId: string, otherUserId: st
   );
 }
 
+function isRecentlyOnline(lastSeenAt: string | null) {
+  if (!lastSeenAt) {
+    return false;
+  }
+
+  return Date.now() - new Date(lastSeenAt).getTime() <= ONLINE_WINDOW_MS;
+}
+
 const FALLBACK_RELATIONSHIPS = STUDENT_PROFILES.map((profile) => ({
   userId: profile.id,
   advisorId: profile.advisorId || null,
@@ -181,11 +188,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isAuthReady, user, users } = useAuth();
   const [messages, setMessages] = useState<AdvisorMessage[]>([]);
   const [relationships, setRelationships] = useState<StudentProfileRelation[]>([]);
-  const [onlineAppUserIds, setOnlineAppUserIds] = useState<Set<string>>(new Set());
   const [isMessagingReady, setIsMessagingReady] = useState(!hasSupabaseConfig());
-  const messagesChannelRef = useRef<RealtimeChannel | null>(null);
-  const presenceChannelRef = useRef<RealtimeChannel | null>(null);
-  const heartbeatRef = useRef<number | null>(null);
+  const refreshRef = useRef<(() => Promise<void>) | null>(null);
   const pendingDeliveryRef = useRef<Set<string>>(new Set());
   const pendingReadRef = useRef<Set<string>>(new Set());
 
@@ -286,6 +290,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     try {
       await supabaseRpc<number>('mark_conversation_delivered', { other_user_id: otherAppUserId });
       setMessages((current) => applyDelivery(current, user.id, otherUserId, deliveredAt));
+      await refreshRef.current?.();
     } catch (error) {
       console.error('Unable to mark messages as delivered.', error);
     } finally {
@@ -315,6 +320,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     try {
       await supabaseRpc<number>('mark_conversation_read', { other_user_id: otherAppUserId });
       setMessages((current) => applyRead(current, user.id, otherUserId, readAt));
+      await refreshRef.current?.();
     } catch (error) {
       console.error('Unable to mark messages as read.', error);
     } finally {
@@ -344,32 +350,34 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         FALLBACK_RELATIONSHIPS.map((profile) => ({ user_id: profile.userId, advisor_id: profile.advisorId }))
       );
       setIsMessagingReady(true);
+      refreshRef.current = null;
       return;
     }
 
     if (!isAuthReady) {
       setIsMessagingReady(false);
+      refreshRef.current = null;
       return;
     }
 
     if (!isAuthenticated || !user || !currentAppUserId) {
       setMessages([]);
       setRelationships([]);
-      setOnlineAppUserIds(new Set());
       setIsMessagingReady(true);
-      return;
-    }
-
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      setIsMessagingReady(true);
+      refreshRef.current = null;
       return;
     }
 
     let cancelled = false;
+    let isFetching = false;
     setIsMessagingReady(false);
 
     const loadSnapshot = async () => {
+      if (isFetching) {
+        return;
+      }
+
+      isFetching = true;
       try {
         const [messageRows, relationRows] = await Promise.all([
           supabaseSelect<RemoteMessageRow[]>(
@@ -383,9 +391,13 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        const nextMessages = messageRows
+          .map((row) => mapRemoteMessage(row, userIdByAppUserId))
+          .filter(Boolean) as AdvisorMessage[];
+
         startTransition(() => {
           setRelationships(relationRows);
-          setMessages(messageRows.map((row) => mapRemoteMessage(row, userIdByAppUserId)).filter(Boolean) as AdvisorMessage[]);
+          setMessages(nextMessages);
           setIsMessagingReady(true);
         });
       } catch (error) {
@@ -393,92 +405,25 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         if (!cancelled) {
           setIsMessagingReady(true);
         }
+      } finally {
+        isFetching = false;
       }
     };
 
-    const upsertRemoteMessage = (row: RemoteMessageRow | null | undefined) => {
-      if (!row) {
-        return;
-      }
-
-      const mapped = mapRemoteMessage(row, userIdByAppUserId);
-      if (!mapped) {
-        void loadSnapshot();
-        return;
-      }
-
-      startTransition(() => {
-        setMessages((current) => mergeMessages(current, [mapped]));
-      });
-
-      if (mapped.recipientId === user.id && !mapped.deliveredAt) {
-        void markConversationDelivered(mapped.senderId);
-      }
-    };
-
+    refreshRef.current = loadSnapshot;
     void loadSnapshot();
 
-    const messagesChannel = supabase.channel(`${MESSAGES_CHANNEL}:${currentAppUserId}`);
-    const encodedCurrentAppUserId = encodeURIComponent(currentAppUserId);
+    const pollingInterval = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') {
+        return;
+      }
 
-    messagesChannelRef.current = messagesChannel;
-
-    messagesChannel
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${encodedCurrentAppUserId}` }, ({ new: next }) => {
-        upsertRemoteMessage(next as RemoteMessageRow);
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `recipient_id=eq.${encodedCurrentAppUserId}` }, ({ new: next }) => {
-        upsertRemoteMessage(next as RemoteMessageRow);
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `sender_id=eq.${encodedCurrentAppUserId}` }, ({ new: next }) => {
-        upsertRemoteMessage(next as RemoteMessageRow);
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `recipient_id=eq.${encodedCurrentAppUserId}` }, ({ new: next }) => {
-        upsertRemoteMessage(next as RemoteMessageRow);
-      })
-      .subscribe((status) => {
-        if (status !== 'SUBSCRIBED') {
-          return;
-        }
-
-        setIsMessagingReady(true);
-      });
-
-    const handlePresenceSync = () => {
-      const state = presenceChannelRef.current?.presenceState() ?? {};
-      startTransition(() => {
-        setOnlineAppUserIds(new Set(Object.keys(state)));
-      });
-    };
-
-    const presenceChannel = supabase.channel(PRESENCE_CHANNEL, {
-      config: {
-        presence: {
-          key: currentAppUserId,
-        },
-      },
-    });
-
-    presenceChannelRef.current = presenceChannel;
-
-    presenceChannel
-      .on('presence', { event: 'sync' }, handlePresenceSync)
-      .subscribe((status) => {
-        if (status !== 'SUBSCRIBED') {
-          return;
-        }
-
-        void presenceChannel.track({ universityId: user.id, connectedAt: new Date().toISOString() });
-        void touchLastSeen();
-      });
-
-    heartbeatRef.current = window.setInterval(() => {
-      void touchLastSeen();
-    }, 60_000);
+      void loadSnapshot();
+    }, MESSAGE_POLL_INTERVAL_MS);
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        void touchLastSeen();
+      if (document.visibilityState === 'visible') {
+        void loadSnapshot();
       }
     };
 
@@ -486,19 +431,42 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
+      refreshRef.current = null;
+      window.clearInterval(pollingInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (heartbeatRef.current) {
-        window.clearInterval(heartbeatRef.current);
-        heartbeatRef.current = null;
-      }
-      messagesChannelRef.current = null;
-      presenceChannelRef.current = null;
-      setOnlineAppUserIds(new Set());
-      void touchLastSeen();
-      void supabase.removeChannel(messagesChannel);
-      void supabase.removeChannel(presenceChannel);
     };
-  }, [currentAppUserId, isAuthenticated, isAuthReady, markConversationDelivered, touchLastSeen, user, userIdByAppUserId]);
+  }, [currentAppUserId, isAuthenticated, isAuthReady, user, userIdByAppUserId]);
+
+  useEffect(() => {
+    if (!hasSupabaseConfig() || !isAuthenticated || !user) {
+      return;
+    }
+
+    void touchLastSeen();
+
+    const touchInterval = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') {
+        return;
+      }
+
+      void touchLastSeen();
+    }, LAST_SEEN_TOUCH_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      void touchLastSeen();
+      if (document.visibilityState === 'visible') {
+        void refreshRef.current?.();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(touchInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      void touchLastSeen();
+    };
+  }, [isAuthenticated, touchLastSeen, user]);
 
   const getConversationMessages = useCallback(
     (userId: string, otherUserId: string) =>
@@ -517,15 +485,15 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
   const getPresence = useCallback(
     (userId: string) => {
-      const appUserId = appUserIdByUserId[userId];
       const matchedUser = users.find((account) => account.id === userId);
+      const lastSeenAt = matchedUser?.lastSeenAt ?? null;
 
       return {
-        isOnline: userId === user?.id || Boolean(appUserId && onlineAppUserIds.has(appUserId)),
-        lastSeenAt: matchedUser?.lastSeenAt ?? null,
+        isOnline: userId === user?.id || isRecentlyOnline(lastSeenAt),
+        lastSeenAt,
       } satisfies PresenceState;
     },
-    [appUserIdByUserId, onlineAppUserIds, user?.id, users]
+    [user?.id, users]
   );
 
   const sendMessage = useCallback(async ({ senderId, recipientId, body }: SendMessageInput): Promise<MessageSendResult> => {
@@ -582,6 +550,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       }
 
       setMessages((current) => mergeMessages(current, [insertedMessage]));
+      await refreshRef.current?.();
       return { success: true, message: insertedMessage };
     } catch (error) {
       console.error('Unable to save message to Supabase.', error);

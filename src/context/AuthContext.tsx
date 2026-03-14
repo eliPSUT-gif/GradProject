@@ -16,7 +16,6 @@ import {
   type Role,
 } from '../data/courses';
 import {
-  getSupabaseClient,
   getSupabaseSession,
   hasSupabaseConfig,
   onSupabaseAuthStateChange,
@@ -93,6 +92,7 @@ const MAX_ATTEMPTS = 3;
 const LOCKOUT_MS = 30_000;
 const MIN_PASSWORD_LENGTH = 10;
 const DEFAULT_PASSWORD = 'ChangeMe@123';
+const USER_SYNC_INTERVAL_MS = 5000;
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -393,7 +393,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let cancelled = false;
-    const supabase = getSupabaseClient();
 
     const hydrate = async () => {
       try {
@@ -441,21 +440,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const resolved = await resolveAppUserFromAuth(session.user);
         setUser(resolved);
         setIsAuthReady(true);
+        void syncUsersFromSupabase();
       })();
     });
 
-    const channel = supabase?.channel('app-users-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_users' }, () => {
+    const syncInterval = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') {
+        return;
+      }
+
+      void syncUsersFromSupabase();
+    }, USER_SYNC_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
         void syncUsersFromSupabase();
-      })
-      .subscribe();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       cancelled = true;
       authListener.subscription.unsubscribe();
-      if (supabase && channel) {
-        void supabase.removeChannel(channel);
-      }
+      window.clearInterval(syncInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [resolveAppUserFromAuth, syncUsersFromSupabase]);
 
@@ -544,6 +553,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('Unable to update Supabase login metadata.', error);
         });
 
+        void syncUsersFromSupabase();
         return { success: true };
       }
 
@@ -567,7 +577,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(toSessionUser(nextUser));
       return { success: true };
     },
-    [attempts, resolveAppUserFromAuth, users]
+    [attempts, resolveAppUserFromAuth, syncUsersFromSupabase, users]
   );
 
   const logout = useCallback(async () => {
@@ -706,6 +716,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => useContext(AuthContext);
 export type { AuthSession, LoginResult, PasswordChangeResult, UserFormInput };
-
-
-
