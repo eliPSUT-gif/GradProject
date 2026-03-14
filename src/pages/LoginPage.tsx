@@ -5,6 +5,7 @@ import { Eye, EyeOff, GraduationCap, Shield, Sparkles, Users } from 'lucide-reac
 import { getHomeRoute, useAuth } from '../context/AuthContext';
 import type { Role } from '../data/courses';
 import { executeRecaptcha, hasRecaptchaSiteKey, verifyRecaptchaToken } from '../lib/recaptcha';
+import { getSupabaseConfigError, hasSupabaseConfig, isLocalDemoModeEnabled } from '../lib/supabase';
 
 const ROLES: { key: Role; label: string; icon: ReactNode }[] = [
   { key: 'student', label: 'Student', icon: <GraduationCap className="h-4 w-4" /> },
@@ -49,6 +50,11 @@ export default function LoginPage() {
     event.preventDefault();
     setError(null);
 
+    if (backendConfigError) {
+      setError(backendConfigError);
+      return;
+    }
+
     if (!hasRecaptchaSiteKey()) {
       setError('reCAPTCHA is not configured yet. Add the site key before logging in.');
       return;
@@ -74,7 +80,10 @@ export default function LoginPage() {
     }
   };
 
-  const activeError = error ?? authError;
+  const backendConfigError = !hasSupabaseConfig() && !isLocalDemoModeEnabled()
+    ? `${getSupabaseConfigError()} Add the Supabase URL and anon key to the deployment environment and rebuild.`
+    : null;
+  const activeError = error ?? authError ?? backendConfigError;
 
   return (
     <div className="flex min-h-screen">
@@ -202,7 +211,7 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || Boolean(backendConfigError)}
                 className="w-full rounded-xl bg-blue py-2.5 font-semibold text-white shadow-lg shadow-blue/25 transition hover:bg-blue-lt active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isSubmitting ? 'Verifying...' : 'Sign in'}
@@ -214,4 +223,8 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
+
+
 

@@ -16,8 +16,10 @@ import {
   type Role,
 } from '../data/courses';
 import {
+  getSupabaseConfigError,
   getSupabaseSession,
   hasSupabaseConfig,
+  isLocalDemoModeEnabled,
   onSupabaseAuthStateChange,
   supabasePatch,
   supabaseSelect,
@@ -274,7 +276,7 @@ export function getHomeRoute(role: Role) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<ManagedUser[]>(loadUsers);
-  const [user, setUser] = useState<AuthSession | null>(() => (hasSupabaseConfig() ? null : loadSession()));
+  const [user, setUser] = useState<AuthSession | null>(() => (isLocalDemoModeEnabled() ? loadSession() : null));
   const [rememberSession, setRememberSession] = useState(loadRememberSession);
   const [attempts, setAttempts] = useState<Record<string, { count: number; lockedUntil?: string }>>(loadAttempts);
   const [isAuthReady, setIsAuthReady] = useState(!hasSupabaseConfig());
@@ -367,7 +369,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [users]);
 
   useEffect(() => {
-    if (hasSupabaseConfig()) {
+    if (!isLocalDemoModeEnabled()) {
+      window.localStorage.removeItem(LOCAL_SESSION_KEY);
+      window.sessionStorage.removeItem(SESSION_SESSION_KEY);
+      window.localStorage.removeItem(REMEMBER_ME_KEY);
       return;
     }
 
@@ -498,6 +503,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : `Invalid credentials. ${MAX_ATTEMPTS - nextCount} attempt${MAX_ATTEMPTS - nextCount === 1 ? '' : 's'} remaining before temporary lockout.`;
       };
 
+      if (!hasSupabaseConfig() && !isLocalDemoModeEnabled()) {
+        return {
+          success: false,
+          error: `${getSupabaseConfigError()} Add the Supabase URL and anon key to the deployment environment and rebuild.`,
+        };
+      }
+
       if (hasSupabaseConfig()) {
         const matchedUser = users.find((account) => account.id.toLowerCase() === normalizedId.toLowerCase());
         if (!matchedUser || matchedUser.role !== role) {
@@ -610,6 +622,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: validationError };
       }
 
+      if (!hasSupabaseConfig() && !isLocalDemoModeEnabled()) {
+        return {
+          success: false,
+          error: `${getSupabaseConfigError()} Add the Supabase URL and anon key to the deployment environment and rebuild.`,
+        };
+      }
+
       if (hasSupabaseConfig()) {
         const result = await supabaseUpdateCurrentUserPassword(nextPassword);
         if (result.error) {
@@ -716,3 +735,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => useContext(AuthContext);
 export type { AuthSession, LoginResult, PasswordChangeResult, UserFormInput };
+
+

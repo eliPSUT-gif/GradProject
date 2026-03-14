@@ -8,6 +8,10 @@ import {
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? '';
+const missingSupabaseConfig = [
+  !supabaseUrl ? 'VITE_SUPABASE_URL' : null,
+  !supabaseAnonKey ? 'VITE_SUPABASE_ANON_KEY' : null,
+].filter(Boolean) as string[];
 
 const supabaseClient: SupabaseClient | null = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey, {
@@ -70,7 +74,19 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 export function hasSupabaseConfig() {
-  return Boolean(supabaseUrl && supabaseAnonKey);
+  return missingSupabaseConfig.length === 0;
+}
+
+export function isLocalDemoModeEnabled() {
+  return import.meta.env.DEV && !hasSupabaseConfig();
+}
+
+export function getSupabaseConfigError() {
+  if (hasSupabaseConfig()) {
+    return null;
+  }
+
+  return `Supabase is not configured for this build. Missing ${missingSupabaseConfig.join(' and ')}.`;
 }
 
 export function getSupabaseClient() {

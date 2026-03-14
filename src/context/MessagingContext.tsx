@@ -13,7 +13,9 @@ import {
 import { STUDENT_PROFILES } from '../data/courses';
 import { useAuth } from './AuthContext';
 import {
+  getSupabaseConfigError,
   hasSupabaseConfig,
+  isLocalDemoModeEnabled,
   supabaseInsert,
   supabaseRpc,
   supabaseSelect,
@@ -188,7 +190,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isAuthReady, user, users } = useAuth();
   const [messages, setMessages] = useState<AdvisorMessage[]>([]);
   const [relationships, setRelationships] = useState<StudentProfileRelation[]>([]);
-  const [isMessagingReady, setIsMessagingReady] = useState(!hasSupabaseConfig());
+  const [isMessagingReady, setIsMessagingReady] = useState(hasSupabaseConfig() || isLocalDemoModeEnabled());
   const refreshRef = useRef<(() => Promise<void>) | null>(null);
   const pendingDeliveryRef = useRef<Set<string>>(new Set());
   const pendingReadRef = useRef<Set<string>>(new Set());
@@ -346,10 +348,16 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hasSupabaseConfig()) {
-      setRelationships(
-        FALLBACK_RELATIONSHIPS.map((profile) => ({ user_id: profile.userId, advisor_id: profile.advisorId }))
-      );
-      setIsMessagingReady(true);
+      if (isLocalDemoModeEnabled()) {
+        setRelationships(
+          FALLBACK_RELATIONSHIPS.map((profile) => ({ user_id: profile.userId, advisor_id: profile.advisorId }))
+        );
+        setIsMessagingReady(true);
+      } else {
+        setMessages([]);
+        setRelationships([]);
+        setIsMessagingReady(false);
+      }
       refreshRef.current = null;
       return;
     }
@@ -522,7 +530,15 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     setMessages((current) => mergeMessages(current, [optimisticMessage]));
 
     if (!hasSupabaseConfig()) {
-      return { success: true, message: { ...optimisticMessage, optimistic: false } };
+      if (isLocalDemoModeEnabled()) {
+        return { success: true, message: { ...optimisticMessage, optimistic: false } };
+      }
+
+      setMessages((current) => current.filter((message) => message.clientMessageId !== clientMessageId));
+      return {
+        success: false,
+        error: `${getSupabaseConfigError()} Add the Supabase URL and anon key to the deployment environment and rebuild.`,
+      };
     }
 
     const senderAppUserId = appUserIdByUserId[senderId];
@@ -597,3 +613,4 @@ export function useMessaging() {
 
   return context;
 }
+
