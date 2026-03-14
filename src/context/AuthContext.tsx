@@ -320,7 +320,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return remoteUsers;
-  }, []);
+  }, []);  const fetchRemoteUserByUniversityId = useCallback(async (universityId: string) => {
+    if (!hasSupabaseConfig()) {
+      return null;
+    }
+
+    const encodedUniversityId = encodeURIComponent(universityId);
+    const remoteRows = await supabaseSelect<RemoteAppUserRow[]>(
+      'app_users',
+      `select=id,auth_user_id,university_id,role,full_name,initials,email,subtitle,status,last_login_at,last_seen_at&university_id=eq.${encodedUniversityId}&limit=1`
+    );
+
+    const resolved = remoteRows[0];
+    if (!resolved) {
+      return null;
+    }
+
+    const passwordById = new Map(users.map((account) => [account.id, account.password]));
+    const mapped = mapRemoteUser(resolved, passwordById);
+    setUsers((current) => mergeManagedUsers(SEED_MANAGED_USERS.map(normalizeManagedUser), current, [mapped]).map(normalizeManagedUser));
+    return mapped;
+  }, [users]);
+
 
   const resolveAppUserFromAuth = useCallback(async (authUser: User | null) => {
     if (!authUser || !hasSupabaseConfig()) {
@@ -511,7 +532,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (hasSupabaseConfig()) {
-        const matchedUser = users.find((account) => account.id.toLowerCase() === normalizedId.toLowerCase());
+        let matchedUser = users.find((account) => account.id.toLowerCase() === normalizedId.toLowerCase());
+        const remoteMatchedUser = await fetchRemoteUserByUniversityId(normalizedId);
+        if (remoteMatchedUser) {
+          matchedUser = remoteMatchedUser;
+        }
         if (!matchedUser || matchedUser.role !== role) {
           return { success: false, error: registerFailedAttempt() };
         }
@@ -521,7 +546,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (!matchedUser.email) {
-          return { success: false, error: 'This account is missing an email address in Supabase.' };
+          return { success: false, error: 'This account is missing an email address in public.app_users. Add the email in Supabase and try again.' };
         }
 
         setIsAuthReady(false);
@@ -589,7 +614,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(toSessionUser(nextUser));
       return { success: true };
     },
-    [attempts, resolveAppUserFromAuth, syncUsersFromSupabase, users]
+    [attempts, fetchRemoteUserByUniversityId, resolveAppUserFromAuth, syncUsersFromSupabase, users]
   );
 
   const logout = useCallback(async () => {
@@ -735,5 +760,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => useContext(AuthContext);
 export type { AuthSession, LoginResult, PasswordChangeResult, UserFormInput };
+
 
 
