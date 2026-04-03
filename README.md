@@ -24,4 +24,4 @@ To enable it:
 3. Put the secret key in Vercel as `RECAPTCHA_SECRET_KEY`.
 4. Redeploy the project.
 
-If either key is missing, login protection will block sign-in and show a configuration error.
+If either key is missing, login protection will block sign-in and show a configuration error..
