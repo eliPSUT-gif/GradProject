@@ -229,7 +229,7 @@ export default function AppLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-bg">
       {visibleToastNotifications.length > 0 && (
-        <div className="pointer-events-none fixed right-4 top-20 z-[70] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3">
+        <div className="pointer-events-none fixed bottom-4 right-4 z-[70] flex w-[min(24rem,calc(100vw-2rem))] flex-col-reverse gap-3">
           {visibleToastNotifications.map((notification) => (
             <div
               key={notification.id}
