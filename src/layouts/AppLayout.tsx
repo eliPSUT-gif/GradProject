@@ -6,10 +6,12 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   LayoutDashboard,
   LogOut,
   Menu,
   MessageSquare,
+  X as CloseIcon,
   Settings,
   Sparkles,
   Users,
@@ -32,11 +34,13 @@ interface NavSection {
 }
 
 interface NotificationSummary {
+  id: string;
+  targetUserId: string;
   senderId: string;
   senderName: string;
   preview: string;
   sentAt: string;
-  unreadCount: number;
+  readAt: string | null;
 }
 
 const NAV: Record<Role, NavSection[]> = {
@@ -104,6 +108,7 @@ export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [toastNotifications, setToastNotifications] = useState<NotificationSummary[]>([]);
 
   const role = user?.role ?? 'student';
   const sections = NAV[role];
@@ -114,43 +119,82 @@ export default function AppLayout() {
   const messageRoute = role === 'advisor' ? '/app/advisor/messages' : role === 'student' ? '/app/messages' : null;
   const sidebarWidth = mobileOpen || !collapsed ? 240 : 64;
 
-  const unreadSummaries = useMemo(() => {
+  const initializedNotificationIdsRef = useRef<Set<string>>(new Set());
+  const hasInitializedNotificationsRef = useRef(false);
+
+  const recentNotifications = useMemo(() => {
     if (!user) {
       return [] as NotificationSummary[];
     }
 
-    const grouped = new Map<string, NotificationSummary>();
+    return messages
+      .filter((message) => message.recipientId === user.id)
+      .map((message) => ({
+        id: message.id,
+        targetUserId: user.id,
+        senderId: message.senderId,
+        senderName: users.find((account) => account.id === message.senderId)?.name ?? 'Someone',
+        preview: message.body,
+        sentAt: message.sentAt,
+        readAt: message.readAt,
+      }))
+      .sort((left, right) => right.sentAt.localeCompare(left.sentAt))
+      .slice(0, 5);
+  }, [messages, user, users]);
 
-    messages.forEach((message) => {
-      if (message.recipientId !== user.id || message.readAt) {
-        return;
-      }
+  useEffect(() => {
+    if (!user) {
+      initializedNotificationIdsRef.current = new Set();
+      hasInitializedNotificationsRef.current = false;
+      return;
+    }
 
-      const senderName = users.find((account) => account.id === message.senderId)?.name ?? 'Someone';
-      const existing = grouped.get(message.senderId);
-      if (!existing) {
-        grouped.set(message.senderId, {
+    const incomingMessages = messages.filter((message) => message.recipientId === user.id);
+
+    if (!hasInitializedNotificationsRef.current) {
+      initializedNotificationIdsRef.current = new Set(incomingMessages.map((message) => message.id));
+      hasInitializedNotificationsRef.current = true;
+      return;
+    }
+
+    const newNotifications = incomingMessages
+      .filter((message) => !initializedNotificationIdsRef.current.has(message.id))
+      .map((message) => {
+        initializedNotificationIdsRef.current.add(message.id);
+        return {
+          id: message.id,
+          targetUserId: user.id,
           senderId: message.senderId,
-          senderName,
+          senderName: users.find((account) => account.id === message.senderId)?.name ?? 'Someone',
           preview: message.body,
           sentAt: message.sentAt,
-          unreadCount: 1,
-        });
-        return;
-      }
+          readAt: message.readAt,
+        } satisfies NotificationSummary;
+      })
+      .sort((left, right) => right.sentAt.localeCompare(left.sentAt));
 
-      const isNewer = existing.sentAt.localeCompare(message.sentAt) < 0;
-      grouped.set(message.senderId, {
-        senderId: message.senderId,
-        senderName,
-        preview: isNewer ? message.body : existing.preview,
-        sentAt: isNewer ? message.sentAt : existing.sentAt,
-        unreadCount: existing.unreadCount + 1,
+    if (newNotifications.length === 0) {
+      return;
+    }
+
+    setToastNotifications((current) => {
+      const deduped = new Map<string, NotificationSummary>();
+      [...newNotifications, ...current].forEach((notification) => {
+        if (!deduped.has(notification.id)) {
+          deduped.set(notification.id, notification);
+        }
       });
-    });
 
-    return [...grouped.values()].sort((left, right) => right.sentAt.localeCompare(left.sentAt));
+      return [...deduped.values()]
+        .sort((left, right) => right.sentAt.localeCompare(left.sentAt))
+        .slice(0, 5);
+    });
   }, [messages, user, users]);
+
+  const visibleToastNotifications = useMemo(
+    () => (user ? toastNotifications.filter((notification) => notification.targetUserId === user.id) : []),
+    [toastNotifications, user]
+  );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -185,6 +229,15 @@ export default function AppLayout() {
     navigate(messageRoute, { state: { scrollToBottom: true } });
   };
 
+  const dismissToast = (notificationId: string) => {
+    setToastNotifications((current) => current.filter((notification) => notification.id !== notificationId));
+  };
+
+  const handleOpenNotification = (notification: NotificationSummary) => {
+    dismissToast(notification.id);
+    handleOpenMessageThread(notification.senderId);
+  };
+
   const handleSignOut = async () => {
     handleNavAction();
     await logout();
@@ -193,6 +246,43 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg">
+      {visibleToastNotifications.length > 0 && (
+        <div className="pointer-events-none fixed right-4 top-20 z-[70] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3">
+          {visibleToastNotifications.map((notification) => (
+            <div
+              key={notification.id}
+              className="pointer-events-auto overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl"
+            >
+              <div className="px-4 py-3 transition-colors hover:bg-blue-50">
+                <div className="flex items-start justify-between gap-3">
+                  <button
+                    onClick={() => handleOpenNotification(notification)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 shrink-0 text-[#2563eb]" />
+                      <p className="truncate text-sm font-semibold text-[#0f1e3c]">{notification.senderName}</p>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-sm text-gray-600">{notification.preview}</p>
+                    <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                      <Clock3 className="h-3.5 w-3.5" />
+                      <span>{formatNotificationTime(notification.sentAt)}</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => dismissToast(notification.id)}
+                    className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                    aria-label="Close notification"
+                  >
+                    <CloseIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
@@ -316,15 +406,15 @@ export default function AppLayout() {
             {notificationsOpen && (
               <div className="absolute right-0 top-full z-20 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-gray-200 bg-white p-3 shadow-xl">
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-[#0f1e3c]">Unread messages</p>
-                  <span className="text-xs text-gray-400">{unreadCount}</span>
+                  <p className="text-sm font-semibold text-[#0f1e3c]">Recent notifications</p>
+                  <span className="text-xs text-gray-400">{recentNotifications.length}</span>
                 </div>
                 <div className="max-h-80 space-y-2 overflow-y-auto">
-                  {unreadSummaries.length > 0 ? (
-                    unreadSummaries.map((summary) => (
+                  {recentNotifications.length > 0 ? (
+                    recentNotifications.map((summary) => (
                       <button
-                        key={`${summary.senderId}-${summary.sentAt}`}
-                        onClick={() => handleOpenMessageThread(summary.senderId)}
+                        key={summary.id}
+                        onClick={() => handleOpenNotification(summary)}
                         className="w-full rounded-xl border border-gray-200 px-3 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50"
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -333,9 +423,11 @@ export default function AppLayout() {
                             <p className="mt-1 line-clamp-2 text-xs text-gray-500">{summary.preview}</p>
                           </div>
                           <div className="shrink-0 text-right">
-                            <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 text-[10px] font-bold text-white">
-                              {summary.unreadCount > 9 ? '9+' : summary.unreadCount}
-                            </span>
+                            {!summary.readAt && (
+                              <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 text-[10px] font-bold text-white">
+                                New
+                              </span>
+                            )}
                             <p className="mt-1 text-[10px] text-gray-400">{formatNotificationTime(summary.sentAt)}</p>
                           </div>
                         </div>
@@ -343,7 +435,7 @@ export default function AppLayout() {
                     ))
                   ) : (
                     <div className="rounded-xl border border-dashed border-gray-200 px-3 py-6 text-center text-sm text-gray-500">
-                      No new messages right now.
+                      No recent notifications right now.
                     </div>
                   )}
                 </div>
