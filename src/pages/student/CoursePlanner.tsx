@@ -15,7 +15,7 @@ function typeTag(type: Course['type']) {
 
 export default function CoursePlanner() {
   const { user } = useAuth();
-  const { analyzeSchedule, clearSelection, courses, currentEvaluations, deleteScheduleDraft, getCourseSelectionState, getSelectedCourses, getStudentDrafts, loadScheduleDraft, plannerSelections, saveScheduleDraft, toggleCourseSelection } = useAppData();
+  const { analyzeSchedule, clearSelection, courses, currentEvaluations, deleteScheduleDraft, getCourseSelectionState, getSelectedCourses, getStudentDrafts, isAppDataReady, loadScheduleDraft, plannerSelections, saveScheduleDraft, toggleCourseSelection } = useAppData();
   const studentId = user?.id ?? '';
   const selectedCourses = getSelectedCourses(studentId);
   const savedDrafts = getStudentDrafts(studentId);
@@ -52,6 +52,14 @@ export default function CoursePlanner() {
     const draft = saveScheduleDraft(studentId, nextDraftName);
     setPlannerError(draft ? null : 'Analyze a valid schedule before saving it.');
   };
+
+  if (!isAppDataReady) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-8 text-sm text-gray-500">
+        Loading your planner and saved drafts...
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-start gap-4 max-lg:flex-col sm:gap-6">

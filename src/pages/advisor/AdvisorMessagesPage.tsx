@@ -26,7 +26,7 @@ function formatReceipt(sentAt: string, readAt: string | null) {
 export default function AdvisorMessagesPage() {
   const { user, users } = useAuth();
   const location = useLocation();
-  const { studentInsights } = useAppData();
+  const { isAppDataReady, studentInsights } = useAppData();
   const { getAdviseeIds, getConversationMessages, isMessagingReady, markConversationRead, sendMessage } = useMessaging();
   const [search, setSearch] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState('');
@@ -162,6 +162,14 @@ export default function AdvisorMessagesPage() {
 
     void handleSend();
   };
+
+  if (!isAppDataReady) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-8 text-sm text-gray-500">
+        Loading advisee conversations...
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">

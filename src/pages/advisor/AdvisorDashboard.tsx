@@ -19,7 +19,7 @@ import { useAppData } from '../../context/AppDataContext';
 
 export default function AdvisorDashboard() {
   const { user } = useAuth();
-  const { courses, studentInsights } = useAppData();
+  const { courses, isAppDataReady, studentInsights } = useAppData();
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
 
@@ -79,6 +79,14 @@ export default function AdvisorDashboard() {
     .filter((student) => student.status !== 'good')
     .sort((left, right) => right.difficulty - left.difficulty)
     .slice(0, 4);
+
+  if (!isAppDataReady) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-8 text-sm text-gray-500">
+        Loading advisee data...
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

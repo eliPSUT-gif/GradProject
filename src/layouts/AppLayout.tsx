@@ -6,14 +6,12 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
-  ClipboardList,
   LayoutDashboard,
   LogOut,
   Menu,
   MessageSquare,
   Settings,
   Sparkles,
-  User,
   Users,
   X,
 } from 'lucide-react';
@@ -51,28 +49,13 @@ const NAV: Record<Role, NavSection[]> = {
         { label: 'Messages', to: '/app/messages', icon: MessageSquare },
       ],
     },
-    {
-      title: 'Account',
-      items: [
-        { label: 'Profile', to: '/app/profile', icon: User },
-        { label: 'Settings', to: '/app/settings', icon: Settings },
-      ],
-    },
   ],
   advisor: [
     {
       title: 'Main',
       items: [
         { label: 'Dashboard', to: '/app/advisor', icon: LayoutDashboard },
-        { label: 'Course Analysis', to: '/app/advisor/courses', icon: BookOpen },
         { label: 'Messages', to: '/app/advisor/messages', icon: MessageSquare },
-      ],
-    },
-    {
-      title: 'Tools',
-      items: [
-        { label: 'Reports', to: '/app/advisor/reports', icon: ClipboardList },
-        { label: 'Settings', to: '/app/advisor/settings', icon: Settings },
       ],
     },
   ],
@@ -98,14 +81,9 @@ const NAV: Record<Role, NavSection[]> = {
 const PAGE_TITLES: Record<string, string> = {
   '/app/dashboard': 'Dashboard',
   '/app/courses': 'Course Planner',
-  '/app/profile': 'Profile',
   '/app/messages': 'Messages',
-  '/app/settings': 'Settings',
   '/app/advisor': 'Advisor Dashboard',
-  '/app/advisor/courses': 'Course Analysis',
   '/app/advisor/messages': 'Messages',
-  '/app/advisor/reports': 'Reports',
-  '/app/advisor/settings': 'Settings',
   '/app/admin': 'Admin Overview',
   '/app/admin/courses': 'Course Management',
   '/app/admin/users': 'User Management',

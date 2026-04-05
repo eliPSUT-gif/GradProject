@@ -171,6 +171,10 @@ function loadUsers() {
     return normalizedSeedUsers;
   }
 
+  if (hasSupabaseConfig()) {
+    return normalizedSeedUsers;
+  }
+
   const saved = window.localStorage.getItem(USERS_KEY);
   if (!saved) {
     return normalizedSeedUsers;
@@ -446,6 +450,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (hasSupabaseConfig()) {
+      window.localStorage.removeItem(USERS_KEY);
+      return;
+    }
+
     window.localStorage.setItem(USERS_KEY, JSON.stringify(users.map(normalizeManagedUser)));
   }, [users]);
 

@@ -23,9 +23,11 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 export default function StudentDashboard() {
   const { user } = useAuth();
   const {
+    courses,
     currentEvaluations,
     getSelectedCourses,
     getStudentDrafts,
+    isAppDataReady,
     loadScheduleDraft,
     recentEvaluations,
     studentInsights,
@@ -36,10 +38,21 @@ export default function StudentDashboard() {
   const drafts = getStudentDrafts(studentId);
   const currentEvaluation = currentEvaluations[studentId] ?? null;
   const profile = studentInsights.find((item) => item.id === studentId);
+  const selectedCoursesForDisplay = useMemo(
+    () =>
+      selectedCourses.length > 0
+        ? selectedCourses
+        : drafts[0]
+          ? drafts[0].courseCodes
+              .map((code) => courses.find((course) => course.code === code))
+              .filter((course): course is NonNullable<typeof course> => Boolean(course))
+          : [],
+    [courses, drafts, selectedCourses]
+  );
 
   const totalCredits = useMemo(
-    () => selectedCourses.reduce((sum, course) => sum + course.credits, 0),
-    [selectedCourses]
+    () => selectedCoursesForDisplay.reduce((sum, course) => sum + course.credits, 0),
+    [selectedCoursesForDisplay]
   );
 
   const evaluationHistory = useMemo(
@@ -103,6 +116,14 @@ export default function StudentDashboard() {
     return 'bg-blue-50 border-blue-200';
   };
 
+  if (!isAppDataReady) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-8 text-sm text-gray-500">
+        Loading your academic dashboard...
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -129,7 +150,7 @@ export default function StudentDashboard() {
             My Schedule This Semester
           </h2>
 
-          {selectedCourses.length === 0 ? (
+          {selectedCoursesForDisplay.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <BookOpen className="mb-3 h-10 w-10 text-gray-300" />
               <p className="mb-4 text-gray-500">No courses selected yet.</p>
@@ -154,7 +175,7 @@ export default function StudentDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedCourses.map((course) => {
+                  {selectedCoursesForDisplay.map((course) => {
                     const label = getDiffLabel(course.diffScore);
                     return (
                       <tr key={course.code} className="border-b border-gray-50 last:border-0">
