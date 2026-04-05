@@ -198,11 +198,11 @@ export default function AppLayout() {
     setNotificationsOpen(false);
 
     if (role === 'advisor' && senderId) {
-      navigate(messageRoute, { state: { focusUserId: senderId } });
+      navigate(messageRoute, { state: { focusUserId: senderId, scrollToBottom: true } });
       return;
     }
 
-    navigate(messageRoute);
+    navigate(messageRoute, { state: { scrollToBottom: true } });
   };
 
   const handleSignOut = async () => {

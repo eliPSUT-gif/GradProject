@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Check, Mail, Send, UserRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useMessaging } from '../../context/MessagingContext';
@@ -22,25 +23,49 @@ function formatReceipt(sentAt: string, readAt: string | null) {
 }
 
 export default function StudentMessagesPage() {
+  const location = useLocation();
   const { user, users } = useAuth();
   const { getAssignedAdvisorId, getConversationMessages, isMessagingReady, markConversationRead, sendMessage } = useMessaging();
   const [draft, setDraft] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const handledScrollRequestRef = useRef<string | null>(null);
 
   const studentId = user?.id ?? '';
   const advisorId = getAssignedAdvisorId(studentId);
   const advisor = users.find((account) => account.id === advisorId) ?? null;
   const conversation = advisorId ? getConversationMessages(studentId, advisorId) : [];
+  const scrollRequestKey = `${location.key}:${String((location.state as { scrollToBottom?: boolean } | null)?.scrollToBottom ?? false)}`;
 
   const unreadFromAdvisor = conversation.filter(
     (message) => message.senderId === advisorId && message.recipientId === studentId && !message.readAt
   ).length;
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  };
 
   useEffect(() => {
     if (advisorId && unreadFromAdvisor > 0) {
       void markConversationRead(advisorId);
     }
   }, [advisorId, markConversationRead, unreadFromAdvisor]);
+
+  useEffect(() => {
+    const shouldScrollToBottom = (location.state as { scrollToBottom?: boolean } | null)?.scrollToBottom ?? false;
+    if (!shouldScrollToBottom || conversation.length === 0) {
+      return;
+    }
+
+    if (handledScrollRequestRef.current === scrollRequestKey) {
+      return;
+    }
+
+    handledScrollRequestRef.current = scrollRequestKey;
+    window.requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+  }, [conversation.length, location.state, scrollRequestKey]);
 
   const handleSend = async () => {
     if (!advisorId) {
@@ -52,7 +77,24 @@ export default function StudentMessagesPage() {
     setFeedback(result.success ? 'Message sent to your advisor.' : result.error ?? 'Unable to send message.');
     if (result.success) {
       setDraft('');
+      window.requestAnimationFrame(() => {
+        scrollToBottom();
+      });
     }
+  };
+
+  const handleDraftKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!isMessagingReady || !advisorId || !draft.trim()) {
+      return;
+    }
+
+    void handleSend();
   };
 
   return (
@@ -123,12 +165,14 @@ export default function StudentMessagesPage() {
               Start the conversation with your advisor.
             </div>
           )}
+          <div ref={messagesEndRef} />
         </div>
 
         <div className="space-y-3">
           <textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={handleDraftKeyDown}
             placeholder="Write a message to your advisor"
             rows={3}
             className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm sm:px-4 sm:py-3 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"

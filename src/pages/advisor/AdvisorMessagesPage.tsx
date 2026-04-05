@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Check, Mail, Search, Send, UserRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -33,6 +33,8 @@ export default function AdvisorMessagesPage() {
   const [draft, setDraft] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const handledScrollRequestRef = useRef<string | null>(null);
 
   const advisorId = user?.id ?? '';
   const adviseeIds = useMemo(() => new Set(getAdviseeIds(advisorId)), [advisorId, getAdviseeIds]);
@@ -50,6 +52,7 @@ export default function AdvisorMessagesPage() {
   }, [advisees, deferredSearch]);
 
   const focusedStudentId = (location.state as { focusUserId?: string } | null)?.focusUserId ?? '';
+  const shouldScrollFromNotification = (location.state as { scrollToBottom?: boolean } | null)?.scrollToBottom ?? false;
   const preferredStudentId = selectedStudentId || focusedStudentId;
 
   const activeStudentId = filteredStudents.some((student) => student.id === preferredStudentId)
@@ -83,6 +86,7 @@ export default function AdvisorMessagesPage() {
     () => (activeStudentId ? getConversationMessages(advisorId, activeStudentId) : []),
     [activeStudentId, advisorId, getConversationMessages]
   );
+  const scrollRequestKey = `${location.key}:${activeStudentId}:${String(shouldScrollFromNotification)}`;
 
   const unreadFromStudent = conversation.filter(
     (message) => message.recipientId === advisorId && message.senderId === activeStudentId && !message.readAt
@@ -93,6 +97,25 @@ export default function AdvisorMessagesPage() {
       void markConversationRead(activeStudentId);
     }
   }, [activeStudentId, markConversationRead, unreadFromStudent]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  };
+
+  useEffect(() => {
+    if (!shouldScrollFromNotification || !activeStudentId || conversation.length === 0) {
+      return;
+    }
+
+    if (handledScrollRequestRef.current === scrollRequestKey) {
+      return;
+    }
+
+    handledScrollRequestRef.current = scrollRequestKey;
+    window.requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+  }, [activeStudentId, conversation.length, scrollRequestKey, shouldScrollFromNotification]);
 
   const handleSelectStudent = (studentId: string) => {
     setSelectedStudentId(studentId);
@@ -110,7 +133,24 @@ export default function AdvisorMessagesPage() {
     setFeedback(result.success ? 'Message sent to student.' : result.error ?? 'Unable to send message.');
     if (result.success) {
       setDraft('');
+      window.requestAnimationFrame(() => {
+        scrollToBottom();
+      });
     }
+  };
+
+  const handleDraftKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!isMessagingReady || !activeStudentId || !draft.trim()) {
+      return;
+    }
+
+    void handleSend();
   };
 
   return (
@@ -206,12 +246,14 @@ export default function AdvisorMessagesPage() {
                   Start the conversation with this student.
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
 
             <div className="space-y-3">
               <textarea
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={handleDraftKeyDown}
                 placeholder="Write a message to this student"
                 rows={3}
                 className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm sm:px-4 sm:py-3 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
