@@ -104,7 +104,7 @@ function formatNotificationTime(value: string) {
 
 export default function AppLayout() {
   const { logout, user, users } = useAuth();
-  const { dismissNotificationToast, getUnreadMessageCount, notifications, toastNotifications } = useMessaging();
+  const { dismissNotification, dismissNotificationToast, getUnreadMessageCount, notifications, toastNotifications } = useMessaging();
   const location = useLocation();
   const navigate = useNavigate();
   const notificationPanelRef = useRef<HTMLDivElement | null>(null);
@@ -211,7 +211,7 @@ export default function AppLayout() {
   };
 
   const handleOpenNotification = (notification: NotificationSummary) => {
-    dismissNotificationToast(notification.id);
+    dismissNotification(notification.id);
     if (notification.kind === 'assistance') {
       navigate('/app/advisor/messages', { state: { focusUserId: notification.senderId, scrollToBottom: true } });
       return;

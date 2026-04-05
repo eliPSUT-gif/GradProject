@@ -73,6 +73,7 @@ interface MessagingContextValue {
   getAdviseeIds: (advisorId: string) => string[];
   getConversationMessages: (userId: string, otherUserId: string) => AdvisorMessage[];
   getUnreadMessageCount: (userId: string) => number;
+  dismissNotification: (notificationId: string) => void;
   dismissNotificationToast: (notificationId: string) => void;
   markConversationRead: (otherUserId: string) => Promise<void>;
   sendAssistanceRequest: (input: { senderId: string; recipientId: string }) => Promise<AssistanceRequestResult>;
@@ -406,6 +407,11 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   );
 
   const dismissNotificationToast = useCallback((notificationId: string) => {
+    setToastNotifications((current) => current.filter((notification) => notification.id !== notificationId));
+  }, []);
+
+  const dismissNotification = useCallback((notificationId: string) => {
+    setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
     setToastNotifications((current) => current.filter((notification) => notification.id !== notificationId));
   }, []);
 
@@ -855,6 +861,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       getAdviseeIds,
       getConversationMessages,
       getUnreadMessageCount,
+      dismissNotification,
       dismissNotificationToast,
       markConversationRead,
       sendAssistanceRequest,
@@ -866,6 +873,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       getAssignedAdvisorId,
       getConversationMessages,
       getUnreadMessageCount,
+      dismissNotification,
       isMessagingReady,
       markConversationRead,
       messages,
