@@ -44,14 +44,28 @@ interface MessageSendResult {
   message?: AdvisorMessage;
 }
 
+export interface AssistanceNotification {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  createdAt: string;
+}
+
+interface AssistanceRequestResult {
+  success: boolean;
+  error?: string;
+}
+
 interface MessagingContextValue {
   messages: AdvisorMessage[];
+  assistanceNotifications: AssistanceNotification[];
   isMessagingReady: boolean;
   getAssignedAdvisorId: (studentId: string) => string | null;
   getAdviseeIds: (advisorId: string) => string[];
   getConversationMessages: (userId: string, otherUserId: string) => AdvisorMessage[];
   getUnreadMessageCount: (userId: string) => number;
   markConversationRead: (otherUserId: string) => Promise<void>;
+  sendAssistanceRequest: (input: { senderId: string; recipientId: string }) => Promise<AssistanceRequestResult>;
   sendMessage: (input: SendMessageInput) => Promise<MessageSendResult>;
 }
 
@@ -81,8 +95,15 @@ interface MessageReadBroadcast {
   readAt: string;
 }
 
+interface AssistanceRequestBroadcast {
+  senderId: string;
+  recipientId: string;
+  requestedAt: string;
+}
+
 const BROADCAST_EVENT_CREATED = 'message.created';
 const BROADCAST_EVENT_READ = 'message.read';
+const BROADCAST_EVENT_ASSISTANCE = 'assistance.request';
 const FALLBACK_RELATIONSHIPS = STUDENT_PROFILES.map((profile) => ({
   userId: profile.id,
   advisorId: profile.advisorId || null,
@@ -286,6 +307,7 @@ function buildConversationTopics(
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isAuthReady, user, users } = useAuth();
   const [messages, setMessages] = useState<AdvisorMessage[]>([]);
+  const [assistanceNotifications, setAssistanceNotifications] = useState<AssistanceNotification[]>([]);
   const [relationships, setRelationships] = useState<StudentProfileRelation[]>([]);
   const [isMessagingReady, setIsMessagingReady] = useState(hasSupabaseConfig() || isLocalDemoModeEnabled());
   const refreshQueuedRef = useRef(false);
@@ -376,9 +398,11 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         setRelationships(
           FALLBACK_RELATIONSHIPS.map((profile) => ({ user_id: profile.userId, advisor_id: profile.advisorId }))
         );
+        setAssistanceNotifications([]);
         setIsMessagingReady(true);
       } else {
         setMessages([]);
+        setAssistanceNotifications([]);
         setRelationships([]);
         setIsMessagingReady(false);
       }
@@ -392,6 +416,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
     if (!isAuthenticated || !user || !currentAppUserId) {
       setMessages([]);
+      setAssistanceNotifications([]);
       setRelationships([]);
       setIsMessagingReady(true);
       return;
@@ -495,6 +520,28 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           .on('broadcast', { event: BROADCAST_EVENT_READ }, () => {
             void queueMessagesRefresh();
           })
+          .on('broadcast', { event: BROADCAST_EVENT_ASSISTANCE }, ({ payload }) => {
+            const nextNotification = payload as AssistanceRequestBroadcast;
+            if (nextNotification.recipientId !== user.id) {
+              return;
+            }
+
+            startTransition(() => {
+              setAssistanceNotifications((current) => {
+                const deduped = new Map<string, AssistanceNotification>();
+                [...current, {
+                  id: `assist:${nextNotification.senderId}:${nextNotification.requestedAt}`,
+                  senderId: nextNotification.senderId,
+                  recipientId: nextNotification.recipientId,
+                  createdAt: nextNotification.requestedAt,
+                }].forEach((notification) => {
+                  deduped.set(notification.id, notification);
+                });
+
+                return [...deduped.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+              });
+            });
+          })
           .subscribe((status) => {
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
               console.error('Supabase broadcast channel failed.', topic, status);
@@ -551,6 +598,67 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     (userId: string) => messages.filter((message) => message.recipientId === userId && !message.readAt).length,
     [messages]
   );
+
+  const sendAssistanceRequest = useCallback(async ({
+    senderId,
+    recipientId,
+  }: {
+    senderId: string;
+    recipientId: string;
+  }): Promise<AssistanceRequestResult> => {
+    const pairAllowed = isMessagePairAllowed(
+      senderId,
+      recipientId,
+      relationships,
+      appUserIdByUserId,
+      userIdByAppUserId
+    );
+
+    if (!pairAllowed) {
+      return { success: false, error: 'Assistance requests can only be sent to your assigned advisor.' };
+    }
+
+    if (!hasSupabaseConfig()) {
+      if (isLocalDemoModeEnabled()) {
+        return { success: true };
+      }
+
+      return {
+        success: false,
+        error: `${getSupabaseConfigError()} Add the Supabase URL and anon key to the deployment environment and rebuild.`,
+      };
+    }
+
+    const senderAppUserId = appUserIdByUserId[senderId];
+    const recipientAppUserId = appUserIdByUserId[recipientId];
+    if (!senderAppUserId || !recipientAppUserId) {
+      return { success: false, error: 'Messaging is still syncing user records. Please try again in a few seconds.' };
+    }
+
+    const topic = getConversationTopic(senderAppUserId, recipientAppUserId);
+    const channel = channelByTopicRef.current.get(topic);
+    if (!channel) {
+      return { success: false, error: 'The advisor notification channel is not ready yet. Please try again.' };
+    }
+
+    const requestedAt = new Date().toISOString();
+    const status = await channel.send({
+      type: 'broadcast',
+      event: BROADCAST_EVENT_ASSISTANCE,
+      payload: {
+        senderId,
+        recipientId,
+        requestedAt,
+      } satisfies AssistanceRequestBroadcast,
+    });
+
+    if (status !== 'ok') {
+      console.error('Supabase assistance broadcast was not acknowledged.', status);
+      return { success: false, error: 'Unable to send the assistance alert right now. Please try again.' };
+    }
+
+    return { success: true };
+  }, [appUserIdByUserId, relationships, userIdByAppUserId]);
 
   const sendMessage = useCallback(async ({ senderId, recipientId, body }: SendMessageInput): Promise<MessageSendResult> => {
     const trimmedBody = body.trim();
@@ -664,15 +772,18 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const value = useMemo<MessagingContextValue>(
     () => ({
       messages,
+      assistanceNotifications,
       isMessagingReady,
       getAssignedAdvisorId,
       getAdviseeIds,
       getConversationMessages,
       getUnreadMessageCount,
       markConversationRead,
+      sendAssistanceRequest,
       sendMessage,
     }),
     [
+      assistanceNotifications,
       getAdviseeIds,
       getAssignedAdvisorId,
       getConversationMessages,
@@ -680,6 +791,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       isMessagingReady,
       markConversationRead,
       messages,
+      sendAssistanceRequest,
       sendMessage,
     ]
   );

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -17,11 +17,13 @@ import {
 import { getDiffLabel, PAST_SEMESTER_GPA } from '../../data/courses';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
+import { useMessaging } from '../../context/MessagingContext';
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 export default function StudentDashboard() {
   const { user } = useAuth();
+  const { getAssignedAdvisorId, isMessagingReady, sendAssistanceRequest } = useMessaging();
   const {
     courses,
     currentEvaluations,
@@ -34,6 +36,7 @@ export default function StudentDashboard() {
   } = useAppData();
 
   const studentId = user?.id ?? '';
+  const advisorId = getAssignedAdvisorId(studentId);
   const selectedCourses = getSelectedCourses(studentId);
   const drafts = getStudentDrafts(studentId);
   const currentEvaluation = currentEvaluations[studentId] ?? null;
@@ -66,6 +69,7 @@ export default function StudentDashboard() {
 
   const recommendations = currentEvaluation?.recommendations ?? drafts[0]?.evaluation.recommendations ?? [];
   const explanation = currentEvaluation?.explanation ?? drafts[0]?.evaluation.explanation ?? [];
+  const [assistanceFeedback, setAssistanceFeedback] = useState<string | null>(null);
 
   const kpis = [
     {
@@ -124,8 +128,45 @@ export default function StudentDashboard() {
     );
   }
 
+  const handleAskForAssistance = async () => {
+    if (!advisorId) {
+      setAssistanceFeedback('No advisor is assigned to your account yet.');
+      return;
+    }
+
+    const result = await sendAssistanceRequest({ senderId: studentId, recipientId: advisorId });
+    setAssistanceFeedback(
+      result.success
+        ? 'Your advisor has been notified that you need assistance.'
+        : result.error ?? 'Unable to notify your advisor right now.'
+    );
+  };
+
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-[#0f1e3c]">Need quick advisor support?</p>
+          <p className="text-sm text-gray-600">
+            Send a direct assistance alert to your assigned advisor.
+          </p>
+        </div>
+        <button
+          onClick={() => { void handleAskForAssistance(); }}
+          disabled={!advisorId || !isMessagingReady}
+          className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <AlertTriangle className="h-4 w-4" />
+          Ask for assistance
+        </button>
+      </div>
+
+      {assistanceFeedback && (
+        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+          {assistanceFeedback}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {kpis.map((item) => {
           const Icon = item.icon;

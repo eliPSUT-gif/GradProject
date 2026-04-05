@@ -36,12 +36,16 @@ interface NavSection {
 interface NotificationSummary {
   id: string;
   targetUserId: string;
+  kind: 'message' | 'assistance';
   senderId: string;
   senderName: string;
   preview: string;
   sentAt: string;
   readAt: string | null;
 }
+
+const MAX_VISIBLE_NOTIFICATIONS = 5;
+const TOAST_DURATION_MS = 5000;
 
 const NAV: Record<Role, NavSection[]> = {
   student: [
@@ -101,7 +105,7 @@ function formatNotificationTime(value: string) {
 
 export default function AppLayout() {
   const { logout, user, users } = useAuth();
-  const { getUnreadMessageCount, messages } = useMessaging();
+  const { assistanceNotifications, getUnreadMessageCount, messages } = useMessaging();
   const location = useLocation();
   const navigate = useNavigate();
   const notificationPanelRef = useRef<HTMLDivElement | null>(null);
@@ -121,26 +125,44 @@ export default function AppLayout() {
 
   const initializedNotificationIdsRef = useRef<Set<string>>(new Set());
   const hasInitializedNotificationsRef = useRef(false);
+  const initializedAssistanceIdsRef = useRef<Set<string>>(new Set());
+  const hasInitializedAssistanceRef = useRef(false);
 
   const recentNotifications = useMemo(() => {
     if (!user) {
       return [] as NotificationSummary[];
     }
 
-    return messages
+    const messageNotifications: NotificationSummary[] = messages
       .filter((message) => message.recipientId === user.id)
       .map((message) => ({
         id: message.id,
         targetUserId: user.id,
+        kind: 'message' as const,
         senderId: message.senderId,
         senderName: users.find((account) => account.id === message.senderId)?.name ?? 'Someone',
         preview: message.body,
         sentAt: message.sentAt,
         readAt: message.readAt,
-      }))
+      }));
+
+    const assistanceRecentNotifications: NotificationSummary[] = assistanceNotifications
+      .filter((notification) => notification.recipientId === user.id)
+      .map((notification) => ({
+        id: notification.id,
+        targetUserId: user.id,
+        kind: 'assistance' as const,
+        senderId: notification.senderId,
+        senderName: users.find((account) => account.id === notification.senderId)?.name ?? 'Someone',
+        preview: `${users.find((account) => account.id === notification.senderId)?.name ?? 'A student'} has asked for assistance.`,
+        sentAt: notification.createdAt,
+        readAt: null,
+      }));
+
+    return [...messageNotifications, ...assistanceRecentNotifications]
       .sort((left, right) => right.sentAt.localeCompare(left.sentAt))
-      .slice(0, 5);
-  }, [messages, user, users]);
+      .slice(0, MAX_VISIBLE_NOTIFICATIONS);
+  }, [assistanceNotifications, messages, user, users]);
 
   useEffect(() => {
     if (!user) {
@@ -162,8 +184,9 @@ export default function AppLayout() {
       .map((message) => {
         initializedNotificationIdsRef.current.add(message.id);
         return {
-          id: message.id,
+          id: `toast:${user.id}:${message.senderId}`,
           targetUserId: user.id,
+          kind: 'message' as const,
           senderId: message.senderId,
           senderName: users.find((account) => account.id === message.senderId)?.name ?? 'Someone',
           preview: message.body,
@@ -180,21 +203,93 @@ export default function AppLayout() {
     setToastNotifications((current) => {
       const deduped = new Map<string, NotificationSummary>();
       [...newNotifications, ...current].forEach((notification) => {
-        if (!deduped.has(notification.id)) {
+        const existing = deduped.get(notification.id);
+        if (!existing || existing.sentAt.localeCompare(notification.sentAt) < 0) {
           deduped.set(notification.id, notification);
         }
       });
 
       return [...deduped.values()]
         .sort((left, right) => right.sentAt.localeCompare(left.sentAt))
-        .slice(0, 5);
+        .slice(0, MAX_VISIBLE_NOTIFICATIONS);
     });
   }, [messages, user, users]);
+
+  useEffect(() => {
+    if (!user) {
+      initializedAssistanceIdsRef.current = new Set();
+      hasInitializedAssistanceRef.current = false;
+      return;
+    }
+
+    const incomingAssistance = assistanceNotifications.filter((notification) => notification.recipientId === user.id);
+
+    if (!hasInitializedAssistanceRef.current) {
+      initializedAssistanceIdsRef.current = new Set(incomingAssistance.map((notification) => notification.id));
+      hasInitializedAssistanceRef.current = true;
+      return;
+    }
+
+    const newNotifications = incomingAssistance
+      .filter((notification) => !initializedAssistanceIdsRef.current.has(notification.id))
+      .map((notification) => {
+        initializedAssistanceIdsRef.current.add(notification.id);
+        const senderName = users.find((account) => account.id === notification.senderId)?.name ?? 'A student';
+
+        return {
+          id: `assist-toast:${user.id}:${notification.senderId}`,
+          targetUserId: user.id,
+          kind: 'assistance' as const,
+          senderId: notification.senderId,
+          senderName,
+          preview: `${senderName} has asked for assistance.`,
+          sentAt: notification.createdAt,
+          readAt: null,
+        } satisfies NotificationSummary;
+      })
+      .sort((left, right) => right.sentAt.localeCompare(left.sentAt));
+
+    if (newNotifications.length === 0) {
+      return;
+    }
+
+    setToastNotifications((current) => {
+      const deduped = new Map<string, NotificationSummary>();
+      [...newNotifications, ...current].forEach((notification) => {
+        const existing = deduped.get(notification.id);
+        if (!existing || existing.sentAt.localeCompare(notification.sentAt) < 0) {
+          deduped.set(notification.id, notification);
+        }
+      });
+
+      return [...deduped.values()]
+        .sort((left, right) => right.sentAt.localeCompare(left.sentAt))
+        .slice(0, MAX_VISIBLE_NOTIFICATIONS);
+    });
+  }, [assistanceNotifications, user, users]);
 
   const visibleToastNotifications = useMemo(
     () => (user ? toastNotifications.filter((notification) => notification.targetUserId === user.id) : []),
     [toastNotifications, user]
   );
+
+  useEffect(() => {
+    if (visibleToastNotifications.length === 0) {
+      return;
+    }
+
+    const timeoutIds = visibleToastNotifications.map((notification) =>
+      window.setTimeout(() => {
+        setToastNotifications((current) =>
+          current.filter((item) => item.id !== notification.id)
+        );
+      }, TOAST_DURATION_MS)
+    );
+
+    return () => {
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    };
+  }, [visibleToastNotifications]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -235,6 +330,11 @@ export default function AppLayout() {
 
   const handleOpenNotification = (notification: NotificationSummary) => {
     dismissToast(notification.id);
+    if (notification.kind === 'assistance') {
+      navigate('/app/advisor/messages', { state: { focusUserId: notification.senderId, scrollToBottom: true } });
+      return;
+    }
+
     handleOpenMessageThread(notification.senderId);
   };
 
@@ -263,7 +363,11 @@ export default function AppLayout() {
                       <MessageSquare className="h-4 w-4 shrink-0 text-[#2563eb]" />
                       <p className="truncate text-sm font-semibold text-[#0f1e3c]">{notification.senderName}</p>
                     </div>
-                    <p className="mt-1 line-clamp-2 text-sm text-gray-600">{notification.preview}</p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {notification.kind === 'assistance'
+                        ? `${notification.senderName} has asked for assistance.`
+                        : `You received a message from ${notification.senderName}.`}
+                    </p>
                     <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-gray-400">
                       <Clock3 className="h-3.5 w-3.5" />
                       <span>{formatNotificationTime(notification.sentAt)}</span>
@@ -423,11 +527,15 @@ export default function AppLayout() {
                             <p className="mt-1 line-clamp-2 text-xs text-gray-500">{summary.preview}</p>
                           </div>
                           <div className="shrink-0 text-right">
-                            {!summary.readAt && (
+                            {summary.kind === 'assistance' ? (
+                              <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">
+                                !
+                              </span>
+                            ) : !summary.readAt ? (
                               <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 text-[10px] font-bold text-white">
                                 New
                               </span>
-                            )}
+                            ) : null}
                             <p className="mt-1 text-[10px] text-gray-400">{formatNotificationTime(summary.sentAt)}</p>
                           </div>
                         </div>
