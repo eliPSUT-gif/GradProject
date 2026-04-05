@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { STUDENT_PROFILES } from '../data/courses';
 import { useAuth } from './AuthContext';
 import {
@@ -27,7 +28,6 @@ export interface AdvisorMessage {
   recipientId: string;
   body: string;
   sentAt: string;
-  deliveredAt: string | null;
   readAt: string | null;
   optimistic?: boolean;
 }
@@ -44,11 +44,6 @@ interface MessageSendResult {
   message?: AdvisorMessage;
 }
 
-interface PresenceState {
-  isOnline: boolean;
-  lastSeenAt: string | null;
-}
-
 interface MessagingContextValue {
   messages: AdvisorMessage[];
   isMessagingReady: boolean;
@@ -56,8 +51,6 @@ interface MessagingContextValue {
   getAdviseeIds: (advisorId: string) => string[];
   getConversationMessages: (userId: string, otherUserId: string) => AdvisorMessage[];
   getUnreadMessageCount: (userId: string) => number;
-  getPresence: (userId: string) => PresenceState;
-  markConversationDelivered: (otherUserId: string) => Promise<void>;
   markConversationRead: (otherUserId: string) => Promise<void>;
   sendMessage: (input: SendMessageInput) => Promise<MessageSendResult>;
 }
@@ -68,7 +61,6 @@ interface RemoteMessageRow {
   recipient_id: string;
   body: string;
   sent_at: string;
-  delivered_at: string | null;
   read_at: string | null;
   client_message_id: string | null;
 }
@@ -78,10 +70,23 @@ interface StudentProfileRelation {
   advisor_id: string | null;
 }
 
-const MESSAGES_CHANNEL = 'messaging-realtime';
-const PRESENCE_CHANNEL = 'messaging-presence';
-const LAST_SEEN_TOUCH_INTERVAL_MS = 15000;
-const ONLINE_WINDOW_MS = 45000;
+interface MessageCreatedBroadcast {
+  messageId: string;
+  clientMessageId: string;
+}
+
+interface MessageReadBroadcast {
+  viewerId: string;
+  otherUserId: string;
+  readAt: string;
+}
+
+const BROADCAST_EVENT_CREATED = 'message.created';
+const BROADCAST_EVENT_READ = 'message.read';
+const FALLBACK_RELATIONSHIPS = STUDENT_PROFILES.map((profile) => ({
+  userId: profile.id,
+  advisorId: profile.advisorId || null,
+}));
 
 const MessagingContext = createContext<MessagingContextValue | null>(null);
 
@@ -91,6 +96,10 @@ function createClientId() {
   }
 
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getMessageMergeKey(message: AdvisorMessage) {
+  return message.clientMessageId || message.id;
 }
 
 function choosePreferredMessage(existing: AdvisorMessage, incoming: AdvisorMessage) {
@@ -105,9 +114,8 @@ function choosePreferredMessage(existing: AdvisorMessage, incoming: AdvisorMessa
   return {
     ...existing,
     ...incoming,
-    deliveredAt: incoming.deliveredAt ?? existing.deliveredAt,
     readAt: incoming.readAt ?? existing.readAt,
-    optimistic: existing.optimistic && incoming.optimistic,
+    optimistic: Boolean(existing.optimistic && incoming.optimistic),
   };
 }
 
@@ -116,7 +124,7 @@ function mergeMessages(...sources: AdvisorMessage[][]) {
 
   sources.forEach((source) => {
     source.forEach((message) => {
-      const key = message.clientMessageId || message.id;
+      const key = getMessageMergeKey(message);
       const existing = deduped.get(key);
       deduped.set(key, existing ? choosePreferredMessage(existing, message) : message);
     });
@@ -129,6 +137,25 @@ function mergeMessages(...sources: AdvisorMessage[][]) {
     }
 
     return left.id.localeCompare(right.id);
+  });
+}
+
+function areMessagesEqual(left: AdvisorMessage[], right: AdvisorMessage[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((message, index) => {
+    const other = right[index];
+    return Boolean(other)
+      && message.id === other.id
+      && message.clientMessageId === other.clientMessageId
+      && message.senderId === other.senderId
+      && message.recipientId === other.recipientId
+      && message.body === other.body
+      && message.sentAt === other.sentAt
+      && (message.readAt ?? null) === (other.readAt ?? null)
+      && Boolean(message.optimistic) === Boolean(other.optimistic);
   });
 }
 
@@ -147,247 +174,204 @@ function mapRemoteMessage(row: RemoteMessageRow, userIdByAppUserId: Record<strin
     recipientId,
     body: row.body,
     sentAt: row.sent_at,
-    deliveredAt: row.delivered_at,
     readAt: row.read_at,
     optimistic: false,
   } satisfies AdvisorMessage;
 }
 
-function applyDelivery(messages: AdvisorMessage[], viewerId: string, otherUserId: string, deliveredAt: string) {
-  return messages.map((message) =>
-    message.recipientId === viewerId && message.senderId === otherUserId && !message.deliveredAt
-      ? { ...message, deliveredAt }
-      : message
-  );
-}
-
 function applyRead(messages: AdvisorMessage[], viewerId: string, otherUserId: string, readAt: string) {
   return messages.map((message) =>
-    message.recipientId === viewerId && message.senderId === otherUserId
-      ? {
-          ...message,
-          deliveredAt: message.deliveredAt ?? readAt,
-          readAt: message.readAt ?? readAt,
-        }
+    message.recipientId === viewerId && message.senderId === otherUserId && !message.readAt
+      ? { ...message, readAt }
       : message
   );
 }
 
-function isRecentlyOnline(lastSeenAt: string | null) {
-  if (!lastSeenAt) {
-    return false;
+function resolveAssignedAdvisorId(
+  studentId: string,
+  relationships: StudentProfileRelation[],
+  appUserIdByUserId: Record<string, string>,
+  userIdByAppUserId: Record<string, string>
+) {
+  const fallbackAdvisorId = FALLBACK_RELATIONSHIPS.find((profile) => profile.userId === studentId)?.advisorId ?? null;
+  if (relationships.length === 0) {
+    return fallbackAdvisorId;
   }
 
-  return Date.now() - new Date(lastSeenAt).getTime() <= ONLINE_WINDOW_MS;
+  const studentAppUserId = appUserIdByUserId[studentId];
+  if (!studentAppUserId) {
+    return fallbackAdvisorId;
+  }
+
+  const relation = relationships.find((profile) => profile.user_id === studentAppUserId);
+  if (!relation?.advisor_id) {
+    return fallbackAdvisorId;
+  }
+
+  return userIdByAppUserId[relation.advisor_id] ?? fallbackAdvisorId;
 }
 
-const FALLBACK_RELATIONSHIPS = STUDENT_PROFILES.map((profile) => ({
-  userId: profile.id,
-  advisorId: profile.advisorId || null,
-}));
+function resolveAdviseeIds(
+  advisorId: string,
+  relationships: StudentProfileRelation[],
+  appUserIdByUserId: Record<string, string>,
+  userIdByAppUserId: Record<string, string>
+) {
+  const fallbackAdviseeIds = FALLBACK_RELATIONSHIPS
+    .filter((profile) => profile.advisorId === advisorId)
+    .map((profile) => profile.userId);
+
+  if (relationships.length === 0) {
+    return fallbackAdviseeIds;
+  }
+
+  const advisorAppUserId = appUserIdByUserId[advisorId];
+  if (!advisorAppUserId) {
+    return fallbackAdviseeIds;
+  }
+
+  const remoteAdviseeIds = relationships
+    .filter((profile) => profile.advisor_id === advisorAppUserId)
+    .map((profile) => userIdByAppUserId[profile.user_id])
+    .filter(Boolean) as string[];
+
+  return remoteAdviseeIds.length > 0 ? remoteAdviseeIds : fallbackAdviseeIds;
+}
+
+function isMessagePairAllowed(
+  senderId: string,
+  recipientId: string,
+  relationships: StudentProfileRelation[],
+  appUserIdByUserId: Record<string, string>,
+  userIdByAppUserId: Record<string, string>
+) {
+  const senderAdvisorId = resolveAssignedAdvisorId(senderId, relationships, appUserIdByUserId, userIdByAppUserId);
+  const recipientAdvisorId = resolveAssignedAdvisorId(recipientId, relationships, appUserIdByUserId, userIdByAppUserId);
+  return senderAdvisorId === recipientId || recipientAdvisorId === senderId;
+}
+
+function getConversationTopic(leftAppUserId: string, rightAppUserId: string) {
+  const [first, second] = [leftAppUserId, rightAppUserId].toSorted();
+  return `chat:pair:${first}:${second}`;
+}
+
+function buildConversationTopics(
+  currentUserId: string,
+  currentRole: string,
+  relationships: StudentProfileRelation[],
+  appUserIdByUserId: Record<string, string>,
+  userIdByAppUserId: Record<string, string>
+) {
+  const currentAppUserId = appUserIdByUserId[currentUserId];
+  if (!currentAppUserId) {
+    return [] as string[];
+  }
+
+  if (currentRole === 'student') {
+    const advisorId = resolveAssignedAdvisorId(currentUserId, relationships, appUserIdByUserId, userIdByAppUserId);
+    const advisorAppUserId = advisorId ? appUserIdByUserId[advisorId] : null;
+    return advisorAppUserId ? [getConversationTopic(currentAppUserId, advisorAppUserId)] : [];
+  }
+
+  if (currentRole === 'advisor') {
+    return resolveAdviseeIds(currentUserId, relationships, appUserIdByUserId, userIdByAppUserId)
+      .map((adviseeId) => appUserIdByUserId[adviseeId])
+      .filter(Boolean)
+      .map((adviseeAppUserId) => getConversationTopic(currentAppUserId, adviseeAppUserId!));
+  }
+
+  return [] as string[];
+}
 
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isAuthReady, user, users } = useAuth();
   const [messages, setMessages] = useState<AdvisorMessage[]>([]);
   const [relationships, setRelationships] = useState<StudentProfileRelation[]>([]);
-  const [onlineAppUserIds, setOnlineAppUserIds] = useState<Set<string>>(new Set());
   const [isMessagingReady, setIsMessagingReady] = useState(hasSupabaseConfig() || isLocalDemoModeEnabled());
-  const hasLoadedSnapshotRef = useRef(false);
-  const pendingDeliveryRef = useRef<Set<string>>(new Set());
-  const pendingReadRef = useRef<Set<string>>(new Set());
-  const snapshotRef = useRef<(() => Promise<void>) | null>(null);
-  const markConversationDeliveredRef = useRef<typeof markConversationDelivered>(null!);
-  const touchLastSeenRef = useRef<typeof touchLastSeen>(null!);
-  const userRef = useRef(user);
-  const appUserMapsRef = useRef<{
-    key: string;
-    appUserIdByUserId: Record<string, string>;
-    userIdByAppUserId: Record<string, string>;
-  }>({
-    key: '',
-    appUserIdByUserId: {},
-    userIdByAppUserId: {},
-  });
+  const refreshQueuedRef = useRef(false);
+  const refreshInFlightRef = useRef(false);
+  const channelByTopicRef = useRef(new Map<string, RealtimeChannel>());
+  const mappedUsers = useMemo(
+    () => users.filter((account) => account.appUserId),
+    [users]
+  );
 
-  const appUserMappingKey = users
-    .filter((account) => account.appUserId)
-    .map((account) => `${account.id}:${account.appUserId}`)
-    .join('|');
-
-  if (appUserMapsRef.current.key !== appUserMappingKey) {
-    appUserMapsRef.current = {
-      key: appUserMappingKey,
-      appUserIdByUserId: Object.fromEntries(
-        users
-          .filter((account) => account.appUserId)
-          .map((account) => [account.id, account.appUserId!])
+  const appUserIdByUserId = useMemo(
+    () =>
+      Object.fromEntries(
+        mappedUsers.map((account) => [account.id, account.appUserId!])
       ),
-      userIdByAppUserId: Object.fromEntries(
-        users
-          .filter((account) => account.appUserId)
-          .map((account) => [account.appUserId!, account.id])
-      ),
-    };
-  }
+    [mappedUsers]
+  );
 
-  const { appUserIdByUserId, userIdByAppUserId } = appUserMapsRef.current;
+  const userIdByAppUserId = useMemo(
+    () =>
+      Object.fromEntries(
+        mappedUsers.map((account) => [account.appUserId!, account.id])
+      ),
+    [mappedUsers]
+  );
+
   const currentAppUserId = user?.appUserId ?? appUserIdByUserId[user?.id ?? ''] ?? null;
 
-  const touchLastSeen = useCallback(async () => {
-    if (!hasSupabaseConfig() || !isAuthenticated) {
-      return;
-    }
-
-    try {
-      await supabaseRpc<null>('touch_last_seen');
-    } catch (error) {
-      console.error('Unable to update last seen state.', error);
-    }
-  }, [isAuthenticated]);
-
   const getAssignedAdvisorId = useCallback(
-    (studentId: string) => {
-      const fallbackAdvisorId = FALLBACK_RELATIONSHIPS.find((profile) => profile.userId === studentId)?.advisorId ?? null;
-      if (relationships.length === 0) {
-        return fallbackAdvisorId;
-      }
-
-      const studentAppUserId = appUserIdByUserId[studentId];
-      if (!studentAppUserId) {
-        return fallbackAdvisorId;
-      }
-
-      const relation = relationships.find((profile) => profile.user_id === studentAppUserId);
-      if (!relation?.advisor_id) {
-        return fallbackAdvisorId;
-      }
-
-      return userIdByAppUserId[relation.advisor_id] ?? fallbackAdvisorId;
-    },
+    (studentId: string) => resolveAssignedAdvisorId(studentId, relationships, appUserIdByUserId, userIdByAppUserId),
     [appUserIdByUserId, relationships, userIdByAppUserId]
   );
 
   const getAdviseeIds = useCallback(
-    (advisorId: string) => {
-      const fallbackAdviseeIds = FALLBACK_RELATIONSHIPS.filter((profile) => profile.advisorId === advisorId).map((profile) => profile.userId);
-      if (relationships.length === 0) {
-        return fallbackAdviseeIds;
-      }
-
-      const advisorAppUserId = appUserIdByUserId[advisorId];
-      if (!advisorAppUserId) {
-        return fallbackAdviseeIds;
-      }
-
-      const remoteAdviseeIds = relationships
-        .filter((profile) => profile.advisor_id === advisorAppUserId)
-        .map((profile) => userIdByAppUserId[profile.user_id])
-        .filter(Boolean) as string[];
-
-      return remoteAdviseeIds.length > 0 ? remoteAdviseeIds : fallbackAdviseeIds;
-    },
+    (advisorId: string) => resolveAdviseeIds(advisorId, relationships, appUserIdByUserId, userIdByAppUserId),
     [appUserIdByUserId, relationships, userIdByAppUserId]
   );
-
-  const isMessagePairAllowed = useCallback(
-    (senderId: string, recipientId: string) => {
-      const senderAdvisorId = getAssignedAdvisorId(senderId);
-      const recipientAdvisorId = getAssignedAdvisorId(recipientId);
-      return senderAdvisorId === recipientId || recipientAdvisorId === senderId;
-    },
-    [getAssignedAdvisorId]
-  );
-
-  const markConversationDelivered = useCallback(async (otherUserId: string) => {
-    if (!user) {
-      return;
-    }
-
-    if (!hasSupabaseConfig()) {
-      if (!isLocalDemoModeEnabled()) {
-        return;
-      }
-
-      const deliveredAt = new Date().toISOString();
-      setMessages((current) => applyDelivery(current, user.id, otherUserId, deliveredAt));
-      return;
-    }
-
-    const otherAppUserId = appUserIdByUserId[otherUserId];
-    if (!otherAppUserId || pendingDeliveryRef.current.has(otherUserId)) {
-      return;
-    }
-
-    pendingDeliveryRef.current.add(otherUserId);
-    const deliveredAt = new Date().toISOString();
-
-    try {
-      await supabaseRpc<number>('mark_conversation_delivered', { other_user_id: otherAppUserId });
-      setMessages((current) => applyDelivery(current, user.id, otherUserId, deliveredAt));
-    } catch (error) {
-      console.error('Unable to mark messages as delivered.', error);
-    } finally {
-      pendingDeliveryRef.current.delete(otherUserId);
-    }
-  }, [appUserIdByUserId, user]);
 
   const markConversationRead = useCallback(async (otherUserId: string) => {
     if (!user) {
       return;
     }
 
-    if (!hasSupabaseConfig()) {
-      if (!isLocalDemoModeEnabled()) {
-        return;
-      }
+    const readAt = new Date().toISOString();
 
-      const readAt = new Date().toISOString();
-      setMessages((current) => applyRead(current, user.id, otherUserId, readAt));
+    if (!hasSupabaseConfig()) {
+      if (isLocalDemoModeEnabled()) {
+        setMessages((current) => applyRead(current, user.id, otherUserId, readAt));
+      }
       return;
     }
 
     const otherAppUserId = appUserIdByUserId[otherUserId];
-    if (!otherAppUserId || pendingReadRef.current.has(otherUserId)) {
+    const currentUserAppUserId = appUserIdByUserId[user.id];
+    if (!otherAppUserId || !currentUserAppUserId) {
       return;
     }
-
-    pendingReadRef.current.add(otherUserId);
-    const readAt = new Date().toISOString();
 
     try {
       await supabaseRpc<number>('mark_conversation_read', { other_user_id: otherAppUserId });
       setMessages((current) => applyRead(current, user.id, otherUserId, readAt));
+
+      const topic = getConversationTopic(currentUserAppUserId, otherAppUserId);
+      const channel = channelByTopicRef.current.get(topic);
+      if (channel) {
+        const status = await channel.send({
+          type: 'broadcast',
+          event: BROADCAST_EVENT_READ,
+          payload: {
+            viewerId: user.id,
+            otherUserId,
+            readAt,
+          } satisfies MessageReadBroadcast,
+        });
+
+        if (status !== 'ok') {
+          console.error('Supabase read broadcast was not acknowledged.', status);
+        }
+      }
     } catch (error) {
       console.error('Unable to mark messages as read.', error);
-    } finally {
-      pendingReadRef.current.delete(otherUserId);
     }
   }, [appUserIdByUserId, user]);
 
-  markConversationDeliveredRef.current = markConversationDelivered;
-  touchLastSeenRef.current = touchLastSeen;
-  userRef.current = user;
-
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-
-    const incomingSenders = new Set(
-      messages
-        .filter((message) => message.recipientId === user.id && !message.deliveredAt)
-        .map((message) => message.senderId)
-    );
-
-    incomingSenders.forEach((senderId) => {
-      void markConversationDelivered(senderId);
-    });
-  }, [markConversationDelivered, messages, user]);
-
   useEffect(() => {
     if (!hasSupabaseConfig()) {
-      snapshotRef.current = null;
-      hasLoadedSnapshotRef.current = true;
       if (isLocalDemoModeEnabled()) {
         setRelationships(
           FALLBACK_RELATIONSHIPS.map((profile) => ({ user_id: profile.userId, advisor_id: profile.advisorId }))
@@ -396,191 +380,162 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       } else {
         setMessages([]);
         setRelationships([]);
-        setOnlineAppUserIds(new Set());
         setIsMessagingReady(false);
       }
       return;
     }
 
     if (!isAuthReady) {
-      snapshotRef.current = null;
-      hasLoadedSnapshotRef.current = false;
       setIsMessagingReady(false);
       return;
     }
 
-    if (!isAuthenticated || !currentAppUserId) {
-      snapshotRef.current = null;
+    if (!isAuthenticated || !user || !currentAppUserId) {
       setMessages([]);
       setRelationships([]);
-      setOnlineAppUserIds(new Set());
-      hasLoadedSnapshotRef.current = false;
       setIsMessagingReady(true);
       return;
     }
 
     const supabase = getSupabaseClient();
     if (!supabase) {
-      snapshotRef.current = null;
-      hasLoadedSnapshotRef.current = false;
-      setIsMessagingReady(true);
+      setIsMessagingReady(false);
       return;
     }
 
     let cancelled = false;
-    hasLoadedSnapshotRef.current = false;
-    setIsMessagingReady(false);
+    const activeChannels = new Map<string, RealtimeChannel>();
 
-    const loadSnapshot = async () => {
-      const [{ data: messageRows, error: messageError }, { data: relationRows, error: relationError }] = await Promise.all([
-        supabase
-          .from('messages')
-          .select('id,sender_id,recipient_id,body,sent_at,delivered_at,read_at,client_message_id')
-          .or(`sender_id.eq.${currentAppUserId},recipient_id.eq.${currentAppUserId}`)
-          .order('sent_at', { ascending: true }),
-        supabase
-          .from('student_profiles')
-          .select('user_id,advisor_id'),
-      ]);
+    const loadMessagesSnapshot = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('id,sender_id,recipient_id,body,sent_at,read_at,client_message_id')
+        .or(`sender_id.eq.${currentAppUserId},recipient_id.eq.${currentAppUserId}`)
+        .order('sent_at', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
 
       if (cancelled) {
         return;
       }
 
-      if (messageError) {
-        throw messageError;
+      const snapshotMessages = (data ?? [])
+        .map((row) => mapRemoteMessage(row as RemoteMessageRow, userIdByAppUserId))
+        .filter(Boolean) as AdvisorMessage[];
+
+      startTransition(() => {
+        setMessages((current) => {
+          const nextMessages = mergeMessages(snapshotMessages, current.filter((message) => message.optimistic));
+          return areMessagesEqual(current, nextMessages) ? current : nextMessages;
+        });
+      });
+    };
+
+    const queueMessagesRefresh = async () => {
+      if (refreshInFlightRef.current) {
+        refreshQueuedRef.current = true;
+        return;
       }
+
+      refreshInFlightRef.current = true;
+
+      try {
+        do {
+          refreshQueuedRef.current = false;
+          await loadMessagesSnapshot();
+        } while (!cancelled && refreshQueuedRef.current);
+      } catch (error) {
+        console.error('Unable to refresh messaging snapshot.', error);
+      } finally {
+        refreshInFlightRef.current = false;
+      }
+    };
+
+    const initialize = async () => {
+      setIsMessagingReady(false);
+
+      const { data: relationRows, error: relationError } = await supabase
+        .from('student_profiles')
+        .select('user_id,advisor_id');
 
       if (relationError) {
         throw relationError;
       }
 
-      const nextMessages = (messageRows ?? [])
-        .map((row) => mapRemoteMessage(row as RemoteMessageRow, userIdByAppUserId))
-        .filter(Boolean) as AdvisorMessage[];
+      if (cancelled) {
+        return;
+      }
 
+      const nextRelationships = (relationRows ?? []) as StudentProfileRelation[];
       startTransition(() => {
-        setRelationships((relationRows ?? []) as StudentProfileRelation[]);
-        setMessages(nextMessages);
-        hasLoadedSnapshotRef.current = true;
-        setIsMessagingReady(true);
+        setRelationships(nextRelationships);
       });
+
+      await loadMessagesSnapshot();
+
+      const topics = buildConversationTopics(
+        user.id,
+        user.role,
+        nextRelationships,
+        appUserIdByUserId,
+        userIdByAppUserId
+      );
+
+      topics.forEach((topic) => {
+        const channel = supabase.channel(topic, {
+          config: {
+            private: true,
+          },
+        })
+          .on('broadcast', { event: BROADCAST_EVENT_CREATED }, () => {
+            void queueMessagesRefresh();
+          })
+          .on('broadcast', { event: BROADCAST_EVENT_READ }, () => {
+            void queueMessagesRefresh();
+          })
+          .subscribe((status) => {
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              console.error('Supabase broadcast channel failed.', topic, status);
+            }
+          });
+
+        activeChannels.set(topic, channel);
+      });
+
+      channelByTopicRef.current = activeChannels;
+      setIsMessagingReady(true);
     };
 
-    snapshotRef.current = loadSnapshot;
-
-    const handleRealtimeMessage = (row: RemoteMessageRow | null | undefined) => {
-      if (!row) {
-        return;
-      }
-
-      if (row.sender_id !== currentAppUserId && row.recipient_id !== currentAppUserId) {
-        return;
-      }
-
-      const mapped = mapRemoteMessage(row, userIdByAppUserId);
-      if (!mapped) {
-        return;
-      }
-
-      startTransition(() => {
-        setMessages((current) => mergeMessages(current, [mapped]));
-      });
-
-      if (mapped.recipientId === userRef.current?.id && !mapped.deliveredAt) {
-        void markConversationDeliveredRef.current(mapped.senderId);
-      }
-    };
-
-    const messagesChannel = supabase.channel(`${MESSAGES_CHANNEL}:${currentAppUserId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, ({ new: next }) => {
-        handleRealtimeMessage(next as RemoteMessageRow);
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, ({ new: next }) => {
-        handleRealtimeMessage(next as RemoteMessageRow);
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          return;
-        }
-
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Supabase messages channel failed to subscribe.', status);
-          if (!cancelled) {
-            setIsMessagingReady(false);
-          }
-        }
-      });
-
-    const presenceChannel = supabase.channel(PRESENCE_CHANNEL, {
-      config: {
-        presence: {
-          key: currentAppUserId,
-        },
-      },
-    })
-      .on('presence', { event: 'sync' }, () => {
-        const state = presenceChannel.presenceState();
-        startTransition(() => {
-          setOnlineAppUserIds(new Set(Object.keys(state)));
-        });
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          void presenceChannel.track({ universityId: userRef.current?.id ?? '', connectedAt: new Date().toISOString() });
-          void touchLastSeenRef.current();
-          return;
-        }
-
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('Supabase presence channel failed to subscribe.', status);
-        }
-      });
-
-    void loadSnapshot().catch((error) => {
-      console.error('Unable to load messaging snapshot.', error);
+    void initialize().catch((error) => {
+      console.error('Unable to initialize messaging.', error);
       if (!cancelled) {
-        hasLoadedSnapshotRef.current = true;
         setIsMessagingReady(false);
       }
     });
 
-    const lastSeenInterval = window.setInterval(() => {
-      if (document.visibilityState === 'hidden') {
-        return;
-      }
-
-      void touchLastSeenRef.current();
-    }, LAST_SEEN_TOUCH_INTERVAL_MS);
-
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        void touchLastSeenRef.current();
-        return;
+      if (document.visibilityState === 'visible') {
+        void queueMessagesRefresh();
       }
-
-      if (!hasLoadedSnapshotRef.current) {
-        return;
-      }
-
-      void snapshotRef.current?.().catch((error) => {
-        console.error('Unable to refresh messaging snapshot on visibility change.', error);
-      });
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       cancelled = true;
-      snapshotRef.current = null;
+      refreshQueuedRef.current = false;
+      refreshInFlightRef.current = false;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.clearInterval(lastSeenInterval);
-      setOnlineAppUserIds(new Set());
-      void touchLastSeenRef.current();
-      void supabase.removeChannel(messagesChannel);
-      void supabase.removeChannel(presenceChannel);
+
+      activeChannels.forEach((channel) => {
+        void supabase.removeChannel(channel);
+      });
+
+      channelByTopicRef.current = new Map();
     };
-  }, [currentAppUserId, isAuthenticated, isAuthReady, userIdByAppUserId]);
+  }, [appUserIdByUserId, currentAppUserId, isAuthenticated, isAuthReady, user, userIdByAppUserId]);
 
   const getConversationMessages = useCallback(
     (userId: string, otherUserId: string) =>
@@ -597,27 +552,21 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     [messages]
   );
 
-  const getPresence = useCallback(
-    (userId: string) => {
-      const appUserId = appUserIdByUserId[userId];
-      const matchedUser = users.find((account) => account.id === userId);
-      const lastSeenAt = matchedUser?.lastSeenAt ?? null;
-
-      return {
-        isOnline: userId === user?.id || Boolean(appUserId && onlineAppUserIds.has(appUserId)) || isRecentlyOnline(lastSeenAt),
-        lastSeenAt,
-      } satisfies PresenceState;
-    },
-    [appUserIdByUserId, onlineAppUserIds, user?.id, users]
-  );
-
   const sendMessage = useCallback(async ({ senderId, recipientId, body }: SendMessageInput): Promise<MessageSendResult> => {
     const trimmedBody = body.trim();
     if (!trimmedBody) {
       return { success: false, error: 'Message cannot be empty.' };
     }
 
-    if (!isMessagePairAllowed(senderId, recipientId)) {
+    const pairAllowed = isMessagePairAllowed(
+      senderId,
+      recipientId,
+      relationships,
+      appUserIdByUserId,
+      userIdByAppUserId
+    );
+
+    if (!pairAllowed) {
       return { success: false, error: 'Messages can only be exchanged between a student and their assigned advisor.' };
     }
 
@@ -629,7 +578,6 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       recipientId,
       body: trimmedBody,
       sentAt: new Date().toISOString(),
-      deliveredAt: null,
       readAt: null,
       optimistic: true,
     };
@@ -671,7 +619,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           sent_at: optimisticMessage.sentAt,
           client_message_id: clientMessageId,
         })
-        .select('id,sender_id,recipient_id,body,sent_at,delivered_at,read_at,client_message_id')
+        .select('id,sender_id,recipient_id,body,sent_at,read_at,client_message_id')
         .single();
 
       if (error) {
@@ -684,6 +632,24 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       }
 
       setMessages((current) => mergeMessages(current, [insertedMessage]));
+
+      const topic = getConversationTopic(senderAppUserId, recipientAppUserId);
+      const channel = channelByTopicRef.current.get(topic);
+      if (channel) {
+        const status = await channel.send({
+          type: 'broadcast',
+          event: BROADCAST_EVENT_CREATED,
+          payload: {
+            messageId: insertedMessage.id,
+            clientMessageId: insertedMessage.clientMessageId,
+          } satisfies MessageCreatedBroadcast,
+        });
+
+        if (status !== 'ok') {
+          console.error('Supabase message broadcast was not acknowledged.', status);
+        }
+      }
+
       return { success: true, message: insertedMessage };
     } catch (error) {
       console.error('Unable to save message to Supabase.', error);
@@ -693,7 +659,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         error: error instanceof Error ? error.message : 'Unable to save the message right now. Please try again.',
       };
     }
-  }, [appUserIdByUserId, isMessagePairAllowed, userIdByAppUserId]);
+  }, [appUserIdByUserId, relationships, userIdByAppUserId]);
 
   const value = useMemo<MessagingContextValue>(
     () => ({
@@ -703,8 +669,6 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       getAdviseeIds,
       getConversationMessages,
       getUnreadMessageCount,
-      getPresence,
-      markConversationDelivered,
       markConversationRead,
       sendMessage,
     }),
@@ -712,10 +676,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       getAdviseeIds,
       getAssignedAdvisorId,
       getConversationMessages,
-      getPresence,
       getUnreadMessageCount,
       isMessagingReady,
-      markConversationDelivered,
       markConversationRead,
       messages,
       sendMessage,
@@ -733,10 +695,3 @@ export function useMessaging() {
 
   return context;
 }
-
-
-
-
-
-
-

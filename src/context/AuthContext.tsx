@@ -325,7 +325,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthReady, setIsAuthReady] = useState(!hasSupabaseConfig());
 
   const usersRef = useRef(users);
-  usersRef.current = users;
+
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
 
   const syncUsersFromSupabase = useCallback(async () => {
     if (!hasSupabaseConfig()) {
@@ -828,7 +831,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => useContext(AuthContext);
 export type { AuthSession, LoginResult, PasswordChangeResult, UserFormInput };
-
 
 
 

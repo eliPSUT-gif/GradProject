@@ -7,48 +7,29 @@ function formatTimestamp(value: string) {
   return new Date(value).toLocaleString();
 }
 
-function formatPresenceLabel(isOnline: boolean, lastSeenAt: string | null) {
-  if (isOnline) {
-    return 'Online';
-  }
-
-  return lastSeenAt ? `Last seen ${formatTimestamp(lastSeenAt)}` : 'Offline';
-}
-
-function formatReceipt(sentAt: string, deliveredAt: string | null, readAt: string | null) {
+function formatReceipt(sentAt: string, readAt: string | null) {
   if (readAt) {
     return {
       label: `Read ${formatTimestamp(readAt)}`,
       read: true,
-      delivered: true,
-    };
-  }
-
-  if (deliveredAt) {
-    return {
-      label: `Delivered ${formatTimestamp(deliveredAt)}`,
-      read: false,
-      delivered: true,
     };
   }
 
   return {
     label: `Sent ${formatTimestamp(sentAt)}`,
     read: false,
-    delivered: false,
   };
 }
 
 export default function StudentMessagesPage() {
   const { user, users } = useAuth();
-  const { getAssignedAdvisorId, getConversationMessages, getPresence, isMessagingReady, markConversationRead, sendMessage } = useMessaging();
+  const { getAssignedAdvisorId, getConversationMessages, isMessagingReady, markConversationRead, sendMessage } = useMessaging();
   const [draft, setDraft] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const studentId = user?.id ?? '';
   const advisorId = getAssignedAdvisorId(studentId);
   const advisor = users.find((account) => account.id === advisorId) ?? null;
-  const advisorPresence = advisorId ? getPresence(advisorId) : { isOnline: false, lastSeenAt: null };
   const conversation = advisorId ? getConversationMessages(studentId, advisorId) : [];
 
   const unreadFromAdvisor = conversation.filter(
@@ -88,9 +69,6 @@ export default function StudentMessagesPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Assigned advisor</p>
               <p className="mt-2 text-base font-semibold text-[#0f1e3c]">{advisor.name}</p>
               <p className="mt-1 text-sm text-gray-500">{advisor.subtitle}</p>
-              <p className={`mt-2 text-xs font-semibold ${advisorPresence.isOnline ? 'text-emerald-600' : 'text-slate-500'}`}>
-                {formatPresenceLabel(advisorPresence.isOnline, advisorPresence.lastSeenAt)}
-              </p>
             </div>
             <div className="rounded-xl border border-gray-200 p-4 text-sm text-gray-600">
               Use this inbox to ask about workload, prerequisites, and registration decisions.
@@ -116,7 +94,7 @@ export default function StudentMessagesPage() {
           {conversation.length > 0 ? (
             conversation.map((message) => {
               const isMine = message.senderId === studentId;
-              const receipt = formatReceipt(message.sentAt, message.deliveredAt, message.readAt);
+              const receipt = formatReceipt(message.sentAt, message.readAt);
               return (
                 <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[88%] rounded-2xl px-3 py-2.5 shadow-sm sm:max-w-xl sm:px-4 sm:py-3 ${isMine ? 'bg-[#2563eb] text-white' : 'bg-white text-slate-700'}`}>
@@ -129,7 +107,7 @@ export default function StudentMessagesPage() {
                       <p>{formatTimestamp(message.sentAt)}</p>
                       {isMine ? (
                         <div className="inline-flex items-center gap-1.5">
-                          <Check className={`h-3.5 w-3.5 ${receipt.read ? 'rounded-full bg-white p-0.5 text-blue-600' : receipt.delivered ? 'text-blue-200' : 'text-white'}`} />
+                          <Check className={`h-3.5 w-3.5 ${receipt.read ? 'rounded-full bg-white p-0.5 text-blue-600' : 'text-white'}`} />
                           <span>{receipt.label}</span>
                         </div>
                       ) : message.readAt ? (
@@ -156,7 +134,7 @@ export default function StudentMessagesPage() {
             className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm sm:px-4 sm:py-3 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Messages sync across browsers and devices within a few seconds. Checks move from sent to delivered to read.</p>}
+            {feedback ? <p className="text-sm text-gray-600">{feedback}</p> : <p className="text-sm text-gray-500">Messages persist in the database and refresh instantly for connected participants.</p>}
             <button
               onClick={() => { void handleSend(); }}
               disabled={!advisorId || !isMessagingReady}
