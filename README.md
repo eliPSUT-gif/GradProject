@@ -2,6 +2,8 @@
 
 This project runs a Smart Academic Advisor app with role-based dashboards, planner analytics, Supabase-backed data, and Vercel deployment.
 
+Deployment note: normal commits to `main` should trigger a fresh Vercel deployment.
+
 ## Environment Variables
 
 Create a local `.env.local` from [.env.example](C:\Users\Elias\Desktop\GP2\.env.example) and set:
