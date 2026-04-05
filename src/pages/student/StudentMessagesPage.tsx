@@ -4,6 +4,8 @@ import { Check, Mail, Send, UserRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useMessaging } from '../../context/MessagingContext';
 
+const ASSISTANCE_MESSAGE_LABEL = 'Student has asked for assistance.';
+
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString();
 }
@@ -145,6 +147,17 @@ export default function StudentMessagesPage() {
         <div className="mb-5 h-[280px] space-y-3 overflow-y-auto rounded-xl bg-slate-50 p-3 sm:h-[420px] sm:p-4">
           {conversation.length > 0 ? (
             conversation.map((message) => {
+              if (message.kind === 'assistance') {
+                return (
+                  <div key={message.id} className="flex justify-center">
+                    <div className="rounded-full bg-white/80 px-4 py-2 text-center text-xs font-medium text-gray-400 shadow-sm">
+                      <p>{ASSISTANCE_MESSAGE_LABEL}</p>
+                      <p className="mt-1 text-[10px] text-gray-300">{formatTimestamp(message.sentAt)}</p>
+                    </div>
+                  </div>
+                );
+              }
+
               const isMine = message.senderId === studentId;
               const receipt = formatReceipt(message.sentAt, message.readAt);
               return (

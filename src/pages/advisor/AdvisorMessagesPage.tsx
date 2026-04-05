@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
 import { useMessaging } from '../../context/MessagingContext';
 
+const ASSISTANCE_MESSAGE_LABEL = 'Student has asked for assistance.';
+
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString();
 }
@@ -72,6 +74,11 @@ export default function AdvisorMessagesPage() {
           student,
           lastMessage,
           unreadCount,
+          preview: lastMessage
+            ? lastMessage.kind === 'assistance'
+              ? ASSISTANCE_MESSAGE_LABEL
+              : lastMessage.body
+            : 'No messages yet.',
         };
       })
       .sort((left, right) => {
@@ -195,7 +202,7 @@ export default function AdvisorMessagesPage() {
 
         <div className="max-h-[320px] space-y-2 overflow-y-auto xl:max-h-none">
           {studentThreads.length > 0 ? (
-            studentThreads.map(({ student, lastMessage, unreadCount }) => (
+            studentThreads.map(({ student, preview, unreadCount }) => (
               <button
                 key={student.id}
                 onClick={() => handleSelectStudent(student.id)}
@@ -208,7 +215,7 @@ export default function AdvisorMessagesPage() {
                   </div>
                   {unreadCount > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">{unreadCount}</span>}
                 </div>
-                <p className="mt-2 line-clamp-2 text-xs text-gray-500">{lastMessage?.body ?? 'No messages yet.'}</p>
+                <p className="mt-2 line-clamp-2 text-xs text-gray-500">{preview}</p>
               </button>
             ))
           ) : (
@@ -233,6 +240,17 @@ export default function AdvisorMessagesPage() {
             <div className="mb-5 h-[280px] space-y-3 overflow-y-auto rounded-xl bg-slate-50 p-3 sm:h-[420px] sm:p-4">
               {conversation.length > 0 ? (
                 conversation.map((message) => {
+                  if (message.kind === 'assistance') {
+                    return (
+                      <div key={message.id} className="flex justify-center">
+                        <div className="rounded-full bg-white/80 px-4 py-2 text-center text-xs font-medium text-gray-400 shadow-sm">
+                          <p>{ASSISTANCE_MESSAGE_LABEL}</p>
+                          <p className="mt-1 text-[10px] text-gray-300">{formatTimestamp(message.sentAt)}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   const isMine = message.senderId === advisorId;
                   const sender = users.find((account) => account.id === message.senderId);
                   const receipt = formatReceipt(message.sentAt, message.readAt);

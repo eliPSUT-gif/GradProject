@@ -29,6 +29,7 @@ export interface AdvisorMessage {
   body: string;
   sentAt: string;
   readAt: string | null;
+  kind: 'message' | 'assistance';
   optimistic?: boolean;
 }
 
@@ -120,6 +121,7 @@ const BROADCAST_EVENT_READ = 'message.read';
 const BROADCAST_EVENT_ASSISTANCE = 'assistance.request';
 const NOTIFICATIONS_SESSION_KEY = 'smart-advisor-notifications-v1';
 const MAX_NOTIFICATIONS = 5;
+const ASSISTANCE_MESSAGE_BODY = '__smart_advisor_assistance_request__';
 const FALLBACK_RELATIONSHIPS = STUDENT_PROFILES.map((profile) => ({
   userId: profile.id,
   advisorId: profile.advisorId || null,
@@ -133,6 +135,10 @@ function createClientId() {
   }
 
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getMessageKind(body: string) {
+  return body === ASSISTANCE_MESSAGE_BODY ? 'assistance' as const : 'message' as const;
 }
 
 function getMessageMergeKey(message: AdvisorMessage) {
@@ -192,6 +198,7 @@ function areMessagesEqual(left: AdvisorMessage[], right: AdvisorMessage[]) {
       && message.body === other.body
       && message.sentAt === other.sentAt
       && (message.readAt ?? null) === (other.readAt ?? null)
+      && message.kind === other.kind
       && Boolean(message.optimistic) === Boolean(other.optimistic);
   });
 }
@@ -212,6 +219,7 @@ function mapRemoteMessage(row: RemoteMessageRow, userIdByAppUserId: Record<strin
     body: row.body,
     sentAt: row.sent_at,
     readAt: row.read_at,
+    kind: getMessageKind(row.body),
     optimistic: false,
   } satisfies AdvisorMessage;
 }
@@ -604,22 +612,22 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           })
           .on('broadcast', { event: BROADCAST_EVENT_ASSISTANCE }, ({ payload }) => {
             const nextNotification = payload as AssistanceRequestBroadcast;
-            if (nextNotification.recipientId !== user.id) {
-              return;
+            if (nextNotification.recipientId === user.id) {
+              const notification: AppNotification = {
+                id: `assistance:${nextNotification.recipientId}:${nextNotification.senderId}`,
+                kind: 'assistance',
+                senderId: nextNotification.senderId,
+                recipientId: nextNotification.recipientId,
+                createdAt: nextNotification.requestedAt,
+              };
+
+              startTransition(() => {
+                setNotifications((current) => upsertNotification(current, notification));
+                setToastNotifications((current) => upsertNotification(current, notification));
+              });
             }
 
-            const notification: AppNotification = {
-              id: `assistance:${nextNotification.recipientId}:${nextNotification.senderId}`,
-              kind: 'assistance',
-              senderId: nextNotification.senderId,
-              recipientId: nextNotification.recipientId,
-              createdAt: nextNotification.requestedAt,
-            };
-
-            startTransition(() => {
-              setNotifications((current) => upsertNotification(current, notification));
-              setToastNotifications((current) => upsertNotification(current, notification));
-            });
+            void queueMessagesRefresh();
           })
           .subscribe((status) => {
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -699,6 +707,19 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
     if (!hasSupabaseConfig()) {
       if (isLocalDemoModeEnabled()) {
+        const assistanceMessage: AdvisorMessage = {
+          id: `assistance-${Date.now()}`,
+          clientMessageId: createClientId(),
+          senderId,
+          recipientId,
+          body: ASSISTANCE_MESSAGE_BODY,
+          sentAt: new Date().toISOString(),
+          readAt: null,
+          kind: 'assistance',
+          optimistic: false,
+        };
+
+        setMessages((current) => mergeMessages(current, [assistanceMessage]));
         return { success: true };
       }
 
@@ -721,6 +742,36 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     }
 
     const requestedAt = new Date().toISOString();
+    const clientMessageId = createClientId();
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return { success: false, error: 'Supabase client is not available right now.' };
+    }
+
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        sender_id: senderAppUserId,
+        recipient_id: recipientAppUserId,
+        body: ASSISTANCE_MESSAGE_BODY,
+        sent_at: requestedAt,
+        client_message_id: clientMessageId,
+      })
+      .select('id,sender_id,recipient_id,body,sent_at,read_at,client_message_id')
+      .single();
+
+    if (error) {
+      console.error('Unable to save assistance request to Supabase.', error);
+      return { success: false, error: error.message || 'Unable to send the assistance alert right now. Please try again.' };
+    }
+
+    const assistanceMessage = data ? mapRemoteMessage(data as RemoteMessageRow, userIdByAppUserId) : null;
+    if (!assistanceMessage) {
+      return { success: false, error: 'Unable to prepare the assistance request right now. Please try again.' };
+    }
+
+    setMessages((current) => mergeMessages(current, [assistanceMessage]));
+
     const status = await channel.send({
       type: 'broadcast',
       event: BROADCAST_EVENT_ASSISTANCE,
@@ -766,6 +817,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       body: trimmedBody,
       sentAt: new Date().toISOString(),
       readAt: null,
+      kind: 'message',
       optimistic: true,
     };
 
