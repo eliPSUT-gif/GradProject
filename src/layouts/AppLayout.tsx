@@ -35,7 +35,6 @@ interface NavSection {
 
 interface NotificationSummary {
   id: string;
-  targetUserId: string;
   kind: 'message' | 'assistance';
   senderId: string;
   senderName: string;
@@ -105,14 +104,13 @@ function formatNotificationTime(value: string) {
 
 export default function AppLayout() {
   const { logout, user, users } = useAuth();
-  const { assistanceNotifications, getUnreadMessageCount, messages } = useMessaging();
+  const { dismissNotificationToast, getUnreadMessageCount, notifications, toastNotifications } = useMessaging();
   const location = useLocation();
   const navigate = useNavigate();
   const notificationPanelRef = useRef<HTMLDivElement | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [toastNotifications, setToastNotifications] = useState<NotificationSummary[]>([]);
 
   const role = user?.role ?? 'student';
   const sections = NAV[role];
@@ -123,155 +121,43 @@ export default function AppLayout() {
   const messageRoute = role === 'advisor' ? '/app/advisor/messages' : role === 'student' ? '/app/messages' : null;
   const sidebarWidth = mobileOpen || !collapsed ? 240 : 64;
 
-  const initializedNotificationIdsRef = useRef<Set<string>>(new Set());
-  const hasInitializedNotificationsRef = useRef(false);
-  const initializedAssistanceIdsRef = useRef<Set<string>>(new Set());
-  const hasInitializedAssistanceRef = useRef(false);
-
   const recentNotifications = useMemo(() => {
     if (!user) {
       return [] as NotificationSummary[];
     }
 
-    const messageNotifications: NotificationSummary[] = messages
-      .filter((message) => message.recipientId === user.id)
-      .map((message) => ({
-        id: message.id,
-        targetUserId: user.id,
-        kind: 'message' as const,
-        senderId: message.senderId,
-        senderName: users.find((account) => account.id === message.senderId)?.name ?? 'Someone',
-        preview: message.body,
-        sentAt: message.sentAt,
-        readAt: message.readAt,
-      }));
-
-    const assistanceRecentNotifications: NotificationSummary[] = assistanceNotifications
+    return notifications
       .filter((notification) => notification.recipientId === user.id)
       .map((notification) => ({
-        id: notification.id,
-        targetUserId: user.id,
-        kind: 'assistance' as const,
-        senderId: notification.senderId,
+        ...notification,
         senderName: users.find((account) => account.id === notification.senderId)?.name ?? 'Someone',
-        preview: `${users.find((account) => account.id === notification.senderId)?.name ?? 'A student'} has asked for assistance.`,
+        preview: notification.kind === 'assistance'
+          ? `${users.find((account) => account.id === notification.senderId)?.name ?? 'A student'} has asked for assistance.`
+          : `${users.find((account) => account.id === notification.senderId)?.name ?? 'Someone'} sent you a message.`,
+        sentAt: notification.createdAt,
+        readAt: null,
+      }))
+      .sort((left, right) => right.sentAt.localeCompare(left.sentAt))
+      .slice(0, MAX_VISIBLE_NOTIFICATIONS);
+  }, [notifications, user, users]);
+
+  const visibleToastNotifications = useMemo(() => {
+    if (!user) {
+      return [] as NotificationSummary[];
+    }
+
+    return toastNotifications
+      .filter((notification) => notification.recipientId === user.id)
+      .map((notification) => ({
+        ...notification,
+        senderName: users.find((account) => account.id === notification.senderId)?.name ?? 'Someone',
+        preview: notification.kind === 'assistance'
+          ? `${users.find((account) => account.id === notification.senderId)?.name ?? 'A student'} has asked for assistance.`
+          : `${users.find((account) => account.id === notification.senderId)?.name ?? 'Someone'} sent you a message.`,
         sentAt: notification.createdAt,
         readAt: null,
       }));
-
-    return [...messageNotifications, ...assistanceRecentNotifications]
-      .sort((left, right) => right.sentAt.localeCompare(left.sentAt))
-      .slice(0, MAX_VISIBLE_NOTIFICATIONS);
-  }, [assistanceNotifications, messages, user, users]);
-
-  useEffect(() => {
-    if (!user) {
-      initializedNotificationIdsRef.current = new Set();
-      hasInitializedNotificationsRef.current = false;
-      return;
-    }
-
-    const incomingMessages = messages.filter((message) => message.recipientId === user.id);
-
-    if (!hasInitializedNotificationsRef.current) {
-      initializedNotificationIdsRef.current = new Set(incomingMessages.map((message) => message.id));
-      hasInitializedNotificationsRef.current = true;
-      return;
-    }
-
-    const newNotifications = incomingMessages
-      .filter((message) => !initializedNotificationIdsRef.current.has(message.id))
-      .map((message) => {
-        initializedNotificationIdsRef.current.add(message.id);
-        return {
-          id: `toast:${user.id}:${message.senderId}`,
-          targetUserId: user.id,
-          kind: 'message' as const,
-          senderId: message.senderId,
-          senderName: users.find((account) => account.id === message.senderId)?.name ?? 'Someone',
-          preview: message.body,
-          sentAt: message.sentAt,
-          readAt: message.readAt,
-        } satisfies NotificationSummary;
-      })
-      .sort((left, right) => right.sentAt.localeCompare(left.sentAt));
-
-    if (newNotifications.length === 0) {
-      return;
-    }
-
-    setToastNotifications((current) => {
-      const deduped = new Map<string, NotificationSummary>();
-      [...newNotifications, ...current].forEach((notification) => {
-        const existing = deduped.get(notification.id);
-        if (!existing || existing.sentAt.localeCompare(notification.sentAt) < 0) {
-          deduped.set(notification.id, notification);
-        }
-      });
-
-      return [...deduped.values()]
-        .sort((left, right) => right.sentAt.localeCompare(left.sentAt))
-        .slice(0, MAX_VISIBLE_NOTIFICATIONS);
-    });
-  }, [messages, user, users]);
-
-  useEffect(() => {
-    if (!user) {
-      initializedAssistanceIdsRef.current = new Set();
-      hasInitializedAssistanceRef.current = false;
-      return;
-    }
-
-    const incomingAssistance = assistanceNotifications.filter((notification) => notification.recipientId === user.id);
-
-    if (!hasInitializedAssistanceRef.current) {
-      initializedAssistanceIdsRef.current = new Set(incomingAssistance.map((notification) => notification.id));
-      hasInitializedAssistanceRef.current = true;
-      return;
-    }
-
-    const newNotifications = incomingAssistance
-      .filter((notification) => !initializedAssistanceIdsRef.current.has(notification.id))
-      .map((notification) => {
-        initializedAssistanceIdsRef.current.add(notification.id);
-        const senderName = users.find((account) => account.id === notification.senderId)?.name ?? 'A student';
-
-        return {
-          id: `assist-toast:${user.id}:${notification.senderId}`,
-          targetUserId: user.id,
-          kind: 'assistance' as const,
-          senderId: notification.senderId,
-          senderName,
-          preview: `${senderName} has asked for assistance.`,
-          sentAt: notification.createdAt,
-          readAt: null,
-        } satisfies NotificationSummary;
-      })
-      .sort((left, right) => right.sentAt.localeCompare(left.sentAt));
-
-    if (newNotifications.length === 0) {
-      return;
-    }
-
-    setToastNotifications((current) => {
-      const deduped = new Map<string, NotificationSummary>();
-      [...newNotifications, ...current].forEach((notification) => {
-        const existing = deduped.get(notification.id);
-        if (!existing || existing.sentAt.localeCompare(notification.sentAt) < 0) {
-          deduped.set(notification.id, notification);
-        }
-      });
-
-      return [...deduped.values()]
-        .sort((left, right) => right.sentAt.localeCompare(left.sentAt))
-        .slice(0, MAX_VISIBLE_NOTIFICATIONS);
-    });
-  }, [assistanceNotifications, user, users]);
-
-  const visibleToastNotifications = useMemo(
-    () => (user ? toastNotifications.filter((notification) => notification.targetUserId === user.id) : []),
-    [toastNotifications, user]
-  );
+  }, [toastNotifications, user, users]);
 
   useEffect(() => {
     if (visibleToastNotifications.length === 0) {
@@ -280,16 +166,14 @@ export default function AppLayout() {
 
     const timeoutIds = visibleToastNotifications.map((notification) =>
       window.setTimeout(() => {
-        setToastNotifications((current) =>
-          current.filter((item) => item.id !== notification.id)
-        );
+        dismissNotificationToast(notification.id);
       }, TOAST_DURATION_MS)
     );
 
     return () => {
       timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
     };
-  }, [visibleToastNotifications]);
+  }, [dismissNotificationToast, visibleToastNotifications]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -324,12 +208,8 @@ export default function AppLayout() {
     navigate(messageRoute, { state: { scrollToBottom: true } });
   };
 
-  const dismissToast = (notificationId: string) => {
-    setToastNotifications((current) => current.filter((notification) => notification.id !== notificationId));
-  };
-
   const handleOpenNotification = (notification: NotificationSummary) => {
-    dismissToast(notification.id);
+    dismissNotificationToast(notification.id);
     if (notification.kind === 'assistance') {
       navigate('/app/advisor/messages', { state: { focusUserId: notification.senderId, scrollToBottom: true } });
       return;
@@ -374,7 +254,7 @@ export default function AppLayout() {
                     </div>
                   </button>
                   <button
-                    onClick={() => dismissToast(notification.id)}
+                    onClick={() => dismissNotificationToast(notification.id)}
                     className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                     aria-label="Close notification"
                   >

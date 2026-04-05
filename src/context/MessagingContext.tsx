@@ -51,6 +51,14 @@ export interface AssistanceNotification {
   createdAt: string;
 }
 
+export interface AppNotification {
+  id: string;
+  kind: 'message' | 'assistance';
+  senderId: string;
+  recipientId: string;
+  createdAt: string;
+}
+
 interface AssistanceRequestResult {
   success: boolean;
   error?: string;
@@ -58,12 +66,14 @@ interface AssistanceRequestResult {
 
 interface MessagingContextValue {
   messages: AdvisorMessage[];
-  assistanceNotifications: AssistanceNotification[];
+  notifications: AppNotification[];
+  toastNotifications: AppNotification[];
   isMessagingReady: boolean;
   getAssignedAdvisorId: (studentId: string) => string | null;
   getAdviseeIds: (advisorId: string) => string[];
   getConversationMessages: (userId: string, otherUserId: string) => AdvisorMessage[];
   getUnreadMessageCount: (userId: string) => number;
+  dismissNotificationToast: (notificationId: string) => void;
   markConversationRead: (otherUserId: string) => Promise<void>;
   sendAssistanceRequest: (input: { senderId: string; recipientId: string }) => Promise<AssistanceRequestResult>;
   sendMessage: (input: SendMessageInput) => Promise<MessageSendResult>;
@@ -87,6 +97,9 @@ interface StudentProfileRelation {
 interface MessageCreatedBroadcast {
   messageId: string;
   clientMessageId: string;
+  senderId: string;
+  recipientId: string;
+  sentAt: string;
 }
 
 interface MessageReadBroadcast {
@@ -104,6 +117,8 @@ interface AssistanceRequestBroadcast {
 const BROADCAST_EVENT_CREATED = 'message.created';
 const BROADCAST_EVENT_READ = 'message.read';
 const BROADCAST_EVENT_ASSISTANCE = 'assistance.request';
+const NOTIFICATIONS_SESSION_KEY = 'smart-advisor-notifications-v1';
+const MAX_NOTIFICATIONS = 5;
 const FALLBACK_RELATIONSHIPS = STUDENT_PROFILES.map((profile) => ({
   userId: profile.id,
   advisorId: profile.advisorId || null,
@@ -208,6 +223,41 @@ function applyRead(messages: AdvisorMessage[], viewerId: string, otherUserId: st
   );
 }
 
+function loadStoredNotifications() {
+  if (typeof window === 'undefined') {
+    return [] as AppNotification[];
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(NOTIFICATIONS_SESSION_KEY);
+    if (!raw) {
+      return [] as AppNotification[];
+    }
+
+    const parsed = JSON.parse(raw) as AppNotification[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [] as AppNotification[];
+  }
+}
+
+function upsertNotification(
+  notifications: AppNotification[],
+  notification: AppNotification
+) {
+  const deduped = new Map<string, AppNotification>();
+  [...notifications, notification].forEach((item) => {
+    const existing = deduped.get(item.id);
+    if (!existing || existing.createdAt.localeCompare(item.createdAt) < 0) {
+      deduped.set(item.id, item);
+    }
+  });
+
+  return [...deduped.values()]
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, MAX_NOTIFICATIONS);
+}
+
 function resolveAssignedAdvisorId(
   studentId: string,
   relationships: StudentProfileRelation[],
@@ -307,7 +357,8 @@ function buildConversationTopics(
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isAuthReady, user, users } = useAuth();
   const [messages, setMessages] = useState<AdvisorMessage[]>([]);
-  const [assistanceNotifications, setAssistanceNotifications] = useState<AssistanceNotification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>(loadStoredNotifications);
+  const [toastNotifications, setToastNotifications] = useState<AppNotification[]>([]);
   const [relationships, setRelationships] = useState<StudentProfileRelation[]>([]);
   const [isMessagingReady, setIsMessagingReady] = useState(hasSupabaseConfig() || isLocalDemoModeEnabled());
   const refreshQueuedRef = useRef(false);
@@ -336,6 +387,14 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
   const currentAppUserId = user?.appUserId ?? appUserIdByUserId[user?.id ?? ''] ?? null;
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.sessionStorage.setItem(NOTIFICATIONS_SESSION_KEY, JSON.stringify(notifications));
+  }, [notifications]);
+
   const getAssignedAdvisorId = useCallback(
     (studentId: string) => resolveAssignedAdvisorId(studentId, relationships, appUserIdByUserId, userIdByAppUserId),
     [appUserIdByUserId, relationships, userIdByAppUserId]
@@ -345,6 +404,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     (advisorId: string) => resolveAdviseeIds(advisorId, relationships, appUserIdByUserId, userIdByAppUserId),
     [appUserIdByUserId, relationships, userIdByAppUserId]
   );
+
+  const dismissNotificationToast = useCallback((notificationId: string) => {
+    setToastNotifications((current) => current.filter((notification) => notification.id !== notificationId));
+  }, []);
 
   const markConversationRead = useCallback(async (otherUserId: string) => {
     if (!user) {
@@ -398,11 +461,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         setRelationships(
           FALLBACK_RELATIONSHIPS.map((profile) => ({ user_id: profile.userId, advisor_id: profile.advisorId }))
         );
-        setAssistanceNotifications([]);
         setIsMessagingReady(true);
       } else {
         setMessages([]);
-        setAssistanceNotifications([]);
         setRelationships([]);
         setIsMessagingReady(false);
       }
@@ -416,7 +477,6 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
     if (!isAuthenticated || !user || !currentAppUserId) {
       setMessages([]);
-      setAssistanceNotifications([]);
       setRelationships([]);
       setIsMessagingReady(true);
       return;
@@ -514,7 +574,23 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             private: true,
           },
         })
-          .on('broadcast', { event: BROADCAST_EVENT_CREATED }, () => {
+          .on('broadcast', { event: BROADCAST_EVENT_CREATED }, ({ payload }) => {
+            const nextNotification = payload as MessageCreatedBroadcast;
+            if (nextNotification.recipientId === user.id) {
+              const notification: AppNotification = {
+                id: `message:${nextNotification.recipientId}:${nextNotification.senderId}`,
+                kind: 'message',
+                senderId: nextNotification.senderId,
+                recipientId: nextNotification.recipientId,
+                createdAt: nextNotification.sentAt,
+              };
+
+              startTransition(() => {
+                setNotifications((current) => upsertNotification(current, notification));
+                setToastNotifications((current) => upsertNotification(current, notification));
+              });
+            }
+
             void queueMessagesRefresh();
           })
           .on('broadcast', { event: BROADCAST_EVENT_READ }, () => {
@@ -526,20 +602,17 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
               return;
             }
 
-            startTransition(() => {
-              setAssistanceNotifications((current) => {
-                const deduped = new Map<string, AssistanceNotification>();
-                [...current, {
-                  id: `assist:${nextNotification.senderId}:${nextNotification.requestedAt}`,
-                  senderId: nextNotification.senderId,
-                  recipientId: nextNotification.recipientId,
-                  createdAt: nextNotification.requestedAt,
-                }].forEach((notification) => {
-                  deduped.set(notification.id, notification);
-                });
+            const notification: AppNotification = {
+              id: `assistance:${nextNotification.recipientId}:${nextNotification.senderId}`,
+              kind: 'assistance',
+              senderId: nextNotification.senderId,
+              recipientId: nextNotification.recipientId,
+              createdAt: nextNotification.requestedAt,
+            };
 
-                return [...deduped.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-              });
+            startTransition(() => {
+              setNotifications((current) => upsertNotification(current, notification));
+              setToastNotifications((current) => upsertNotification(current, notification));
             });
           })
           .subscribe((status) => {
@@ -750,6 +823,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           payload: {
             messageId: insertedMessage.id,
             clientMessageId: insertedMessage.clientMessageId,
+            senderId: insertedMessage.senderId,
+            recipientId: insertedMessage.recipientId,
+            sentAt: insertedMessage.sentAt,
           } satisfies MessageCreatedBroadcast,
         });
 
@@ -772,18 +848,20 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const value = useMemo<MessagingContextValue>(
     () => ({
       messages,
-      assistanceNotifications,
+      notifications,
+      toastNotifications,
       isMessagingReady,
       getAssignedAdvisorId,
       getAdviseeIds,
       getConversationMessages,
       getUnreadMessageCount,
+      dismissNotificationToast,
       markConversationRead,
       sendAssistanceRequest,
       sendMessage,
     }),
     [
-      assistanceNotifications,
+      dismissNotificationToast,
       getAdviseeIds,
       getAssignedAdvisorId,
       getConversationMessages,
@@ -791,8 +869,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       isMessagingReady,
       markConversationRead,
       messages,
+      notifications,
       sendAssistanceRequest,
       sendMessage,
+      toastNotifications,
     ]
   );
 
