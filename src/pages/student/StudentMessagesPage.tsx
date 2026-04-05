@@ -67,6 +67,16 @@ export default function StudentMessagesPage() {
     });
   }, [conversation.length, location.state, scrollRequestKey]);
 
+  useEffect(() => {
+    if (conversation.length === 0) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+  }, [advisorId, conversation.length]);
+
   const handleSend = async () => {
     if (!advisorId) {
       setFeedback('No advisor is assigned to this account yet.');

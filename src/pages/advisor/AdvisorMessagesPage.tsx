@@ -117,6 +117,16 @@ export default function AdvisorMessagesPage() {
     });
   }, [activeStudentId, conversation.length, scrollRequestKey, shouldScrollFromNotification]);
 
+  useEffect(() => {
+    if (!activeStudentId || conversation.length === 0) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+  }, [activeStudentId, conversation.length]);
+
   const handleSelectStudent = (studentId: string) => {
     setSelectedStudentId(studentId);
     setDraft('');
