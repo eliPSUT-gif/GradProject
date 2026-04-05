@@ -1,10 +1,10 @@
 import { useDeferredValue, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   AlertTriangle,
-  ClipboardCheck,
   GraduationCap,
+  MessageSquare,
   Search,
   ShieldAlert,
   Users,
@@ -19,7 +19,8 @@ import { useAppData } from '../../context/AppDataContext';
 
 export default function AdvisorDashboard() {
   const { user } = useAuth();
-  const { courses, isAppDataReady, studentInsights } = useAppData();
+  const navigate = useNavigate();
+  const { isAppDataReady, studentInsights } = useAppData();
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
 
@@ -38,11 +39,6 @@ export default function AdvisorDashboard() {
       );
     });
   }, [advisees, deferredSearch]);
-
-  const selectedStudent = filteredStudents[0] ?? advisees[0] ?? null;
-  const selectedCourses = selectedStudent?.activeDraft
-    ? courses.filter((course) => selectedStudent.activeDraft?.courseCodes.includes(course.code))
-    : [];
 
   const kpis = [
     {
@@ -67,7 +63,7 @@ export default function AdvisorDashboard() {
       accent: '#0d9488',
     },
     {
-      icon: ClipboardCheck,
+      icon: MessageSquare,
       label: 'Balanced Drafts',
       value: String(advisees.filter((student) => student.latestEvaluation?.riskLabel === 'Balanced').length),
       subtitle: 'Ready for review',
@@ -79,6 +75,14 @@ export default function AdvisorDashboard() {
     .filter((student) => student.status !== 'good')
     .sort((left, right) => right.difficulty - left.difficulty)
     .slice(0, 4);
+
+  const openStudentPage = (studentId: string) => {
+    navigate(`/app/advisor/student/${studentId}`);
+  };
+
+  const messageStudent = (studentId: string) => {
+    navigate('/app/advisor/messages', { state: { focusUserId: studentId, scrollToBottom: true } });
+  };
 
   if (!isAppDataReady) {
     return (
@@ -124,11 +128,25 @@ export default function AdvisorDashboard() {
                 return (
                   <div key={student.id} className={`flex items-start gap-3 rounded-lg border p-3 ${cardClass}`}>
                     <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold">{student.name}</p>
                       <p className="mt-0.5 text-xs text-gray-600">
                         {student.difficulty}% difficulty | GPA {student.gpa.toFixed(2)}
                       </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          onClick={() => openStudentPage(student.id)}
+                          className="rounded-lg border border-current/20 bg-white/70 px-3 py-2 text-xs font-semibold transition-colors hover:bg-white"
+                        >
+                          View details
+                        </button>
+                        <button
+                          onClick={() => messageStudent(student.id)}
+                          className="rounded-lg border border-current/20 bg-white/70 px-3 py-2 text-xs font-semibold transition-colors hover:bg-white"
+                        >
+                          Message student
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -172,7 +190,8 @@ export default function AdvisorDashboard() {
                   <th className="pb-2 pr-4 text-center">GPA</th>
                   <th className="pb-2 pr-4 text-center">Credits</th>
                   <th className="pb-2 pr-4 text-center">Difficulty</th>
-                  <th className="pb-2 text-center">Status</th>
+                  <th className="pb-2 pr-4 text-center">Status</th>
+                  <th className="pb-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,6 +215,22 @@ export default function AdvisorDashboard() {
                           {getStatusLabel(student.status)}
                         </span>
                       </td>
+                      <td className="py-2.5 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => openStudentPage(student.id)}
+                            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-[#2563eb] transition-colors hover:border-[#2563eb]/30 hover:bg-[#2563eb]/5"
+                          >
+                            View details
+                          </button>
+                          <button
+                            onClick={() => messageStudent(student.id)}
+                            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50"
+                          >
+                            Message
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -204,85 +239,6 @@ export default function AdvisorDashboard() {
           </div>
         </div>
       </div>
-
-      {selectedStudent && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_3fr]">
-          <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
-            <h2 className="mb-4 text-base font-bold text-[#0f1e3c] sm:text-lg">Student Insight</h2>
-            <div className="space-y-4 text-sm text-gray-700">
-              <div>
-                <p className="font-semibold text-[#0f1e3c]">{selectedStudent.name}</p>
-                <p className="text-xs text-gray-500">ID {selectedStudent.id} | GPA {selectedStudent.gpa.toFixed(2)}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Latest workload</p>
-                <p className="mt-2 font-display text-3xl font-bold text-[#0f1e3c] sm:text-4xl">{selectedStudent.difficulty}</p>
-                <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getDiffLabel(selectedStudent.difficulty).cls}`}>
-                  {selectedStudent.latestEvaluation?.riskLabel ?? 'No evaluation'}
-                </span>
-              </div>
-              <div className="rounded-xl border border-gray-200 p-4">
-                <p className="font-semibold text-[#0f1e3c]">Top contributors</p>
-                <ul className="mt-2 space-y-2 text-xs text-gray-600">
-                  {selectedStudent.latestEvaluation?.topCourses.map((course) => (
-                    <li key={course}>{course}</li>
-                  )) ?? <li>No courses in active draft.</li>}
-                </ul>
-              </div>
-              <div className="rounded-xl border border-gray-200 p-4">
-                <p className="font-semibold text-[#0f1e3c]">Advisor-ready recommendations</p>
-                <ul className="mt-2 space-y-2 text-xs text-gray-600">
-                  {selectedStudent.latestEvaluation?.recommendations.map((recommendation) => (
-                    <li key={recommendation.id}>{recommendation.title}: {recommendation.action}</li>
-                  )) ?? <li>No recommendations available.</li>}
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
-            <h2 className="mb-4 text-base font-bold text-[#0f1e3c] sm:text-lg">Active Schedule</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">
-                    <th className="pb-2 pr-4">Code</th>
-                    <th className="pb-2 pr-4">Course</th>
-                    <th className="pb-2 pr-4">Type</th>
-                    <th className="pb-2 pr-4 text-center">Credits</th>
-                    <th className="pb-2 text-center">Difficulty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedCourses.map((course) => {
-                    const diff = getDiffLabel(course.diffScore);
-                    return (
-                      <tr key={course.code} className="border-b border-gray-50 last:border-0">
-                        <td className="py-2.5 pr-4 font-mono font-semibold text-[#0f1e3c]">{course.code}</td>
-                        <td className="py-2.5 pr-4 text-gray-700">{course.name}</td>
-                        <td className="py-2.5 pr-4 capitalize text-gray-600">{course.type}</td>
-                        <td className="py-2.5 pr-4 text-center text-gray-600">{course.credits}</td>
-                        <td className="py-2.5 text-center">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${diff.cls}`}>
-                            {course.diffScore}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {selectedCourses.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-sm text-gray-400">
-                        No active schedule has been saved yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

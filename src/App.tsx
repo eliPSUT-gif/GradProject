@@ -13,6 +13,7 @@ import ModelStatusPage from './pages/admin/ModelStatusPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import AdvisorDashboard from './pages/advisor/AdvisorDashboard';
 import AdvisorMessagesPage from './pages/advisor/AdvisorMessagesPage';
+import AdvisorStudentDetailPage from './pages/advisor/AdvisorStudentDetailPage';
 import CoursePlanner from './pages/student/CoursePlanner';
 import StudentDashboard from './pages/student/StudentDashboard';
 import StudentMessagesPage from './pages/student/StudentMessagesPage';
@@ -71,6 +72,7 @@ export default function App() {
                 <Route path="profile" element={<Navigate to="/app/dashboard" replace />} />
                 <Route path="settings" element={<Navigate to="/app/dashboard" replace />} />
                 <Route path="advisor" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorDashboard /></ProtectedRoute>} />
+                <Route path="advisor/student/:studentId" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorStudentDetailPage /></ProtectedRoute>} />
                 <Route path="advisor/messages" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorMessagesPage /></ProtectedRoute>} />
                 <Route path="advisor/courses" element={<Navigate to="/app/advisor" replace />} />
                 <Route path="advisor/reports" element={<Navigate to="/app/advisor" replace />} />

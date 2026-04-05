@@ -107,7 +107,9 @@ export default function AppLayout() {
 
   const role = user?.role ?? 'student';
   const sections = NAV[role];
-  const pageTitle = PAGE_TITLES[location.pathname] ?? 'Dashboard';
+  const pageTitle = location.pathname.startsWith('/app/advisor/student/')
+    ? 'Student Details'
+    : PAGE_TITLES[location.pathname] ?? 'Dashboard';
   const unreadCount = user ? getUnreadMessageCount(user.id) : 0;
   const messageRoute = role === 'advisor' ? '/app/advisor/messages' : role === 'student' ? '/app/messages' : null;
   const sidebarWidth = mobileOpen || !collapsed ? 240 : 64;
