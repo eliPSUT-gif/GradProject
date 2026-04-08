@@ -25,6 +25,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   const secret = process.env.RECAPTCHA_SECRET_KEY;
+  const isPreviewDeployment = (process.env.VERCEL_ENV ?? '').trim().toLowerCase() === 'preview';
   if (!secret) {
     response.status(500).json({ success: false, error: 'reCAPTCHA secret key is not configured.' });
     return;
@@ -77,7 +78,17 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const returnedAction = normalizeAction(googleResult.action);
     const hasReturnedAction = returnedAction.length > 0;
     const isActionMatch = !hasReturnedAction || returnedAction === expectedAction;
+    const isLowScoreOnlyFailure = Boolean(googleResult.success) && isActionMatch && score < MIN_RECAPTCHA_SCORE;
     const isVerified = Boolean(googleResult.success) && isActionMatch && score >= MIN_RECAPTCHA_SCORE;
+
+    if (isPreviewDeployment && isLowScoreOnlyFailure) {
+      response.status(200).json({
+        success: true,
+        score,
+        action: googleResult.action,
+      });
+      return;
+    }
 
     if (!isVerified) {
       const timeoutHit = googleResult['error-codes']?.includes('verification-timeout');
