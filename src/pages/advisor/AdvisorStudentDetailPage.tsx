@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -14,7 +14,7 @@ import {
   Save,
   TrendingUp,
 } from 'lucide-react';
-import { getDiffLabel, PAST_SEMESTER_GPA } from '../../data/courses';
+import { formatTermLabel, getDiffLabel } from '../../data/courses';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
 
@@ -29,6 +29,8 @@ export default function AdvisorStudentDetailPage() {
     currentEvaluations,
     getSelectedCourses,
     getStudentDrafts,
+    getStudentTermMetrics,
+    getStudentTranscript,
     isAppDataReady,
     recentEvaluations,
     studentInsights,
@@ -37,7 +39,16 @@ export default function AdvisorStudentDetailPage() {
   const profile = studentInsights.find((item) => item.id === studentId && item.advisorId === user?.id) ?? null;
   const selectedCourses = getSelectedCourses(studentId);
   const drafts = getStudentDrafts(studentId);
+  const transcriptRows = getStudentTranscript(studentId);
+  const termMetrics = getStudentTermMetrics(studentId);
   const currentEvaluation = currentEvaluations[studentId] ?? null;
+  const [activeTab, setActiveTab] = useState<'overview' | 'transcript'>('overview');
+  const transcriptByTerm = useMemo(() => {
+    return transcriptRows.reduce<Record<string, typeof transcriptRows>>((groups, row) => {
+      groups[row.termCode] = [...(groups[row.termCode] ?? []), row];
+      return groups;
+    }, {});
+  }, [transcriptRows]);
 
   const selectedCoursesForDisplay = useMemo(
     () =>
@@ -116,9 +127,9 @@ export default function AdvisorStudentDetailPage() {
   const kpis = [
     {
       icon: TrendingUp,
-      label: 'Current GPA',
-      value: profile.gpa.toFixed(2),
-      subtitle: 'Based on academic profile',
+      label: 'Current Average',
+      value: profile.averageMark.toFixed(2),
+      subtitle: 'Based on transcript marks',
       accent: '#2563eb',
     },
     {
@@ -181,6 +192,23 @@ export default function AdvisorStudentDetailPage() {
         })}
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${activeTab === 'overview' ? 'bg-[#0f1e3c] text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50'}`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveTab('transcript')}
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${activeTab === 'transcript' ? 'bg-[#0f1e3c] text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50'}`}
+        >
+          Transcript
+        </button>
+      </div>
+
+      {activeTab === 'overview' ? (
+      <>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]">
         <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
           <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
@@ -313,24 +341,29 @@ export default function AdvisorStudentDetailPage() {
         <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
           <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
             <BarChart3 className="h-5 w-5 text-[#2563eb]" />
-            Past Semester Performance
+            Past Semester Averages
           </h2>
           <div className="flex h-36 items-end gap-2 sm:h-48 sm:gap-3">
-            {PAST_SEMESTER_GPA.map((semester) => {
-              const pct = ((semester.gpa - 2.5) / 1.5) * 100;
+            {termMetrics.length > 0 ? termMetrics.map((semester) => {
+              const mark = semester.averageMark ?? 0;
+              const pct = ((mark - 35) / 65) * 100;
               return (
-                <div key={semester.label} className="flex flex-1 flex-col items-center gap-1">
-                  <span className="text-[10px] font-semibold text-[#0f1e3c] sm:text-xs">{semester.gpa.toFixed(2)}</span>
+                <div key={semester.termCode} className="flex flex-1 flex-col items-center gap-1">
+                  <span className="text-[10px] font-semibold text-[#0f1e3c] sm:text-xs">{mark.toFixed(1)}</span>
                   <div className="flex h-[100px] w-full items-end sm:h-[140px]">
                     <div
                       className="w-full rounded-t-md bg-gradient-to-t from-[#2563eb] to-[#3b82f6] transition-all duration-500"
                       style={{ height: `${clamp(pct, 10, 100)}%` }}
                     />
                   </div>
-                  <span className="text-[9px] font-medium text-gray-400 sm:text-[10px]">{semester.label}</span>
+                  <span className="text-[9px] font-medium text-gray-400 sm:text-[10px]">{semester.termLabel}</span>
                 </div>
               );
-            })}
+            }) : (
+              <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-gray-200 text-sm text-gray-500">
+                Transcript marks will appear here once completed courses are available.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -396,6 +429,53 @@ export default function AdvisorStudentDetailPage() {
           </div>
         </div>
       </div>
+      </>
+      ) : (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <div className="mb-4">
+            <h2 className="text-lg font-bold text-[#0f1e3c]">Full Transcript</h2>
+            <p className="mt-1 text-sm text-gray-500">Completed courses and recorded marks for this advisee.</p>
+          </div>
+          {transcriptRows.length > 0 ? (
+            <div className="space-y-5">
+              {Object.entries(transcriptByTerm).map(([termCode, rows]) => (
+                <div key={termCode} className="overflow-hidden rounded-xl border border-gray-200">
+                  <div className="flex items-center justify-between bg-slate-50 px-4 py-3">
+                    <p className="font-semibold text-[#0f1e3c]">{formatTermLabel(termCode)}</p>
+                    <span className="text-xs font-medium text-gray-500">{rows.length} course{rows.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">
+                          <th className="px-4 py-3 pr-4">Code</th>
+                          <th className="px-4 py-3 pr-4">Course</th>
+                          <th className="px-4 py-3 pr-4 text-center">Credits</th>
+                          <th className="px-4 py-3 text-center">Grade</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => (
+                          <tr key={`${row.termCode}-${row.courseCode}`} className="border-b border-gray-50 last:border-0">
+                            <td className="px-4 py-3 font-mono font-semibold text-[#0f1e3c]">{row.courseCode}</td>
+                            <td className="px-4 py-3 text-gray-700">{row.courseName}</td>
+                            <td className="px-4 py-3 text-center text-gray-600">{row.credits}</td>
+                            <td className="px-4 py-3 text-center font-semibold text-[#0f1e3c]">{row.finalGrade === null ? '-' : row.finalGrade.toFixed(0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-sm text-gray-500">
+              No transcript rows are available yet.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

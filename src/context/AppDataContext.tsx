@@ -9,20 +9,23 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  buildAvailableTerms,
   buildCourses,
   buildSeedDrafts,
   buildSeedHistoricalStats,
   buildStudentInsights,
+  compareTermCodesNewestFirst,
   computeCourseDifficulty,
-  COURSES,
   DEFAULT_MODEL_VERSION,
   evaluateSchedule,
   formatRequirementText,
+  formatTermLabel,
+  getCreditLimitForTermCode,
   getCourseSelectionStatus,
   getDiffLabel,
   MODEL_LAST_CALCULATED_AT,
-  SEED_HISTORICAL_STATS,
   STUDENT_PROFILES,
+  type AdmissionTerm,
   type Course,
   type HistoricalCourseStat,
   type ImportError,
@@ -32,6 +35,7 @@ import {
   type SelectionStatus,
   type StudentInsight,
   type StudentProfile,
+  type TermType,
 } from '../data/courses';
 import {
   hasSupabaseConfig,
@@ -62,6 +66,33 @@ interface ImportHistoricalDataResult {
   job: ImportJob;
 }
 
+export interface StudentTranscriptRow {
+  studentId: string;
+  termCode: string;
+  termLabel: string;
+  termType: TermType;
+  courseCode: string;
+  courseName: string;
+  credits: number;
+  finalGrade: number | null;
+}
+
+export interface StudentTermMetric {
+  studentId: string;
+  termCode: string;
+  termLabel: string;
+  termType: TermType;
+  courseCount: number;
+  completedCredits: number;
+  averageMark: number | null;
+}
+
+export interface CoursePrerequisiteGrade {
+  code: string;
+  name: string;
+  grade: number | null;
+}
+
 interface AppDataContextType {
   analyzeSchedule: (studentId: string) => ScheduleEvaluation | null;
   clearSelection: (studentId: string) => void;
@@ -69,8 +100,14 @@ interface AppDataContextType {
   currentEvaluations: Record<string, ScheduleEvaluation | null>;
   deleteScheduleDraft: (draftId: string) => void;
   getCourseSelectionState: (studentId: string, courseCode: string) => SelectionStatus;
+  getCoursePrerequisitesWithGrades: (studentId: string, courseCode: string) => CoursePrerequisiteGrade[];
+  getPlannerTermCode: (studentId: string) => string;
   getSelectedCourses: (studentId: string) => Course[];
   getStudentDrafts: (studentId: string) => ScheduleDraft[];
+  getStudentTermMetrics: (studentId: string) => StudentTermMetric[];
+  getStudentTranscript: (studentId: string) => StudentTranscriptRow[];
+  getStudentAvailableTerms: (studentId: string) => { termCode: string; termType: TermType }[];
+  getTermCreditLimit: (studentId: string) => number;
   historicalStats: HistoricalCourseStat[];
   importHistoricalData: (fileName: string, raw: string) => ImportHistoricalDataResult;
   importJobs: ImportJob[];
@@ -80,11 +117,15 @@ interface AppDataContextType {
   modelLastCalculatedAt: string;
   modelVersion: string;
   plannerSelections: Record<string, string[]>;
+  plannerTermCodes: Record<string, string>;
   recentEvaluations: ScheduleEvaluation[];
   recalculateScores: () => void;
   saveScheduleDraft: (studentId: string, name: string) => ScheduleDraft | null;
+  setPlannerTermCode: (studentId: string, termCode: string) => void;
   studentInsights: StudentInsight[];
   toggleCourseSelection: (studentId: string, courseCode: string) => PlannerActionResult;
+  transcriptRows: StudentTranscriptRow[];
+  termMetrics: StudentTermMetric[];
   upsertCourse: (input: CourseFormInput) => void;
 }
 
@@ -96,9 +137,12 @@ interface AppDataState {
   modelLastCalculatedAt: string;
   modelVersion: string;
   plannerSelections: Record<string, string[]>;
+  plannerTermCodes: Record<string, string>;
   recentEvaluations: ScheduleEvaluation[];
   scheduleDrafts: ScheduleDraft[];
   studentProfiles: StudentProfile[];
+  termMetrics: StudentTermMetric[];
+  transcriptRows: StudentTranscriptRow[];
 }
 
 interface DepartmentRow {
@@ -156,18 +200,25 @@ interface StudentProfileRow {
   department_id: string;
   advisor_id: string | null;
   gpa: number;
+  average_mark: number | null;
+  admission_year: number | null;
+  admission_term: AdmissionTerm | null;
   completed_credits: number;
 }
 
 interface StudentCompletedCourseRow {
   student_id: string;
   course_id: string;
+  completed_term_code: string | null;
+  final_grade: number | null;
 }
 
 interface ScheduleDraftRow {
   id: string;
   student_id: string;
   name: string;
+  term_code: string | null;
+  status: ScheduleDraft['status'];
   saved_at: string;
 }
 
@@ -203,6 +254,15 @@ interface ImportJobRow {
   created_at: string;
 }
 
+interface StudentTermMetricRow {
+  student_id: string;
+  term_code: string;
+  term_type: TermType;
+  course_count: number;
+  completed_credits: number;
+  average_mark: number | null;
+}
+
 const EMPTY_SELECTION_STATUS: SelectionStatus = {
   eligible: false,
   reasons: ['Course was not found in the catalog.'],
@@ -216,8 +276,14 @@ const AppDataContext = createContext<AppDataContextType>({
   currentEvaluations: {},
   deleteScheduleDraft: () => {},
   getCourseSelectionState: () => EMPTY_SELECTION_STATUS,
+  getCoursePrerequisitesWithGrades: () => [],
+  getPlannerTermCode: () => '',
   getSelectedCourses: () => [],
   getStudentDrafts: () => [],
+  getStudentTermMetrics: () => [],
+  getStudentTranscript: () => [],
+  getStudentAvailableTerms: () => [],
+  getTermCreditLimit: () => 18,
   historicalStats: [],
   importHistoricalData: () => ({
     job: {
@@ -239,11 +305,15 @@ const AppDataContext = createContext<AppDataContextType>({
   modelLastCalculatedAt: MODEL_LAST_CALCULATED_AT,
   modelVersion: DEFAULT_MODEL_VERSION,
   plannerSelections: {},
+  plannerTermCodes: {},
   recentEvaluations: [],
   recalculateScores: () => {},
   saveScheduleDraft: () => null,
+  setPlannerTermCode: () => {},
   studentInsights: [],
   toggleCourseSelection: () => ({ success: false, error: 'App data is not ready.' }),
+  transcriptRows: [],
+  termMetrics: [],
   upsertCourse: () => {},
 });
 
@@ -273,6 +343,9 @@ function buildDemoState(): AppDataState {
   const plannerSelections = Object.fromEntries(
     scheduleDrafts.map((draft) => [draft.studentId, draft.courseCodes])
   ) as Record<string, string[]>;
+  const plannerTermCodes = Object.fromEntries(
+    scheduleDrafts.map((draft) => [draft.studentId, draft.termCode])
+  ) as Record<string, string>;
 
   return {
     courses,
@@ -282,9 +355,30 @@ function buildDemoState(): AppDataState {
     modelLastCalculatedAt: MODEL_LAST_CALCULATED_AT,
     modelVersion: DEFAULT_MODEL_VERSION,
     plannerSelections,
+    plannerTermCodes,
     recentEvaluations: scheduleDrafts.map((draft) => draft.evaluation).sort(sortEvaluationsNewestFirst),
     scheduleDrafts: scheduleDrafts.sort(sortDraftsNewestFirst),
     studentProfiles: STUDENT_PROFILES,
+    termMetrics: [],
+    transcriptRows: [],
+  };
+}
+
+function buildEmptyRemoteState(): AppDataState {
+  return {
+    courses: [],
+    currentEvaluations: {},
+    historicalStats: [],
+    importJobs: [],
+    modelLastCalculatedAt: MODEL_LAST_CALCULATED_AT,
+    modelVersion: DEFAULT_MODEL_VERSION,
+    plannerSelections: {},
+    plannerTermCodes: {},
+    recentEvaluations: [],
+    scheduleDrafts: [],
+    studentProfiles: [],
+    termMetrics: [],
+    transcriptRows: [],
   };
 }
 
@@ -369,6 +463,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     draftCourseRows,
     evaluationRows,
     importJobRows,
+    termMetricRows,
   ] = await Promise.all([
     supabaseSelect<DepartmentRow[]>('departments', 'select=id,name'),
     supabaseSelect<AppSettingRow[]>('app_settings', 'select=key,value_json'),
@@ -383,9 +478,9 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'historical_course_stats',
       'select=id,course_id,term_code,avg_grade,pass_rate,fail_rate,enrollment_count,withdrawals'
     ),
-    supabaseSelect<StudentProfileRow[]>('student_profiles', 'select=user_id,department_id,advisor_id,gpa,completed_credits'),
-    supabaseSelect<StudentCompletedCourseRow[]>('student_completed_courses', 'select=student_id,course_id'),
-    supabaseSelect<ScheduleDraftRow[]>('schedule_drafts', 'select=id,student_id,name,saved_at&order=saved_at.desc'),
+    supabaseSelect<StudentProfileRow[]>('student_profiles', 'select=user_id,department_id,advisor_id,gpa,average_mark,admission_year,admission_term,completed_credits'),
+    supabaseSelect<StudentCompletedCourseRow[]>('student_completed_courses', 'select=student_id,course_id,completed_term_code,final_grade'),
+    supabaseSelect<ScheduleDraftRow[]>('schedule_drafts', 'select=id,student_id,name,term_code,status,saved_at&order=saved_at.desc'),
     supabaseSelect<ScheduleDraftCourseRow[]>('schedule_draft_courses', 'select=schedule_id,course_id'),
     supabaseSelect<ScheduleEvaluationRow[]>(
       'schedule_evaluations',
@@ -395,10 +490,12 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'import_jobs',
       'select=id,file_name,format,imported_rows,rejected_rows,status,validation_messages,errors,created_at&order=created_at.desc'
     ),
+    supabaseSelect<StudentTermMetricRow[]>('student_term_metrics', 'select=student_id,term_code,term_type,course_count,completed_credits,average_mark&order=term_code.desc'),
   ]);
 
   const departmentById = new Map(departments.map((department) => [department.id, department.name]));
   const courseCodeById = new Map(courseRows.map((course) => [course.id, course.course_code]));
+  const courseById = new Map(courseRows.map((course) => [course.id, course]));
 
   const prerequisiteCodesByCourseId = new Map<string, string[]>();
   prerequisiteRows.forEach((row) => {
@@ -496,10 +593,12 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
 
   const appUsersByAppId = new Map(users.filter((account) => account.appUserId).map((account) => [account.appUserId!, account]));
   const completedCourseCodesByStudentId = new Map<string, string[]>();
+  const transcriptRows: StudentTranscriptRow[] = [];
   completedRows.forEach((row) => {
     const studentUniversityId = appUsersByAppId.get(row.student_id)?.id;
     const courseCode = courseCodeById.get(row.course_id);
-    if (!studentUniversityId || !courseCode) {
+    const course = courseById.get(row.course_id);
+    if (!studentUniversityId || !courseCode || !course) {
       return;
     }
 
@@ -507,6 +606,26 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       ...(completedCourseCodesByStudentId.get(studentUniversityId) ?? []),
       courseCode,
     ]);
+
+    const termCode = row.completed_term_code ?? 'Unspecified';
+    transcriptRows.push({
+      studentId: studentUniversityId,
+      termCode,
+      termLabel: formatTermLabel(termCode),
+      termType: /summer/i.test(termCode) ? 'summer' : 'regular',
+      courseCode,
+      courseName: course.title,
+      credits: course.credits,
+      finalGrade: row.final_grade === null ? null : Number(row.final_grade),
+    });
+  });
+  transcriptRows.sort((left, right) => {
+    const termCompare = compareTermCodesNewestFirst(left.termCode, right.termCode);
+    if (termCompare !== 0) {
+      return termCompare;
+    }
+
+    return left.courseCode.localeCompare(right.courseCode);
   });
 
   const remoteProfiles = profileRows.flatMap((row) => {
@@ -516,22 +635,24 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     }
 
     const advisor = row.advisor_id ? appUsersByAppId.get(row.advisor_id) : null;
-    const seedFallback = STUDENT_PROFILES.find((profile) => profile.id === student.id);
 
     return [{
       id: student.id,
       name: student.name,
       gpa: Number(row.gpa),
+      averageMark: Number(row.average_mark ?? 0),
       creditsCompleted: row.completed_credits,
-      department: departmentById.get(row.department_id) ?? seedFallback?.department ?? 'Computer Science',
-      advisorId: advisor?.id ?? seedFallback?.advisorId ?? '',
-      completedCourseCodes: completedCourseCodesByStudentId.get(student.id) ?? seedFallback?.completedCourseCodes ?? [],
+      department: departmentById.get(row.department_id) ?? 'Computer Science',
+      advisorId: advisor?.id ?? '',
+      completedCourseCodes: completedCourseCodesByStudentId.get(student.id) ?? [],
+      admissionYear: row.admission_year ?? (Number(student.id.slice(0, 4)) || new Date().getFullYear()),
+      admissionTerm: row.admission_term ?? 'fall',
     } satisfies StudentProfile];
   });
 
   const studentProfiles = users
     .filter((account) => account.role === 'student')
-    .map((account) => remoteProfiles.find((profile) => profile.id === account.id) ?? STUDENT_PROFILES.find((profile) => profile.id === account.id))
+    .map((account) => remoteProfiles.find((profile) => profile.id === account.id))
     .filter(Boolean) as StudentProfile[];
 
   const evaluationByScheduleId = new Map<string, ScheduleEvaluation>();
@@ -576,6 +697,8 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       studentId,
       name: row.name,
       courseCodes: courseCodesByDraftId.get(row.id) ?? [],
+      termCode: row.term_code ?? '2026-Spring',
+      status: row.status,
       savedAt: row.saved_at,
       evaluation,
     } satisfies ScheduleDraft];
@@ -591,6 +714,13 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
   const plannerSelections = Object.fromEntries(
     [...latestDraftByStudentId.entries()].map(([studentId, draft]) => [studentId, draft.courseCodes])
   ) as Record<string, string[]>;
+  const plannerTermCodes = Object.fromEntries(
+    studentProfiles.map((profile) => {
+      const latestDraft = latestDraftByStudentId.get(profile.id);
+      const availableTerms = buildAvailableTerms(profile.admissionYear, profile.admissionTerm);
+      return [profile.id, latestDraft?.termCode ?? availableTerms[0]?.termCode ?? `${new Date().getFullYear()}-Spring`];
+    })
+  ) as Record<string, string>;
 
   const currentEvaluations = Object.fromEntries(
     [...latestDraftByStudentId.entries()].map(([studentId, draft]) => [studentId, draft.evaluation])
@@ -603,23 +733,45 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     ? modelVersionSetting.value_json
     : DEFAULT_MODEL_VERSION;
 
+  const termMetrics = termMetricRows.flatMap((row) => {
+    const studentUniversityId = appUsersByAppId.get(row.student_id)?.id;
+    if (!studentUniversityId) {
+      return [];
+    }
+
+    return [{
+      studentId: studentUniversityId,
+      termCode: row.term_code,
+      termLabel: formatTermLabel(row.term_code),
+      termType: row.term_type,
+      courseCount: row.course_count,
+      completedCredits: row.completed_credits,
+      averageMark: row.average_mark === null ? null : Number(row.average_mark),
+    } satisfies StudentTermMetric];
+  }).sort((left, right) => compareTermCodesNewestFirst(left.termCode, right.termCode));
+
   return {
-    courses: courses.length > 0 ? courses : COURSES,
+    courses,
     currentEvaluations,
-    historicalStats: historicalStats.length > 0 ? historicalStats : SEED_HISTORICAL_STATS,
+    historicalStats,
     importJobs,
     modelLastCalculatedAt: latestCalculatedAt,
     modelVersion,
     plannerSelections,
+    plannerTermCodes,
     recentEvaluations,
     scheduleDrafts,
-    studentProfiles: studentProfiles.length > 0 ? studentProfiles : STUDENT_PROFILES,
+    studentProfiles,
+    termMetrics,
+    transcriptRows,
   } satisfies AppDataState;
 }
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const { isAuthReady, user, users } = useAuth();
-  const [state, setState] = useState<AppDataState>(() => buildDemoState());
+  const [state, setState] = useState<AppDataState>(() => (
+    hasSupabaseConfig() ? buildEmptyRemoteState() : buildDemoState()
+  ));
   const [isAppDataReady, setIsAppDataReady] = useState(!hasSupabaseConfig());
 
   useEffect(() => {
@@ -645,7 +797,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       .catch((error) => {
         console.error('Unable to load app data from Supabase.', error);
         if (!cancelled) {
-          setState(buildDemoState());
+          setState(buildEmptyRemoteState());
           setIsAppDataReady(true);
         }
       });
@@ -663,9 +815,40 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const getStudentProfile = useCallback(
     (studentId: string) =>
       state.studentProfiles.find((profile) => profile.id === studentId)
-      ?? STUDENT_PROFILES.find((profile) => profile.id === studentId)
       ?? null,
     [state.studentProfiles]
+  );
+
+  const getStudentTranscript = useCallback(
+    (studentId: string) => state.transcriptRows.filter((row) => row.studentId === studentId),
+    [state.transcriptRows]
+  );
+
+  const getStudentTermMetrics = useCallback(
+    (studentId: string) => state.termMetrics.filter((row) => row.studentId === studentId),
+    [state.termMetrics]
+  );
+
+  const getStudentAvailableTerms = useCallback(
+    (studentId: string) => {
+      const profile = getStudentProfile(studentId);
+      if (!profile) {
+        return [];
+      }
+
+      return buildAvailableTerms(profile.admissionYear, profile.admissionTerm);
+    },
+    [getStudentProfile]
+  );
+
+  const getPlannerTermCode = useCallback(
+    (studentId: string) => state.plannerTermCodes[studentId] ?? '',
+    [state.plannerTermCodes]
+  );
+
+  const getTermCreditLimit = useCallback(
+    (studentId: string) => getCreditLimitForTermCode(getPlannerTermCode(studentId)),
+    [getPlannerTermCode]
   );
 
   const getSelectedCourses = useCallback(
@@ -690,15 +873,36 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
 
       const profile = getStudentProfile(studentId);
+      const maxCredits = getTermCreditLimit(studentId);
       return getCourseSelectionStatus(
         course,
         profile?.completedCourseCodes ?? [],
         state.plannerSelections[studentId] ?? [],
         profile?.creditsCompleted ?? 0,
-        state.courses
+        state.courses,
+        maxCredits
       );
     },
-    [getStudentProfile, state.courses, state.plannerSelections]
+    [getStudentProfile, getTermCreditLimit, state.courses, state.plannerSelections]
+  );
+
+  const getCoursePrerequisitesWithGrades = useCallback(
+    (studentId: string, courseCode: string) => {
+      const course = state.courses.find((item) => item.code === courseCode);
+      if (!course || course.prerequisites.length === 0) {
+        return [];
+      }
+
+      const transcript = getStudentTranscript(studentId);
+      const gradeByCode = new Map(transcript.map((row) => [row.courseCode, row.finalGrade]));
+
+      return course.prerequisites.map((code) => ({
+        code,
+        name: state.courses.find((item) => item.code === code)?.name ?? code,
+        grade: gradeByCode.get(code) ?? null,
+      }));
+    },
+    [getStudentTranscript, state.courses]
   );
 
   const toggleCourseSelection = useCallback(
@@ -743,6 +947,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     [getCourseSelectionState, state.courses, state.plannerSelections]
   );
+
+  const setPlannerTermCode = useCallback((studentId: string, termCode: string) => {
+    setState((current) => ({
+      ...current,
+      plannerTermCodes: {
+        ...current.plannerTermCodes,
+        [studentId]: termCode,
+      },
+    }));
+  }, []);
 
   const clearSelection = useCallback((studentId: string) => {
     setState((current) => ({
@@ -800,6 +1014,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           ...current.plannerSelections,
           [studentId]: draft.courseCodes,
         },
+        plannerTermCodes: {
+          ...current.plannerTermCodes,
+          [studentId]: draft.termCode,
+        },
         currentEvaluations: {
           ...current.currentEvaluations,
           [studentId]: draft.evaluation,
@@ -813,6 +1031,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     (studentId: string, name: string) => {
       const evaluation = state.currentEvaluations[studentId];
       const courseCodes = state.plannerSelections[studentId] ?? [];
+      const termCode = state.plannerTermCodes[studentId] ?? getStudentAvailableTerms(studentId)[0]?.termCode ?? '2026-Spring';
       if (!evaluation || courseCodes.length === 0) {
         return null;
       }
@@ -831,6 +1050,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         name,
         courseCodes,
         savedAt: now,
+        termCode,
+        status: 'draft',
         evaluation: nextEvaluation,
       } satisfies ScheduleDraft;
 
@@ -858,6 +1079,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               id: draftId,
               student_id: studentAppUserId,
               name,
+              term_code: termCode,
+              status: 'draft',
               saved_at: now,
             });
 
@@ -896,7 +1119,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       return nextDraft;
     },
-    [state.currentEvaluations, state.plannerSelections, users]
+    [getStudentAvailableTerms, state.currentEvaluations, state.plannerSelections, state.plannerTermCodes, users]
   );
 
   const deleteScheduleDraft = useCallback((draftId: string) => {
@@ -1149,8 +1372,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       currentEvaluations: state.currentEvaluations,
       deleteScheduleDraft,
       getCourseSelectionState,
+      getCoursePrerequisitesWithGrades,
+      getPlannerTermCode,
       getSelectedCourses,
       getStudentDrafts,
+      getStudentTermMetrics,
+      getStudentTranscript,
+      getStudentAvailableTerms,
+      getTermCreditLimit,
       historicalStats: state.historicalStats,
       importHistoricalData,
       importJobs: state.importJobs,
@@ -1160,10 +1389,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       modelLastCalculatedAt: state.modelLastCalculatedAt,
       modelVersion: state.modelVersion,
       plannerSelections: state.plannerSelections,
+      plannerTermCodes: state.plannerTermCodes,
       recentEvaluations: state.recentEvaluations,
       recalculateScores,
       saveScheduleDraft,
+      setPlannerTermCode,
       studentInsights,
+      termMetrics: state.termMetrics,
+      transcriptRows: state.transcriptRows,
       toggleCourseSelection,
       upsertCourse,
     }),
@@ -1172,13 +1405,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       clearSelection,
       deleteScheduleDraft,
       getCourseSelectionState,
+      getCoursePrerequisitesWithGrades,
+      getPlannerTermCode,
       getSelectedCourses,
       getStudentDrafts,
+      getStudentTermMetrics,
+      getStudentTranscript,
+      getStudentAvailableTerms,
+      getTermCreditLimit,
       importHistoricalData,
       isAppDataReady,
       loadScheduleDraft,
       recalculateScores,
       saveScheduleDraft,
+      setPlannerTermCode,
       state.courses,
       state.currentEvaluations,
       state.historicalStats,
@@ -1186,7 +1426,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       state.modelLastCalculatedAt,
       state.modelVersion,
       state.plannerSelections,
+      state.plannerTermCodes,
       state.recentEvaluations,
+      state.termMetrics,
+      state.transcriptRows,
       studentInsights,
       toggleCourseSelection,
       upsertCourse,

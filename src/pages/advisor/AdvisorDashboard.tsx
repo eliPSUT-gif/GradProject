@@ -57,8 +57,8 @@ export default function AdvisorDashboard() {
     },
     {
       icon: GraduationCap,
-      label: 'Avg Cohort GPA',
-      value: advisees.length > 0 ? (advisees.reduce((sum, student) => sum + student.gpa, 0) / advisees.length).toFixed(2) : '0.00',
+      label: 'Avg Cohort Average',
+      value: advisees.length > 0 ? (advisees.reduce((sum, student) => sum + student.averageMark, 0) / advisees.length).toFixed(2) : '0.00',
       subtitle: 'CS Department',
       accent: '#0d9488',
     },
@@ -131,7 +131,7 @@ export default function AdvisorDashboard() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold">{student.name}</p>
                       <p className="mt-0.5 text-xs text-gray-600">
-                        {student.difficulty}% difficulty | GPA {student.gpa.toFixed(2)}
+                        {student.difficulty}% difficulty | Average {student.averageMark.toFixed(2)}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
@@ -187,7 +187,7 @@ export default function AdvisorDashboard() {
               <thead>
                 <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">
                   <th className="pb-2 pr-4">Student</th>
-                  <th className="pb-2 pr-4 text-center">GPA</th>
+                  <th className="pb-2 pr-4 text-center">Average</th>
                   <th className="pb-2 pr-4 text-center">Credits</th>
                   <th className="pb-2 pr-4 text-center">Difficulty</th>
                   <th className="pb-2 pr-4 text-center">Status</th>
@@ -203,7 +203,7 @@ export default function AdvisorDashboard() {
                         <p className="font-semibold text-[#0f1e3c]">{student.name}</p>
                         <p className="text-[11px] text-gray-400">ID {student.id}</p>
                       </td>
-                      <td className="py-2.5 pr-4 text-center font-medium text-[#0f1e3c]">{student.gpa.toFixed(2)}</td>
+                      <td className="py-2.5 pr-4 text-center font-medium text-[#0f1e3c]">{student.averageMark.toFixed(2)}</td>
                       <td className="py-2.5 pr-4 text-center text-gray-600">{student.latestEvaluation?.totalCredits ?? 0}</td>
                       <td className="py-2.5 pr-4 text-center">
                         <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${diff.cls}`}>

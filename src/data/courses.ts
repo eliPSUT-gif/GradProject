@@ -2,6 +2,8 @@ export type Role = 'student' | 'advisor' | 'admin';
 export type CourseType = 'theoretical' | 'practical' | 'hybrid' | 'project';
 export type RiskLabel = 'Easy' | 'Balanced' | 'Hard';
 export type RiskStatus = 'at-risk' | 'monitor' | 'good';
+export type AdmissionTerm = 'fall' | 'spring' | 'summer';
+export type TermType = 'regular' | 'summer';
 
 export interface CourseBlueprint {
   code: string;
@@ -34,8 +36,8 @@ export interface HistoricalCourseStat { id: string; courseCode: string; termId: 
 export interface Recommendation { id: string; title: string; reason: string; action: string; expectedImpact: string; impactDelta: number; }
 export interface EvaluationFactor { label: string; score: number; detail: string; }
 export interface ScheduleEvaluation { id: string; studentId: string; totalScore: number; riskLabel: RiskLabel; totalCredits: number; evaluatedAt: string; modelVersion: string; explanation: string[]; factors: EvaluationFactor[]; recommendations: Recommendation[]; topCourses: string[]; }
-export interface ScheduleDraft { id: string; studentId: string; name: string; courseCodes: string[]; savedAt: string; evaluation: ScheduleEvaluation; }
-export interface StudentProfile { id: string; name: string; gpa: number; creditsCompleted: number; department: string; advisorId: string; completedCourseCodes: string[]; }
+export interface ScheduleDraft { id: string; studentId: string; name: string; courseCodes: string[]; savedAt: string; termCode: string; status: 'draft' | 'submitted' | 'archived'; evaluation: ScheduleEvaluation; }
+export interface StudentProfile { id: string; name: string; gpa: number; averageMark: number; creditsCompleted: number; department: string; advisorId: string; completedCourseCodes: string[]; admissionYear: number; admissionTerm: AdmissionTerm; }
 export interface ManagedUser {
   id: string;
   name: string;
@@ -58,6 +60,7 @@ export interface SelectionStatus { eligible: boolean; reasons: string[]; wouldEx
 export const DEFAULT_MODEL_VERSION = 'internet-weighted-v2.0.0';
 export const MODEL_LAST_CALCULATED_AT = '2026-03-13T10:30:00.000Z';
 export const MAX_SEMESTER_CREDITS = 18;
+export const MAX_SUMMER_CREDITS = 9;
 export const EXTERNAL_PREREQUISITES: Record<string, string> = { '11103': 'Structured Programming', '20133': 'Calculus (2)', '20134': 'Discrete Mathematics (1)', '20233': 'Statistical Methods' };
 export const COURSE_TRENDS: Record<string, { direction: 'up' | 'stable' | 'down'; label: string }> = { '11206': { direction: 'stable', label: 'Stable' }, '11212': { direction: 'up', label: 'Harder' }, '11253': { direction: 'stable', label: 'Stable' }, '11313': { direction: 'up', label: 'Harder' }, '11316': { direction: 'up', label: 'Harder' }, '11323': { direction: 'stable', label: 'Stable' }, '11335': { direction: 'up', label: 'Harder' }, '11354': { direction: 'stable', label: 'Stable' }, '11355': { direction: 'up', label: 'Harder' }, '11391': { direction: 'stable', label: 'Stable' }, '11435': { direction: 'stable', label: 'Stable' }, '11449': { direction: 'down', label: 'Easier' }, '11464': { direction: 'up', label: 'Harder' }, '11493': { direction: 'stable', label: 'Stable' }, '11494': { direction: 'stable', label: 'Stable' }, '12242': { direction: 'down', label: 'Easier' }, '12243': { direction: 'down', label: 'Easier' }, '12343': { direction: 'stable', label: 'Stable' }, '13477': { direction: 'stable', label: 'Stable' }, '14330': { direction: 'up', label: 'Harder' }, '20135': { direction: 'stable', label: 'Stable' }, '20141': { direction: 'stable', label: 'Stable' }, '20142': { direction: 'stable', label: 'Stable' }, '20147': { direction: 'down', label: 'Easier' }, '20333': { direction: 'stable', label: 'Stable' }, '20336': { direction: 'up', label: 'Harder' }, '22241': { direction: 'stable', label: 'Stable' }, '22342': { direction: 'up', label: 'Harder' }, '22541': { direction: 'up', label: 'Harder' } };
 export const KNOWN_HARD_COMBINATIONS = [['11313', '11316'], ['11335', '22541'], ['11335', '11464'], ['14330', '20336'], ['11313', '14330']] as const;
@@ -106,20 +109,23 @@ export const SEED_MANAGED_USERS: ManagedUser[] = [
 ];
 
 export const STUDENT_PROFILES: StudentProfile[] = [
-  { id: '20231001', name: 'Ahmad Hassan', gpa: 3.42, creditsCompleted: 74, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '20135', '20141', '20147', '20333', '20336', '22241', '22342'] },
-  { id: '20221045', name: 'Omar Al-Rashid', gpa: 2.9, creditsCompleted: 88, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11354', '11435', '12243', '12242', '12343', '14330', '20135', '20141', '20142', '20147', '20333', '22241', '22342', '22541'] },
-  { id: '20221188', name: 'Sara Khalil', gpa: 3.05, creditsCompleted: 84, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342'] },
-  { id: '20220877', name: 'Lina Nasser', gpa: 3.2, creditsCompleted: 92, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11335', '11354', '11355', '11435', '11449', '12243', '12242', '12343', '13477', '14330', '20135', '20141', '20142', '20147', '20333', '20336', '22241', '22342', '22541'] },
-  { id: '20220432', name: 'Karim Haddad', gpa: 3.58, creditsCompleted: 101, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11335', '11354', '11355', '11391', '11435', '11449', '11464', '11493', '12243', '12242', '12343', '13477', '14330', '20135', '20141', '20142', '20147', '20333', '20336', '22241', '22342', '22541'] },
-  { id: '20221302', name: 'Nour Saleh', gpa: 3.81, creditsCompleted: 76, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11323', '11435', '12243', '20135', '20141', '20147', '22241', '22342'] },
-  { id: '20220665', name: 'Yousef Barakat', gpa: 3.12, creditsCompleted: 82, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342'] }
+  { id: '20231001', name: 'Ahmad Hassan', gpa: 3.42, averageMark: 78, creditsCompleted: 74, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '20135', '20141', '20147', '20333', '20336', '22241', '22342'], admissionYear: 2023, admissionTerm: 'fall' },
+  { id: '20221045', name: 'Omar Al-Rashid', gpa: 2.9, averageMark: 71, creditsCompleted: 88, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11354', '11435', '12243', '12242', '12343', '14330', '20135', '20141', '20142', '20147', '20333', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
+  { id: '20221188', name: 'Sara Khalil', gpa: 3.05, averageMark: 74, creditsCompleted: 84, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342'], admissionYear: 2022, admissionTerm: 'fall' },
+  { id: '20220877', name: 'Lina Nasser', gpa: 3.2, averageMark: 79, creditsCompleted: 92, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11335', '11354', '11355', '11435', '11449', '12243', '12242', '12343', '13477', '14330', '20135', '20141', '20142', '20147', '20333', '20336', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
+  { id: '20220432', name: 'Karim Haddad', gpa: 3.58, averageMark: 84, creditsCompleted: 101, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11335', '11354', '11355', '11391', '11435', '11449', '11464', '11493', '12243', '12242', '12343', '13477', '14330', '20135', '20141', '20142', '20147', '20333', '20336', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
+  { id: '20221302', name: 'Nour Saleh', gpa: 3.81, averageMark: 86, creditsCompleted: 76, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11323', '11435', '12243', '20135', '20141', '20147', '22241', '22342'], admissionYear: 2022, admissionTerm: 'fall' },
+  { id: '20220665', name: 'Yousef Barakat', gpa: 3.12, averageMark: 76, creditsCompleted: 82, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342'], admissionYear: 2022, admissionTerm: 'fall' }
 ];
 
 const DEMO_PROFILE_TEMPLATES = STUDENT_PROFILES.map((profile) => ({
   gpa: profile.gpa,
+  averageMark: profile.averageMark,
   creditsCompleted: profile.creditsCompleted,
   department: profile.department,
   completedCourseCodes: [...profile.completedCourseCodes],
+  admissionYear: profile.admissionYear,
+  admissionTerm: profile.admissionTerm,
 }));
 
 export const STUDENT_PLAN_SEEDS: Record<string, string[]> = {
@@ -142,10 +148,53 @@ export function getInitials(name: string) { return name.split(' ').filter(Boolea
 function hashSeedToIndex(seed: string, size: number) { if (size <= 0) return 0; const hash = seed.split('').reduce((sum, character, index) => sum + character.charCodeAt(0) * (index + 1), 0); return hash % size; }
 export function buildDemoStudentProfile(student: Pick<ManagedUser, 'id' | 'name'>, advisorId: string | null, templateIndex?: number): StudentProfile {
   const template = DEMO_PROFILE_TEMPLATES[templateIndex ?? hashSeedToIndex(student.id, DEMO_PROFILE_TEMPLATES.length)] ?? DEMO_PROFILE_TEMPLATES[0];
-  return { id: student.id, name: student.name, gpa: template.gpa, creditsCompleted: template.creditsCompleted, department: template.department, advisorId: advisorId ?? '', completedCourseCodes: [...template.completedCourseCodes] };
+  return { id: student.id, name: student.name, gpa: template.gpa, averageMark: template.averageMark, creditsCompleted: template.creditsCompleted, department: template.department, advisorId: advisorId ?? '', completedCourseCodes: [...template.completedCourseCodes], admissionYear: template.admissionYear, admissionTerm: template.admissionTerm };
 }
 export function getCourseName(code: string) { return BASE_COURSES.find((course) => course.code === code)?.name ?? EXTERNAL_PREREQUISITES[code] ?? code; }
 export function formatRequirementText(course: Pick<CourseBlueprint, 'prerequisites' | 'concurrentCourses' | 'minimumCompletedCredits'>) { const lines: string[] = []; course.prerequisites.forEach((code) => lines.push(`Prerequisite: ${getCourseName(code)}`)); course.concurrentCourses.forEach((code) => lines.push(`Concurrent: ${getCourseName(code)}`)); if (course.minimumCompletedCredits) lines.push(`Complete ${course.minimumCompletedCredits} credit hours`); return lines; }
+export function getTermTypeFromCode(termCode: string): TermType {
+  return /summer/i.test(termCode) ? 'summer' : 'regular';
+}
+export function getCreditLimitForTermCode(termCode: string) {
+  return getTermTypeFromCode(termCode) === 'summer' ? MAX_SUMMER_CREDITS : MAX_SEMESTER_CREDITS;
+}
+export function formatTermLabel(termCode: string) {
+  if (!termCode) return '-';
+  const [year, rawTerm] = termCode.split('-');
+  if (!year || !rawTerm) return termCode;
+  const normalized = rawTerm.toLowerCase();
+  const pretty = normalized === 'fall' ? 'Fall' : normalized === 'spring' ? 'Spring' : normalized === 'summer' ? 'Summer' : rawTerm;
+  return `${pretty} ${year}`;
+}
+function getTermRank(termCode: string) {
+  const [yearString, rawTerm] = termCode.split('-');
+  const year = Number(yearString);
+  const normalized = rawTerm?.toLowerCase();
+  const order = normalized === 'fall' ? 3 : normalized === 'summer' ? 2 : normalized === 'spring' ? 1 : 0;
+  return year * 10 + order;
+}
+export function compareTermCodesNewestFirst(left: string, right: string) {
+  return getTermRank(right) - getTermRank(left);
+}
+export function buildAvailableTerms(admissionYear: number, admissionTerm: AdmissionTerm, endYear = new Date().getFullYear() + 1) {
+  const allTerms: { termCode: string; termType: TermType }[] = [];
+  const termSequence: AdmissionTerm[] = ['fall', 'spring', 'summer'];
+  const admissionOffset = termSequence.indexOf(admissionTerm);
+  for (let year = admissionYear; year <= endYear; year += 1) {
+    allTerms.push(
+      { termCode: `${year}-Fall`, termType: 'regular' },
+      { termCode: `${year}-Spring`, termType: 'regular' },
+      { termCode: `${year}-Summer`, termType: 'summer' }
+    );
+  }
+  return allTerms
+    .filter((term) => {
+      const [yearString, season] = term.termCode.split('-');
+      const seasonIndex = termSequence.indexOf(season.toLowerCase() as AdmissionTerm);
+      return Number(yearString) > admissionYear || seasonIndex >= admissionOffset;
+    })
+    .sort((left, right) => getTermRank(left.termCode) - getTermRank(right.termCode));
+}
 export function getDiffLabel(score: number) {
   if (score >= 70) return { label: 'Hard' as const, cls: 'bg-red-100 text-red-700', color: '#dc2626', barColor: 'bg-red-500' };
   if (score >= 45) return { label: 'Balanced' as const, cls: 'bg-amber-100 text-amber-700', color: '#d97706', barColor: 'bg-amber-500' };
@@ -200,7 +249,7 @@ export function buildCourses(stats: HistoricalCourseStat[], modelVersion = DEFAU
 }
 export const COURSES = buildCourses(SEED_HISTORICAL_STATS);
 
-export function getCourseSelectionStatus(course: Course, completedCourseCodes: string[], selectedCourseCodes: string[], completedCredits: number, allCourses: Course[]): SelectionStatus {
+export function getCourseSelectionStatus(course: Course, completedCourseCodes: string[], selectedCourseCodes: string[], completedCredits: number, allCourses: Course[], maxCredits = MAX_SEMESTER_CREDITS): SelectionStatus {
   const reasons: string[] = [];
   const selectedSet = new Set(selectedCourseCodes);
   const completedSet = new Set(completedCourseCodes);
@@ -210,8 +259,8 @@ export function getCourseSelectionStatus(course: Course, completedCourseCodes: s
   const missingConcurrent = course.concurrentCourses.filter((code) => !completedSet.has(code) && !selectedSet.has(code));
   if (missingConcurrent.length > 0) reasons.push(`Requires concurrent course${missingConcurrent.length > 1 ? 's' : ''}: ${missingConcurrent.map(getCourseName).join(', ')}.`);
   if (course.minimumCompletedCredits && completedCredits < course.minimumCompletedCredits) reasons.push(`Requires ${course.minimumCompletedCredits} completed credit hours. You currently have ${completedCredits}.`);
-  const wouldExceedCredits = totalSelectedCredits + course.credits > MAX_SEMESTER_CREDITS;
-  if (wouldExceedCredits) reasons.push(`Maximum semester load is ${MAX_SEMESTER_CREDITS} credit hours.`);
+  const wouldExceedCredits = totalSelectedCredits + course.credits > maxCredits;
+  if (wouldExceedCredits) reasons.push(`Maximum semester load is ${maxCredits} credit hours.`);
   return { eligible: reasons.length === 0, reasons, wouldExceedCredits };
 }
 function buildTopCourseStrings(selectedCourses: Course[]) { return [...selectedCourses].sort((left, right) => right.diffScore - left.diffScore).slice(0, 3).map((course) => `${course.code} ${course.name}`); }
@@ -272,7 +321,7 @@ export function buildSeedDrafts(courses: Course[]) {
     const selectedCourses = courses.filter((course) => courseCodes.includes(course.code));
     const evaluation = evaluateSchedule(studentId, selectedCourses, courses, DEFAULT_MODEL_VERSION, profile?.completedCourseCodes ?? [], profile?.creditsCompleted ?? 0, '2026-03-12T10:00:00.000Z');
     if (!evaluation) return [];
-    return [{ id: createId('draft', `${studentId}-spring26`), studentId, name: 'Spring 2026 Forecast', courseCodes, savedAt: '2026-03-12T10:05:00.000Z', evaluation } satisfies ScheduleDraft];
+    return [{ id: createId('draft', `${studentId}-spring26`), studentId, name: 'Spring 2026 Forecast', courseCodes, savedAt: '2026-03-12T10:05:00.000Z', termCode: '2026-Spring', status: 'draft', evaluation } satisfies ScheduleDraft];
   });
 }
 

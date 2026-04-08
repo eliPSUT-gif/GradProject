@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { AlertTriangle, BookOpen, CheckCircle2, Lock, Save, Search, Sparkles, Trash2, X } from 'lucide-react';
-import { getDiffLabel, MAX_SEMESTER_CREDITS, type Course } from '../../data/courses';
+import { formatTermLabel, getDiffLabel, type Course } from '../../data/courses';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
 
@@ -15,12 +15,34 @@ function typeTag(type: Course['type']) {
 
 export default function CoursePlanner() {
   const { user } = useAuth();
-  const { analyzeSchedule, clearSelection, courses, currentEvaluations, deleteScheduleDraft, getCourseSelectionState, getSelectedCourses, getStudentDrafts, isAppDataReady, loadScheduleDraft, plannerSelections, saveScheduleDraft, toggleCourseSelection } = useAppData();
+  const {
+    analyzeSchedule,
+    clearSelection,
+    courses,
+    currentEvaluations,
+    deleteScheduleDraft,
+    getCoursePrerequisitesWithGrades,
+    getCourseSelectionState,
+    getPlannerTermCode,
+    getSelectedCourses,
+    getStudentAvailableTerms,
+    getStudentDrafts,
+    getTermCreditLimit,
+    isAppDataReady,
+    loadScheduleDraft,
+    plannerSelections,
+    saveScheduleDraft,
+    setPlannerTermCode,
+    toggleCourseSelection,
+  } = useAppData();
   const studentId = user?.id ?? '';
   const selectedCourses = getSelectedCourses(studentId);
   const savedDrafts = getStudentDrafts(studentId);
   const analysisResult = currentEvaluations[studentId] ?? null;
   const selectedCodes = new Set(plannerSelections[studentId] ?? []);
+  const plannerTermCode = getPlannerTermCode(studentId);
+  const availableTerms = getStudentAvailableTerms(studentId);
+  const termCreditLimit = getTermCreditLimit(studentId);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_FILTERS)[number]>('All');
   const [draftName, setDraftName] = useState('My Next Schedule');
@@ -38,7 +60,12 @@ export default function CoursePlanner() {
   const totalCredits = selectedCourses.reduce((sum, course) => sum + course.credits, 0);
 
   const handleAnalyze = () => {
-    setPlannerError(totalCredits > MAX_SEMESTER_CREDITS ? `You cannot analyze more than ${MAX_SEMESTER_CREDITS} credit hours.` : null);
+    if (totalCredits > termCreditLimit) {
+      setPlannerError(`You cannot analyze more than ${termCreditLimit} credit hours for ${formatTermLabel(plannerTermCode)}.`);
+      return;
+    }
+
+    setPlannerError(null);
     analyzeSchedule(studentId);
   };
 
@@ -65,6 +92,19 @@ export default function CoursePlanner() {
     <div className="flex items-start gap-4 max-lg:flex-col sm:gap-6">
       <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="min-w-[180px]">
+            <select
+              value={plannerTermCode}
+              onChange={(event) => setPlannerTermCode(studentId, event.target.value)}
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm transition-all focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+            >
+              {availableTerms.map((term) => (
+                <option key={term.termCode} value={term.termCode}>
+                  {formatTermLabel(term.termCode)}{term.termType === 'summer' ? ' • Summer max 9 credits' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input type="text" placeholder="Search courses..." value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm transition-all focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30" />
@@ -84,6 +124,8 @@ export default function CoursePlanner() {
           {filtered.map((course) => {
             const isSelected = selectedCodes.has(course.code);
             const status = getCourseSelectionState(studentId, course.code);
+            const prerequisiteGrades = getCoursePrerequisitesWithGrades(studentId, course.code);
+            const nonPrerequisiteRules = course.requirementText.filter((line) => !line.startsWith('Prerequisite:'));
             const diff = getDiffLabel(course.diffScore);
             const locked = !isSelected && !status.eligible;
             return (
@@ -95,8 +137,26 @@ export default function CoursePlanner() {
                 <p className="mb-3 text-xs text-gray-500">{course.department} | {course.credits} credit{course.credits !== 1 ? 's' : ''}</p>
                 <div className="mb-3 flex items-center justify-between"><span className="text-xs text-gray-500">Difficulty basis</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${diff.cls}`}>{diff.label} ({course.diffScore})</span></div>
                 <div className="mb-3 h-1.5 w-full rounded-full bg-gray-100"><div className={`h-full rounded-full ${diff.barColor}`} style={{ width: `${course.diffScore}%` }} /></div>
-                <div className="space-y-1 text-[11px] text-gray-500">
-                  {course.requirementText.length > 0 ? course.requirementText.map((line) => <p key={line}>{line}</p>) : <p>No prerequisite restrictions.</p>}
+                <div className="space-y-2 text-[11px] text-gray-500">
+                  <div>
+                    <p className="font-semibold uppercase tracking-wide text-gray-400">Prerequisites</p>
+                    {prerequisiteGrades.length > 0 ? (
+                      <div className="mt-1 space-y-1">
+                        {prerequisiteGrades.map((item) => (
+                          <div key={item.code} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-2 py-1">
+                            <span className="truncate text-gray-600">{item.name}</span>
+                            <span className="shrink-0 font-semibold text-[#0f1e3c]">{item.grade === null ? '-' : item.grade.toFixed(0)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1">-</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold uppercase tracking-wide text-gray-400">Concurrent / Rules</p>
+                    {nonPrerequisiteRules.length > 0 ? nonPrerequisiteRules.map((line) => <p key={line}>{line}</p>) : <p>-</p>}
+                  </div>
                   {locked && status.reasons.map((reason) => <p key={reason} className="text-red-600">{reason}</p>)}
                 </div>
               </button>
@@ -107,7 +167,7 @@ export default function CoursePlanner() {
 
       <div className="w-full shrink-0 space-y-3 sm:space-y-4 lg:w-96 xl:sticky xl:top-6">
         <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-          <div className="mb-4 flex items-center justify-between"><h3 className="text-sm font-bold text-[#0f1e3c]">My Selection ({selectedCourses.length})</h3><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${totalCredits > MAX_SEMESTER_CREDITS ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{totalCredits} / {MAX_SEMESTER_CREDITS} cr</span></div>
+          <div className="mb-4 flex items-center justify-between"><h3 className="text-sm font-bold text-[#0f1e3c]">My Selection ({selectedCourses.length})</h3><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${totalCredits > termCreditLimit ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{totalCredits} / {termCreditLimit} cr</span></div>
           {selectedCourses.length === 0 ? <p className="py-6 text-center text-xs text-gray-400">Click eligible courses to add them here.</p> : <div className="mb-4 space-y-2">{selectedCourses.map((course) => (<div key={course.code} className="flex items-start justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2"><div className="min-w-0"><span className="font-mono text-xs font-bold text-[#0f1e3c]">{course.code}</span><span className="ml-2 break-words text-xs text-gray-500">{course.name}</span></div><button onClick={() => handleToggle(course.code)} className="shrink-0 rounded-md p-1 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>))}</div>}
           <div className="space-y-2">
             <button onClick={handleAnalyze} disabled={selectedCourses.length === 0} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"><Sparkles className="h-4 w-4" />Analyze My Schedule</button>
