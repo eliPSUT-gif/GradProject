@@ -18,6 +18,22 @@ export const config = {
   maxDuration: 10,
 };
 
+function isTestingDeployment(request: VercelRequest) {
+  const vercelEnv = (process.env.VERCEL_ENV ?? '').trim().toLowerCase();
+  const gitRef = (process.env.VERCEL_GIT_COMMIT_REF ?? '').trim().toLowerCase();
+  const host = String(request.headers.host ?? '').trim().toLowerCase();
+
+  if (vercelEnv === 'preview') {
+    return true;
+  }
+
+  if (gitRef && gitRef !== 'main' && gitRef !== 'master') {
+    return true;
+  }
+
+  return host.includes('vercel.app') && !host.startsWith('grad-project-one.vercel.app');
+}
+
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== 'POST') {
     response.status(405).json({ success: false, error: 'Method not allowed.' });
@@ -25,7 +41,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   const secret = process.env.RECAPTCHA_SECRET_KEY;
-  const isPreviewDeployment = (process.env.VERCEL_ENV ?? '').trim().toLowerCase() === 'preview';
+  const isPreviewDeployment = isTestingDeployment(request);
   if (!secret) {
     response.status(500).json({ success: false, error: 'reCAPTCHA secret key is not configured.' });
     return;
