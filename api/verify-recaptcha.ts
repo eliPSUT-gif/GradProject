@@ -3,6 +3,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const MIN_RECAPTCHA_SCORE = 0.5;
 const VERIFY_TIMEOUT_MS = 8000;
 const RECAPTCHA_VERIFY_URL = 'https://www.recaptcha.net/recaptcha/api/siteverify';
+const PRODUCTION_HOSTS = new Set([
+  'grad-project-one.vercel.app',
+]);
 
 function timeoutAfter<T>(ms: number, response: T) {
   return new Promise<T>((resolve) => {
@@ -22,6 +25,7 @@ function isTestingDeployment(request: VercelRequest) {
   const vercelEnv = (process.env.VERCEL_ENV ?? '').trim().toLowerCase();
   const gitRef = (process.env.VERCEL_GIT_COMMIT_REF ?? '').trim().toLowerCase();
   const host = String(request.headers.host ?? '').trim().toLowerCase();
+  const deploymentUrl = String(request.headers['x-vercel-deployment-url'] ?? '').trim().toLowerCase();
 
   if (vercelEnv === 'preview') {
     return true;
@@ -31,7 +35,11 @@ function isTestingDeployment(request: VercelRequest) {
     return true;
   }
 
-  return host.includes('vercel.app') && !host.startsWith('grad-project-one.vercel.app');
+  if (deploymentUrl && deploymentUrl !== 'grad-project-one.vercel.app') {
+    return true;
+  }
+
+  return host.length > 0 && !PRODUCTION_HOSTS.has(host);
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -53,6 +61,16 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   if (!payload.token || !payload.action) {
     response.status(400).json({ success: false, error: 'Missing reCAPTCHA token or action.' });
+    return;
+  }
+
+  if (isPreviewDeployment) {
+    response.status(200).json({
+      success: true,
+      score: 1,
+      action: payload.action,
+      bypassed: true,
+    });
     return;
   }
 
@@ -94,17 +112,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const returnedAction = normalizeAction(googleResult.action);
     const hasReturnedAction = returnedAction.length > 0;
     const isActionMatch = !hasReturnedAction || returnedAction === expectedAction;
-    const isLowScoreOnlyFailure = Boolean(googleResult.success) && isActionMatch && score < MIN_RECAPTCHA_SCORE;
     const isVerified = Boolean(googleResult.success) && isActionMatch && score >= MIN_RECAPTCHA_SCORE;
-
-    if (isPreviewDeployment && isLowScoreOnlyFailure) {
-      response.status(200).json({
-        success: true,
-        score,
-        action: googleResult.action,
-      });
-      return;
-    }
 
     if (!isVerified) {
       const timeoutHit = googleResult['error-codes']?.includes('verification-timeout');
