@@ -129,6 +129,7 @@ export default function AdvisorStudentDetailPage() {
       icon: TrendingUp,
       label: 'Current Average',
       value: profile.averageMark.toFixed(2),
+      pill: `GPA ${profile.averageMark.toFixed(2)}`,
       subtitle: 'Based on transcript marks',
       accent: '#2563eb',
     },
@@ -185,6 +186,11 @@ export default function AdvisorStudentDetailPage() {
                 <Icon className="h-3.5 w-3.5 text-gray-400 sm:h-4 sm:w-4" />
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 sm:text-[11px]">{item.label}</span>
               </div>
+              {'pill' in item ? (
+                <span className="mb-2 inline-flex rounded-full bg-[#2563eb]/10 px-2.5 py-1 text-[10px] font-semibold text-[#2563eb] sm:mb-3 sm:text-xs">
+                  {item.pill}
+                </span>
+              ) : null}
               <p className="font-display text-2xl font-bold text-[#0f1e3c] sm:text-3xl">{item.value}</p>
               <p className="mt-0.5 text-[10px] text-gray-500 sm:mt-1 sm:text-xs">{item.subtitle}</p>
             </div>
