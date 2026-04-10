@@ -5,6 +5,16 @@ alter table public.student_profiles
   add column if not exists admission_year integer,
   add column if not exists admission_term text;
 
+alter table public.student_profiles
+  alter column gpa type numeric(5,2);
+
+alter table public.student_profiles
+  drop constraint if exists student_profiles_gpa_check;
+
+alter table public.student_profiles
+  add constraint student_profiles_gpa_check
+  check (gpa >= 0 and gpa <= 100);
+
 do $$
 begin
   if not exists (
@@ -89,6 +99,7 @@ begin
 
   update public.student_profiles sp
   set
+    gpa = marks.average_mark,
     average_mark = marks.average_mark,
     completed_credits = coalesce(marks.completed_credits, 0),
     admission_year = coalesce(sp.admission_year, inferred_admission_year),
@@ -108,6 +119,7 @@ begin
 
   update public.student_profiles sp
   set
+    gpa = coalesce(sp.average_mark, sp.gpa, 0),
     average_mark = coalesce(sp.average_mark, 0),
     completed_credits = coalesce(sp.completed_credits, 0),
     admission_year = coalesce(sp.admission_year, inferred_admission_year),
@@ -266,6 +278,7 @@ join public.courses c on c.id = scc.course_id;
 
 update public.student_profiles sp
 set
+  gpa = coalesce(sp.average_mark, sp.gpa),
   admission_year = coalesce(sp.admission_year, public.infer_student_admission_year(sp.user_id)),
   admission_term = coalesce(sp.admission_term, 'fall'),
   updated_at = timezone('utc', now());

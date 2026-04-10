@@ -639,7 +639,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     return [{
       id: student.id,
       name: student.name,
-      gpa: Number(row.gpa),
+      gpa: Number(row.average_mark ?? row.gpa ?? 0),
       averageMark: Number(row.average_mark ?? 0),
       creditsCompleted: row.completed_credits,
       department: departmentById.get(row.department_id) ?? 'Computer Science',
