@@ -89,9 +89,15 @@ export default function StudentDashboard() {
       icon: TrendingUp,
       label: 'Current Average',
       value: profile ? profile.averageMark.toFixed(2) : '-',
-      pill: profile ? `GPA ${profile.averageMark.toFixed(2)}` : 'GPA -',
       subtitle: 'Based on transcript marks',
       accent: '#2563eb',
+    },
+    {
+      icon: GraduationCap,
+      label: 'GPA',
+      value: profile ? profile.averageMark.toFixed(2) : '-',
+      subtitle: 'Calculated from transcript marks',
+      accent: '#7c3aed',
     },
     {
       icon: Gauge,
@@ -108,7 +114,7 @@ export default function StudentDashboard() {
       accent: '#3b82f6',
     },
     {
-      icon: GraduationCap,
+      icon: BookOpen,
       label: 'Completed Credits',
       value: String(profile?.creditsCompleted ?? 0),
       subtitle: 'Towards graduation plan',
@@ -181,7 +187,7 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
         {kpis.map((item) => {
           const Icon = item.icon;
           return (
@@ -191,11 +197,6 @@ export default function StudentDashboard() {
                 <Icon className="h-3.5 w-3.5 text-gray-400 sm:h-4 sm:w-4" />
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 sm:text-[11px]">{item.label}</span>
               </div>
-              {'pill' in item ? (
-                <span className="mb-2 inline-flex rounded-full bg-[#2563eb]/10 px-2.5 py-1 text-[10px] font-semibold text-[#2563eb] sm:mb-3 sm:text-xs">
-                  {item.pill}
-                </span>
-              ) : null}
               <p className="font-display text-2xl font-bold text-[#0f1e3c] sm:text-3xl">{item.value}</p>
               <p className="mt-0.5 text-[10px] text-gray-500 sm:mt-1 sm:text-xs">{item.subtitle}</p>
             </div>
