@@ -86,7 +86,7 @@ export interface StudentTermMetric {
   termType: TermType;
   courseCount: number;
   completedCredits: number;
-  averageMark: number | null;
+  gpa: number | null;
 }
 
 export interface CoursePrerequisiteGrade {
@@ -210,7 +210,6 @@ interface StudentProfileRow {
   department_name: string;
   advisor_id: string | null;
   gpa: number;
-  average_mark: number;
   admission_year: number | null;
   admission_term: AdmissionTerm | null;
   completed_credits: number;
@@ -275,7 +274,6 @@ interface StudentTermMetricRow {
   term_type: TermType;
   course_count: number;
   completed_credits: number;
-  average_mark: number | null;
   gpa: number | null;
 }
 
@@ -506,7 +504,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'historical_course_stats',
       'select=id,course_id,term_code,avg_grade,pass_rate,fail_rate,enrollment_count,withdrawals'
     ),
-    supabaseSelect<StudentProfileRow[]>('student_dashboard_summary_v', 'select=student_id,student_name,department_name,advisor_id,gpa,average_mark,admission_year,admission_term,completed_credits'),
+    supabaseSelect<StudentProfileRow[]>('student_dashboard_summary_v', 'select=student_id,student_name,department_name,advisor_id,gpa,admission_year,admission_term,completed_credits'),
     supabaseSelect<StudentCompletedCourseRow[]>('student_transcript_v', 'select=student_id,term_code,term_type,course_code,course_name,credits,final_grade,status,attempt_no'),
     supabaseSelect<ScheduleDraftRow[]>('schedule_drafts', 'select=id,student_id,name,term_code,status,saved_at&order=saved_at.desc'),
     supabaseSelect<ScheduleDraftCourseRow[]>('schedule_draft_courses', 'select=schedule_id,course_id'),
@@ -518,7 +516,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'import_jobs',
       'select=id,file_name,format,imported_rows,rejected_rows,status,validation_messages,errors,created_at&order=created_at.desc'
     ),
-    supabaseSelect<StudentTermMetricRow[]>('student_term_metrics_v', 'select=student_id,term_code,term_type,course_count,completed_credits,average_mark,gpa&order=term_code.desc'),
+    supabaseSelect<StudentTermMetricRow[]>('student_term_metrics_v', 'select=student_id,term_code,term_type,course_count,completed_credits,gpa&order=term_code.desc'),
   ]);
 
   const departmentById = new Map(departments.map((department) => [department.id, department.name]));
@@ -683,7 +681,6 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       id: student.id,
       name: row.student_name,
       gpa: Number(row.gpa ?? 0),
-      averageMark: Number(row.average_mark ?? 0),
       creditsCompleted: row.completed_credits,
       department: row.department_name,
       advisorId: advisor?.id ?? '',
@@ -805,7 +802,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       termType: row.term_type,
       courseCount: row.course_count,
       completedCredits: row.completed_credits,
-      averageMark: row.average_mark === null ? null : Number(row.average_mark),
+      gpa: row.gpa === null ? null : Number(row.gpa),
     } satisfies StudentTermMetric];
   }).sort((left, right) => compareTermCodesNewestFirst(left.termCode, right.termCode));
 

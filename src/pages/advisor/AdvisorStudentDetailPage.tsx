@@ -126,16 +126,9 @@ export default function AdvisorStudentDetailPage() {
 
   const kpis = [
     {
-      icon: TrendingUp,
-      label: 'Current Average',
-      value: profile.averageMark.toFixed(2),
-      subtitle: 'Based on transcript marks',
-      accent: '#2563eb',
-    },
-    {
       icon: GraduationCap,
       label: 'GPA',
-      value: profile.averageMark.toFixed(2),
+      value: profile.gpa.toFixed(2),
       subtitle: 'Calculated from transcript marks',
       accent: '#7c3aed',
     },
@@ -348,15 +341,15 @@ export default function AdvisorStudentDetailPage() {
         <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
           <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
             <BarChart3 className="h-5 w-5 text-[#2563eb]" />
-            Past Semester Averages
+            Past Semester GPA
           </h2>
           <div className="flex h-36 items-end gap-2 sm:h-48 sm:gap-3">
             {termMetrics.length > 0 ? termMetrics.map((semester) => {
-              const mark = semester.averageMark ?? 0;
-              const pct = ((mark - 35) / 65) * 100;
+              const gpa = semester.gpa ?? 0;
+              const pct = (gpa / 4) * 100;
               return (
                 <div key={semester.termCode} className="flex flex-1 flex-col items-center gap-1">
-                  <span className="text-[10px] font-semibold text-[#0f1e3c] sm:text-xs">{mark.toFixed(1)}</span>
+                  <span className="text-[10px] font-semibold text-[#0f1e3c] sm:text-xs">{gpa.toFixed(2)}</span>
                   <div className="flex h-[100px] w-full items-end sm:h-[140px]">
                     <div
                       className="w-full rounded-t-md bg-gradient-to-t from-[#2563eb] to-[#3b82f6] transition-all duration-500"
@@ -368,7 +361,7 @@ export default function AdvisorStudentDetailPage() {
               );
             }) : (
               <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-gray-200 text-sm text-gray-500">
-                Transcript marks will appear here once completed courses are available.
+                Transcript-derived GPA will appear here once completed courses are available.
               </div>
             )}
           </div>

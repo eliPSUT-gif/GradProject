@@ -37,7 +37,7 @@ export interface Recommendation { id: string; title: string; reason: string; act
 export interface EvaluationFactor { label: string; score: number; detail: string; }
 export interface ScheduleEvaluation { id: string; studentId: string; totalScore: number; riskLabel: RiskLabel; totalCredits: number; evaluatedAt: string; modelVersion: string; explanation: string[]; factors: EvaluationFactor[]; recommendations: Recommendation[]; topCourses: string[]; }
 export interface ScheduleDraft { id: string; studentId: string; name: string; courseCodes: string[]; savedAt: string; termCode: string; status: 'draft' | 'submitted' | 'archived'; evaluation: ScheduleEvaluation; }
-export interface StudentProfile { id: string; name: string; gpa: number; averageMark: number; creditsCompleted: number; department: string; advisorId: string; completedCourseCodes: string[]; admissionYear: number; admissionTerm: AdmissionTerm; }
+export interface StudentProfile { id: string; name: string; gpa: number; creditsCompleted: number; department: string; advisorId: string; completedCourseCodes: string[]; admissionYear: number; admissionTerm: AdmissionTerm; }
 export interface ManagedUser {
   id: string;
   name: string;
@@ -109,18 +109,17 @@ export const SEED_MANAGED_USERS: ManagedUser[] = [
 ];
 
 export const STUDENT_PROFILES: StudentProfile[] = [
-  { id: '20231001', name: 'Ahmad Hassan', gpa: 78, averageMark: 78, creditsCompleted: 74, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '20135', '20141', '20147', '20333', '20336', '22241', '22342'], admissionYear: 2023, admissionTerm: 'fall' },
-  { id: '20221045', name: 'Omar Al-Rashid', gpa: 71, averageMark: 71, creditsCompleted: 88, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11354', '11435', '12243', '12242', '12343', '14330', '20135', '20141', '20142', '20147', '20333', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
-  { id: '20221188', name: 'Sara Khalil', gpa: 74, averageMark: 74, creditsCompleted: 84, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342'], admissionYear: 2022, admissionTerm: 'fall' },
-  { id: '20220877', name: 'Lina Nasser', gpa: 79, averageMark: 79, creditsCompleted: 92, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11335', '11354', '11355', '11435', '11449', '12243', '12242', '12343', '13477', '14330', '20135', '20141', '20142', '20147', '20333', '20336', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
-  { id: '20220432', name: 'Karim Haddad', gpa: 84, averageMark: 84, creditsCompleted: 101, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11335', '11354', '11355', '11391', '11435', '11449', '11464', '11493', '12243', '12242', '12343', '13477', '14330', '20135', '20141', '20142', '20147', '20333', '20336', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
-  { id: '20221302', name: 'Nour Saleh', gpa: 86, averageMark: 86, creditsCompleted: 76, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11323', '11435', '12243', '20135', '20141', '20147', '22241', '22342'], admissionYear: 2022, admissionTerm: 'fall' },
-  { id: '20220665', name: 'Yousef Barakat', gpa: 76, averageMark: 76, creditsCompleted: 82, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342'], admissionYear: 2022, admissionTerm: 'fall' }
+  { id: '20231001', name: 'Ahmad Hassan', gpa: 3.12, creditsCompleted: 74, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '20135', '20141', '20147', '20333', '20336', '22241', '22342'], admissionYear: 2023, admissionTerm: 'fall' },
+  { id: '20221045', name: 'Omar Al-Rashid', gpa: 2.84, creditsCompleted: 88, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11354', '11435', '12243', '12242', '12343', '14330', '20135', '20141', '20142', '20147', '20333', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
+  { id: '20221188', name: 'Sara Khalil', gpa: 2.96, creditsCompleted: 84, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342'], admissionYear: 2022, admissionTerm: 'fall' },
+  { id: '20220877', name: 'Lina Nasser', gpa: 3.16, creditsCompleted: 92, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11335', '11354', '11355', '11435', '11449', '12243', '12242', '12343', '13477', '14330', '20135', '20141', '20142', '20147', '20333', '20336', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
+  { id: '20220432', name: 'Karim Haddad', gpa: 3.36, creditsCompleted: 101, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11335', '11354', '11355', '11391', '11435', '11449', '11464', '11493', '12243', '12242', '12343', '13477', '14330', '20135', '20141', '20142', '20147', '20333', '20336', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
+  { id: '20221302', name: 'Nour Saleh', gpa: 3.44, creditsCompleted: 76, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11323', '11435', '12243', '20135', '20141', '20147', '22241', '22342'], admissionYear: 2022, admissionTerm: 'fall' },
+  { id: '20220665', name: 'Yousef Barakat', gpa: 3.04, creditsCompleted: 82, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342'], admissionYear: 2022, admissionTerm: 'fall' }
 ];
 
 const DEMO_PROFILE_TEMPLATES = STUDENT_PROFILES.map((profile) => ({
   gpa: profile.gpa,
-  averageMark: profile.averageMark,
   creditsCompleted: profile.creditsCompleted,
   department: profile.department,
   completedCourseCodes: [...profile.completedCourseCodes],
@@ -148,7 +147,7 @@ export function getInitials(name: string) { return name.split(' ').filter(Boolea
 function hashSeedToIndex(seed: string, size: number) { if (size <= 0) return 0; const hash = seed.split('').reduce((sum, character, index) => sum + character.charCodeAt(0) * (index + 1), 0); return hash % size; }
 export function buildDemoStudentProfile(student: Pick<ManagedUser, 'id' | 'name'>, advisorId: string | null, templateIndex?: number): StudentProfile {
   const template = DEMO_PROFILE_TEMPLATES[templateIndex ?? hashSeedToIndex(student.id, DEMO_PROFILE_TEMPLATES.length)] ?? DEMO_PROFILE_TEMPLATES[0];
-  return { id: student.id, name: student.name, gpa: template.gpa, averageMark: template.averageMark, creditsCompleted: template.creditsCompleted, department: template.department, advisorId: advisorId ?? '', completedCourseCodes: [...template.completedCourseCodes], admissionYear: template.admissionYear, admissionTerm: template.admissionTerm };
+  return { id: student.id, name: student.name, gpa: template.gpa, creditsCompleted: template.creditsCompleted, department: template.department, advisorId: advisorId ?? '', completedCourseCodes: [...template.completedCourseCodes], admissionYear: template.admissionYear, admissionTerm: template.admissionTerm };
 }
 export function getCourseName(code: string) { return BASE_COURSES.find((course) => course.code === code)?.name ?? EXTERNAL_PREREQUISITES[code] ?? code; }
 export function formatRequirementText(course: Pick<CourseBlueprint, 'prerequisites' | 'concurrentCourses' | 'minimumCompletedCredits'>) { const lines: string[] = []; course.prerequisites.forEach((code) => lines.push(`Prerequisite: ${getCourseName(code)}`)); course.concurrentCourses.forEach((code) => lines.push(`Concurrent: ${getCourseName(code)}`)); if (course.minimumCompletedCredits) lines.push(`Complete ${course.minimumCompletedCredits} credit hours`); return lines; }
@@ -334,7 +333,7 @@ export function buildStudentInsights(profiles: StudentProfile[], drafts: Schedul
     return { ...profile, difficulty: score, status: getRiskStatus(score, profile.gpa), latestEvaluation, activeDraft: latestDraft };
   });
 }
-export function getRiskStatus(score: number, gpa: number): RiskStatus { if (score >= 75 || (score >= 68 && gpa < 77.5)) return 'at-risk'; if (score >= 50 || (score >= 42 && gpa < 81.25)) return 'monitor'; return 'good'; }
+export function getRiskStatus(score: number, gpa: number): RiskStatus { if (score >= 75 || (score >= 68 && gpa < 3.1)) return 'at-risk'; if (score >= 50 || (score >= 42 && gpa < 3.25)) return 'monitor'; return 'good'; }
 
 
 

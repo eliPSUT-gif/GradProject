@@ -208,8 +208,8 @@ language sql
 immutable
 as $$
   select case
-    when coalesce(total_score, 0) >= 75 or (coalesce(total_score, 0) >= 68 and coalesce(gpa, 0) < 77.50) then 'at-risk'
-    when coalesce(total_score, 0) >= 50 or (coalesce(total_score, 0) >= 42 and coalesce(gpa, 0) < 81.25) then 'monitor'
+    when coalesce(total_score, 0) >= 75 or (coalesce(total_score, 0) >= 68 and coalesce(gpa, 0) < 3.10) then 'at-risk'
+    when coalesce(total_score, 0) >= 50 or (coalesce(total_score, 0) >= 42 and coalesce(gpa, 0) < 3.25) then 'monitor'
     else 'good'
   end
 $$;
@@ -236,8 +236,7 @@ select
   coalesce(at.term_type, public.term_type_from_term_name(public.term_name_from_code(ste.term_code))) as term_type,
   count(*)::integer as course_count,
   coalesce(sum(case when ste.status = 'passed' then c.credits else 0 end), 0)::integer as completed_credits,
-  round(avg(public.normalize_transcript_mark(ste.final_grade))::numeric, 2) as average_mark,
-  round(avg(public.normalize_transcript_mark(ste.final_grade))::numeric, 2) as gpa
+  round((avg(public.normalize_transcript_mark(ste.final_grade)) * 4 / 100.0)::numeric, 2) as gpa
 from public.student_transcript_entries ste
 join public.courses c on c.id = ste.course_id
 left join public.academic_terms at on at.term_code = ste.term_code
@@ -250,7 +249,7 @@ create or replace view public.student_dashboard_summary_v as
 with transcript_marks as (
   select
     ste.student_id,
-    round(avg(public.normalize_transcript_mark(ste.final_grade))::numeric, 2) as average_mark
+    round((avg(public.normalize_transcript_mark(ste.final_grade)) * 4 / 100.0)::numeric, 2) as gpa
   from public.student_transcript_entries ste
   where ste.final_grade is not null
   group by ste.student_id
@@ -296,8 +295,7 @@ select
   student_user.id as student_id,
   student_user.university_id,
   student_user.full_name as student_name,
-  coalesce(transcript_marks.average_mark, 0) as gpa,
-  coalesce(transcript_marks.average_mark, 0) as average_mark,
+  coalesce(transcript_marks.gpa, 0) as gpa,
   coalesce(completed_credit_totals.completed_credits, 0) as completed_credits,
   sp.admission_year,
   sp.admission_term,
@@ -331,6 +329,9 @@ select
   public.get_dashboard_risk_status(summary.latest_total_score, summary.gpa) as risk_status
 from public.student_dashboard_summary_v summary
 where summary.advisor_id is not null;
+
+alter table public.student_profiles
+  drop column if exists average_mark;
 
 drop table if exists public.student_completed_courses;
 
