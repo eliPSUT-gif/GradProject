@@ -75,6 +75,8 @@ export interface StudentTranscriptRow {
   courseName: string;
   credits: number;
   finalGrade: number | null;
+  status: 'passed' | 'failed' | 'withdrawn' | 'in_progress';
+  attemptNo: number;
 }
 
 export interface StudentTermMetric {
@@ -130,6 +132,13 @@ interface AppDataContextType {
 }
 
 interface AppDataState {
+  academicTerms: {
+    termCode: string;
+    academicYear: number;
+    termName: AdmissionTerm;
+    termType: TermType;
+    maxCredits: number;
+  }[];
   courses: Course[];
   currentEvaluations: Record<string, ScheduleEvaluation | null>;
   historicalStats: HistoricalCourseStat[];
@@ -196,11 +205,12 @@ interface HistoricalStatRow {
 }
 
 interface StudentProfileRow {
-  user_id: string;
-  department_id: string;
+  student_id: string;
+  student_name: string;
+  department_name: string;
   advisor_id: string | null;
   gpa: number;
-  average_mark: number | null;
+  average_mark: number;
   admission_year: number | null;
   admission_term: AdmissionTerm | null;
   completed_credits: number;
@@ -208,9 +218,14 @@ interface StudentProfileRow {
 
 interface StudentCompletedCourseRow {
   student_id: string;
-  course_id: string;
-  completed_term_code: string | null;
+  term_code: string;
+  term_type: TermType;
+  course_code: string;
+  course_name: string;
+  credits: number;
   final_grade: number | null;
+  status: 'passed' | 'failed' | 'withdrawn' | 'in_progress';
+  attempt_no: number;
 }
 
 interface ScheduleDraftRow {
@@ -261,6 +276,15 @@ interface StudentTermMetricRow {
   course_count: number;
   completed_credits: number;
   average_mark: number | null;
+  gpa: number | null;
+}
+
+interface AcademicTermRow {
+  term_code: string;
+  academic_year: number;
+  term_name: AdmissionTerm;
+  term_type: TermType;
+  max_credits: number;
 }
 
 const EMPTY_SELECTION_STATUS: SelectionStatus = {
@@ -348,6 +372,7 @@ function buildDemoState(): AppDataState {
   ) as Record<string, string>;
 
   return {
+    academicTerms: [],
     courses,
     currentEvaluations,
     historicalStats,
@@ -366,6 +391,7 @@ function buildDemoState(): AppDataState {
 
 function buildEmptyRemoteState(): AppDataState {
   return {
+    academicTerms: [],
     courses: [],
     currentEvaluations: {},
     historicalStats: [],
@@ -450,6 +476,7 @@ function normalizeImportRows(raw: string) {
 
 async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
   const [
+    academicTermRows,
     departments,
     settings,
     courseRows,
@@ -458,13 +485,14 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     ruleRows,
     statRows,
     profileRows,
-    completedRows,
+    transcriptViewRows,
     draftRows,
     draftCourseRows,
     evaluationRows,
     importJobRows,
     termMetricRows,
   ] = await Promise.all([
+    supabaseSelect<AcademicTermRow[]>('academic_terms', 'select=term_code,academic_year,term_name,term_type,max_credits'),
     supabaseSelect<DepartmentRow[]>('departments', 'select=id,name'),
     supabaseSelect<AppSettingRow[]>('app_settings', 'select=key,value_json'),
     supabaseSelect<CourseRow[]>(
@@ -478,8 +506,8 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'historical_course_stats',
       'select=id,course_id,term_code,avg_grade,pass_rate,fail_rate,enrollment_count,withdrawals'
     ),
-    supabaseSelect<StudentProfileRow[]>('student_profiles', 'select=user_id,department_id,advisor_id,gpa,average_mark,admission_year,admission_term,completed_credits'),
-    supabaseSelect<StudentCompletedCourseRow[]>('student_completed_courses', 'select=student_id,course_id,completed_term_code,final_grade'),
+    supabaseSelect<StudentProfileRow[]>('student_dashboard_summary_v', 'select=student_id,student_name,department_name,advisor_id,gpa,average_mark,admission_year,admission_term,completed_credits'),
+    supabaseSelect<StudentCompletedCourseRow[]>('student_transcript_v', 'select=student_id,term_code,term_type,course_code,course_name,credits,final_grade,status,attempt_no'),
     supabaseSelect<ScheduleDraftRow[]>('schedule_drafts', 'select=id,student_id,name,term_code,status,saved_at&order=saved_at.desc'),
     supabaseSelect<ScheduleDraftCourseRow[]>('schedule_draft_courses', 'select=schedule_id,course_id'),
     supabaseSelect<ScheduleEvaluationRow[]>(
@@ -490,12 +518,11 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'import_jobs',
       'select=id,file_name,format,imported_rows,rejected_rows,status,validation_messages,errors,created_at&order=created_at.desc'
     ),
-    supabaseSelect<StudentTermMetricRow[]>('student_term_metrics', 'select=student_id,term_code,term_type,course_count,completed_credits,average_mark&order=term_code.desc'),
+    supabaseSelect<StudentTermMetricRow[]>('student_term_metrics_v', 'select=student_id,term_code,term_type,course_count,completed_credits,average_mark,gpa&order=term_code.desc'),
   ]);
 
   const departmentById = new Map(departments.map((department) => [department.id, department.name]));
   const courseCodeById = new Map(courseRows.map((course) => [course.id, course.course_code]));
-  const courseById = new Map(courseRows.map((course) => [course.id, course]));
 
   const prerequisiteCodesByCourseId = new Map<string, string[]>();
   prerequisiteRows.forEach((row) => {
@@ -592,31 +619,42 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     .sort((left, right) => right.localeCompare(left))[0] ?? MODEL_LAST_CALCULATED_AT;
 
   const appUsersByAppId = new Map(users.filter((account) => account.appUserId).map((account) => [account.appUserId!, account]));
-  const completedCourseCodesByStudentId = new Map<string, string[]>();
+  const academicTerms = academicTermRows
+    .map((row) => ({
+      termCode: row.term_code,
+      academicYear: row.academic_year,
+      termName: row.term_name,
+      termType: row.term_type,
+      maxCredits: row.max_credits,
+    }))
+    .sort((left, right) => compareTermCodesNewestFirst(right.termCode, left.termCode));
+
+  const completedCourseCodesByStudentId = new Map<string, Set<string>>();
   const transcriptRows: StudentTranscriptRow[] = [];
-  completedRows.forEach((row) => {
+  transcriptViewRows.forEach((row) => {
     const studentUniversityId = appUsersByAppId.get(row.student_id)?.id;
-    const courseCode = courseCodeById.get(row.course_id);
-    const course = courseById.get(row.course_id);
-    if (!studentUniversityId || !courseCode || !course) {
+    if (!studentUniversityId) {
       return;
     }
 
-    completedCourseCodesByStudentId.set(studentUniversityId, [
-      ...(completedCourseCodesByStudentId.get(studentUniversityId) ?? []),
-      courseCode,
-    ]);
+    if (row.status === 'passed') {
+      const existingCompleted = completedCourseCodesByStudentId.get(studentUniversityId) ?? new Set<string>();
+      existingCompleted.add(row.course_code);
+      completedCourseCodesByStudentId.set(studentUniversityId, existingCompleted);
+    }
 
-    const termCode = row.completed_term_code ?? 'Unspecified';
+    const termCode = row.term_code;
     transcriptRows.push({
       studentId: studentUniversityId,
       termCode,
       termLabel: formatTermLabel(termCode),
-      termType: /summer/i.test(termCode) ? 'summer' : 'regular',
-      courseCode,
-      courseName: course.title,
-      credits: course.credits,
+      termType: row.term_type,
+      courseCode: row.course_code,
+      courseName: row.course_name,
+      credits: row.credits,
       finalGrade: row.final_grade === null ? null : Number(row.final_grade),
+      status: row.status,
+      attemptNo: row.attempt_no,
     });
   });
   transcriptRows.sort((left, right) => {
@@ -625,11 +663,16 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       return termCompare;
     }
 
+    const attemptCompare = (right.attemptNo ?? 1) - (left.attemptNo ?? 1);
+    if (attemptCompare !== 0) {
+      return attemptCompare;
+    }
+
     return left.courseCode.localeCompare(right.courseCode);
   });
 
   const remoteProfiles = profileRows.flatMap((row) => {
-    const student = appUsersByAppId.get(row.user_id);
+    const student = appUsersByAppId.get(row.student_id);
     if (!student) {
       return [];
     }
@@ -638,13 +681,13 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
 
     return [{
       id: student.id,
-      name: student.name,
-      gpa: Number(row.average_mark ?? row.gpa ?? 0),
+      name: row.student_name,
+      gpa: Number(row.gpa ?? 0),
       averageMark: Number(row.average_mark ?? 0),
       creditsCompleted: row.completed_credits,
-      department: departmentById.get(row.department_id) ?? 'Computer Science',
+      department: row.department_name,
       advisorId: advisor?.id ?? '',
-      completedCourseCodes: completedCourseCodesByStudentId.get(student.id) ?? [],
+      completedCourseCodes: [...(completedCourseCodesByStudentId.get(student.id) ?? new Set<string>())],
       admissionYear: row.admission_year ?? (Number(student.id.slice(0, 4)) || new Date().getFullYear()),
       admissionTerm: row.admission_term ?? 'fall',
     } satisfies StudentProfile];
@@ -717,7 +760,23 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
   const plannerTermCodes = Object.fromEntries(
     studentProfiles.map((profile) => {
       const latestDraft = latestDraftByStudentId.get(profile.id);
-      const availableTerms = buildAvailableTerms(profile.admissionYear, profile.admissionTerm);
+      const availableTerms = academicTerms.length > 0
+        ? academicTerms
+            .filter((term) => {
+              if (term.academicYear > profile.admissionYear) {
+                return true;
+              }
+
+              if (term.academicYear < profile.admissionYear) {
+                return false;
+              }
+
+              const termOrder = term.termName === 'spring' ? 1 : term.termName === 'summer' ? 2 : 3;
+              const admissionOrder = profile.admissionTerm === 'spring' ? 1 : profile.admissionTerm === 'summer' ? 2 : 3;
+              return termOrder >= admissionOrder;
+            })
+            .sort((left, right) => compareTermCodesNewestFirst(right.termCode, left.termCode))
+        : buildAvailableTerms(profile.admissionYear, profile.admissionTerm);
       return [profile.id, latestDraft?.termCode ?? availableTerms[0]?.termCode ?? `${new Date().getFullYear()}-Spring`];
     })
   ) as Record<string, string>;
@@ -751,6 +810,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
   }).sort((left, right) => compareTermCodesNewestFirst(left.termCode, right.termCode));
 
   return {
+    academicTerms,
     courses,
     currentEvaluations,
     historicalStats,
@@ -836,9 +896,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         return [];
       }
 
-      return buildAvailableTerms(profile.admissionYear, profile.admissionTerm);
+      if (state.academicTerms.length === 0) {
+        return buildAvailableTerms(profile.admissionYear, profile.admissionTerm);
+      }
+
+      return state.academicTerms
+        .filter((term) => {
+          if (term.academicYear > profile.admissionYear) {
+            return true;
+          }
+
+          if (term.academicYear < profile.admissionYear) {
+            return false;
+          }
+
+          const termOrder = term.termName === 'spring' ? 1 : term.termName === 'summer' ? 2 : 3;
+          const admissionOrder = profile.admissionTerm === 'spring' ? 1 : profile.admissionTerm === 'summer' ? 2 : 3;
+          return termOrder >= admissionOrder;
+        })
+        .sort((left, right) => compareTermCodesNewestFirst(right.termCode, left.termCode))
+        .map((term) => ({ termCode: term.termCode, termType: term.termType }));
     },
-    [getStudentProfile]
+    [getStudentProfile, state.academicTerms]
   );
 
   const getPlannerTermCode = useCallback(
@@ -847,8 +926,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   );
 
   const getTermCreditLimit = useCallback(
-    (studentId: string) => getCreditLimitForTermCode(getPlannerTermCode(studentId)),
-    [getPlannerTermCode]
+    (studentId: string) => {
+      const termCode = getPlannerTermCode(studentId);
+      const matchingTerm = state.academicTerms.find((term) => term.termCode === termCode);
+      return matchingTerm?.maxCredits ?? getCreditLimitForTermCode(termCode);
+    },
+    [getPlannerTermCode, state.academicTerms]
   );
 
   const getSelectedCourses = useCallback(
@@ -894,12 +977,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
 
       const transcript = getStudentTranscript(studentId);
-      const gradeByCode = new Map(transcript.map((row) => [row.courseCode, row.finalGrade]));
+      const latestTranscriptByCode = new Map<string, StudentTranscriptRow>();
+      transcript.forEach((row) => {
+        if (!latestTranscriptByCode.has(row.courseCode)) {
+          latestTranscriptByCode.set(row.courseCode, row);
+        }
+      });
 
       return course.prerequisites.map((code) => ({
         code,
         name: state.courses.find((item) => item.code === code)?.name ?? code,
-        grade: gradeByCode.get(code) ?? null,
+        grade: latestTranscriptByCode.get(code)?.finalGrade ?? null,
       }));
     },
     [getStudentTranscript, state.courses]

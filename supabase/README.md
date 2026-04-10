@@ -14,8 +14,13 @@ Why:
 
 ## Files
 
-- `001_schema.sql`: core tables, constraints, indexes, helper trigger, and app settings
-- `002_seed.sql`: demo departments, users, profiles, courses, prerequisite rules, historical stats, completed courses, drafts, evaluations, and messages
+- `001_schema.sql`: original core schema
+- `002_seed.sql`: demo seed data
+- `003_realtime_messaging.sql`: messaging auth/read state helpers
+- `004_broadcast_messaging.sql`: broadcast-based chat authorization
+- `005_dashboard_backend.sql`: first dashboard/transcript backend pass
+- `006_sync_gpa_with_average_mark.sql`: no-op compatibility migration
+- `007_transcript_first_academic_schema.sql`: transcript-first academic cleanup and new derived views
 
 ## Import Order
 
@@ -23,6 +28,11 @@ Why:
 2. Open the SQL Editor.
 3. Run `supabase/001_schema.sql`.
 4. Run `supabase/002_seed.sql`.
+5. Run `supabase/003_realtime_messaging.sql`.
+6. Run `supabase/004_broadcast_messaging.sql`.
+7. Run `supabase/005_dashboard_backend.sql`.
+8. Run `supabase/006_sync_gpa_with_average_mark.sql`.
+9. Run `supabase/007_transcript_first_academic_schema.sql`.
 
 ## What To Send Me After Import
 

@@ -463,7 +463,7 @@ export default function AdvisorStudentDetailPage() {
                       </thead>
                       <tbody>
                         {rows.map((row) => (
-                          <tr key={`${row.termCode}-${row.courseCode}`} className="border-b border-gray-50 last:border-0">
+                          <tr key={`${row.termCode}-${row.courseCode}-${row.attemptNo}`} className="border-b border-gray-50 last:border-0">
                             <td className="px-4 py-3 font-mono font-semibold text-[#0f1e3c]">{row.courseCode}</td>
                             <td className="px-4 py-3 text-gray-700">{row.courseName}</td>
                             <td className="px-4 py-3 text-center text-gray-600">{row.credits}</td>
