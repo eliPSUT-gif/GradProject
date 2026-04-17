@@ -1,5 +1,5 @@
-import { useDeferredValue, useMemo, useState } from 'react';
-import { AlertTriangle, BookOpen, CheckCircle2, Lock, Save, Search, Sparkles, Trash2, X } from 'lucide-react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, BookOpen, CheckCircle2, Gauge, Lightbulb, Lock, Save, Search, Sparkles, Trash2, TrendingUp, X } from 'lucide-react';
 import { formatTermLabel, getDiffLabel, type Course } from '../../data/courses';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
@@ -47,7 +47,21 @@ export default function CoursePlanner() {
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_FILTERS)[number]>('All');
   const [draftName, setDraftName] = useState('My Next Schedule');
   const [plannerError, setPlannerError] = useState<string | null>(null);
+  const [shouldScrollToResults, setShouldScrollToResults] = useState(false);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const deferredSearch = useDeferredValue(search);
+
+  useEffect(() => {
+    if (shouldScrollToResults && analysisResult && resultsRef.current) {
+      const node = resultsRef.current;
+      const scrollId = window.setTimeout(() => {
+        node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 60);
+      setShouldScrollToResults(false);
+      return () => window.clearTimeout(scrollId);
+    }
+    return undefined;
+  }, [shouldScrollToResults, analysisResult]);
 
   const filtered = useMemo(() => {
     return courses.filter((course) => {
@@ -67,6 +81,7 @@ export default function CoursePlanner() {
 
     setPlannerError(null);
     analyzeSchedule(studentId);
+    setShouldScrollToResults(true);
   };
 
   const handleToggle = (code: string) => {
@@ -88,7 +103,11 @@ export default function CoursePlanner() {
     );
   }
 
+  const overallDiff = analysisResult ? getDiffLabel(analysisResult.totalScore) : null;
+  const scoreDash = 2 * Math.PI * 42;
+
   return (
+    <div className="space-y-6 sm:space-y-8">
     <div className="flex items-start gap-4 max-lg:flex-col sm:gap-6">
       <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -176,10 +195,246 @@ export default function CoursePlanner() {
           </div>
         </div>
 
-        {analysisResult && <div className="space-y-4 rounded-xl bg-[#0f1e3c] p-5 text-white"><div className="flex items-center gap-4"><div className="text-center"><p className="font-display text-4xl font-bold" style={{ color: getDiffLabel(analysisResult.totalScore).color }}>{analysisResult.totalScore}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-gray-400">Difficulty Score</p></div><div className="h-16 w-px bg-gray-600" /><div className="flex-1 space-y-2.5">{analysisResult.factors.map((factor) => (<div key={factor.label}><div className="mb-0.5 flex items-center justify-between text-[10px]"><span className="text-gray-400">{factor.label}</span><span className="font-semibold">{factor.score}</span></div><div className="h-1.5 rounded-full bg-gray-700"><div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(factor.score, 100)}%`, backgroundColor: getDiffLabel(factor.score).color }} /></div><p className="mt-1 text-[10px] text-gray-400">{factor.detail}</p></div>))}</div></div><div className="rounded-lg bg-white/5 p-4 text-sm text-blue-50"><p className="mb-2 font-semibold">Explainability summary</p><ul className="space-y-2 text-xs leading-relaxed">{analysisResult.explanation.map((line) => <li key={line}>{line}</li>)}</ul></div><div className="rounded-lg bg-amber-50 p-4 text-slate-800"><div className="mb-2 flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-600" /><span className="text-xs font-bold text-amber-800">Actionable recommendations</span></div><div className="space-y-3 text-xs leading-relaxed text-amber-900">{analysisResult.recommendations.map((recommendation) => (<div key={recommendation.id} className="rounded-lg bg-white/70 p-3"><p className="font-semibold">{recommendation.title}</p><p className="mt-1">{recommendation.reason}</p><p className="mt-1">{recommendation.action}</p><p className="mt-1 font-semibold">{recommendation.expectedImpact}</p></div>))}</div></div></div>}
-
         <div className="rounded-xl border border-gray-200 bg-white p-5"><div className="mb-4 flex items-center justify-between"><h3 className="flex items-center gap-2 text-sm font-bold text-[#0f1e3c]"><BookOpen className="h-4 w-4 text-[#2563eb]" />Saved Drafts</h3><span className="text-xs text-gray-400">{savedDrafts.length} saved</span></div><div className="space-y-3">{savedDrafts.length > 0 ? savedDrafts.slice(0, 4).map((draft) => (<div key={draft.id} className="rounded-xl border border-gray-200 p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-[#0f1e3c]">{draft.name}</p><p className="text-xs text-gray-500">{draft.evaluation.totalCredits} credits | {draft.courseCodes.length} courses</p></div><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDiffLabel(draft.evaluation.totalScore).cls}`}>{draft.evaluation.totalScore}</span></div><div className="mt-3 flex gap-2"><button onClick={() => { loadScheduleDraft(studentId, draft.id); setPlannerError(null); }} className="rounded-lg bg-[#2563eb]/5 px-3 py-2 text-xs font-semibold text-[#2563eb] transition-colors hover:bg-[#2563eb]/10">Load</button><button onClick={() => deleteScheduleDraft(draft.id)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-500 transition-colors hover:border-red-200 hover:text-red-500"><Trash2 className="h-3.5 w-3.5" />Remove</button></div></div>)) : <p className="rounded-lg border border-dashed border-gray-300 p-3 text-xs text-gray-500">Save a draft after analyzing your schedule to revisit it later.</p>}</div></div>
       </div>
+    </div>
+
+    {analysisResult && overallDiff && (
+      <section
+        ref={resultsRef}
+        className="scroll-mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500"
+        aria-label="Schedule analysis results"
+      >
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0b1630] via-[#0f1e3c] to-[#1b2e5a] shadow-2xl ring-1 ring-white/10">
+          {/* Decorative glow accents */}
+          <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-[#2563eb]/25 blur-3xl" />
+          <div
+            className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full blur-3xl"
+            style={{ backgroundColor: `${overallDiff.color}35` }}
+          />
+
+          {/* Header row */}
+          <div className="relative flex flex-col gap-6 border-b border-white/10 p-6 sm:p-8 lg:flex-row lg:items-center">
+            <div className="flex items-center gap-5 sm:gap-6">
+              {/* Circular score gauge */}
+              <div className="relative h-32 w-32 shrink-0 sm:h-36 sm:w-36">
+                <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
+                  <circle cx="50" cy="50" r="42" strokeWidth="6" stroke="rgba(255,255,255,0.08)" fill="none" />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="42"
+                    strokeWidth="6"
+                    stroke={overallDiff.color}
+                    fill="none"
+                    strokeDasharray={scoreDash}
+                    strokeDashoffset={scoreDash * (1 - Math.min(analysisResult.totalScore, 100) / 100)}
+                    strokeLinecap="round"
+                    className="transition-all duration-1000 ease-out drop-shadow-[0_0_10px_rgba(255,255,255,0.25)]"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="font-display text-4xl font-bold text-white leading-none sm:text-5xl">
+                    {analysisResult.totalScore}
+                  </span>
+                  <span className="mt-1 text-[10px] uppercase tracking-[0.18em] text-gray-400">of 100</span>
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-300">
+                  <Sparkles className="h-3 w-3" /> Analysis Complete
+                </div>
+                <h2 className="mt-1 font-display text-2xl font-bold text-white sm:text-3xl">
+                  Schedule Difficulty
+                </h2>
+                <p className="mt-1 text-xs text-gray-300 sm:text-sm">
+                  {formatTermLabel(plannerTermCode)} &middot; {selectedCourses.length} course{selectedCourses.length !== 1 ? 's' : ''} &middot; {totalCredits} credit{totalCredits !== 1 ? 's' : ''}
+                </p>
+                <div
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1"
+                  style={{
+                    backgroundColor: `${overallDiff.color}22`,
+                    color: overallDiff.color,
+                    borderColor: `${overallDiff.color}55`,
+                  }}
+                >
+                  <Gauge className="h-3.5 w-3.5" />
+                  {overallDiff.label} difficulty
+                </div>
+              </div>
+            </div>
+
+            {/* Factor breakdown grid */}
+            <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:ml-6">
+              {analysisResult.factors.map((factor) => {
+                const factorDiff = getDiffLabel(factor.score);
+                return (
+                  <div
+                    key={factor.label}
+                    className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur-sm transition-transform hover:-translate-y-0.5 hover:bg-white/10"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-300">
+                        {factor.label}
+                      </span>
+                      <span
+                        className="font-display text-xl font-bold"
+                        style={{ color: factorDiff.color }}
+                      >
+                        {factor.score}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full transition-all duration-1000 ease-out"
+                        style={{
+                          width: `${Math.min(factor.score, 100)}%`,
+                          backgroundColor: factorDiff.color,
+                          boxShadow: `0 0 10px ${factorDiff.color}55`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-2 text-[11px] leading-relaxed text-gray-400">
+                      {factor.detail}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Body: course breakdown + notes + recommendations */}
+          <div className="grid gap-4 p-4 sm:gap-5 sm:p-6 lg:grid-cols-3">
+            {/* Course Breakdown */}
+            <div className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10 backdrop-blur-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2563eb]/20 ring-1 ring-[#2563eb]/40">
+                  <BookOpen className="h-4 w-4 text-[#60a5fa]" />
+                </div>
+                <h3 className="text-sm font-bold text-white">Course Breakdown</h3>
+              </div>
+              <div className="space-y-2.5">
+                {selectedCourses.map((course) => {
+                  const d = getDiffLabel(course.diffScore);
+                  return (
+                    <div
+                      key={course.code}
+                      className="rounded-xl bg-black/25 p-3 ring-1 ring-white/5 transition-colors hover:bg-black/35"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-mono text-xs font-bold text-white">{course.code}</span>
+                            <span
+                              className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold capitalize ${typeTag(
+                                course.type,
+                              )}`}
+                            >
+                              {course.type}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs leading-snug text-gray-200">{course.name}</p>
+                          <p className="mt-0.5 text-[10px] text-gray-400">
+                            {course.credits} credit{course.credits !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                        <span
+                          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1"
+                          style={{
+                            backgroundColor: `${d.color}22`,
+                            color: d.color,
+                            borderColor: `${d.color}55`,
+                          }}
+                        >
+                          {course.diffScore}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-full rounded-full transition-all duration-700 ease-out"
+                          style={{
+                            width: `${course.diffScore}%`,
+                            backgroundColor: d.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Notes & rationale */}
+            <div className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10 backdrop-blur-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 ring-1 ring-emerald-400/40">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                </div>
+                <h3 className="text-sm font-bold text-white">Notes &amp; Rationale</h3>
+              </div>
+              {analysisResult.explanation.length === 0 ? (
+                <p className="text-xs text-gray-400">No additional notes for this schedule.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {analysisResult.explanation.map((line, idx) => (
+                    <li
+                      key={line}
+                      className="flex gap-2.5 text-xs leading-relaxed text-gray-200"
+                    >
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-[10px] font-bold text-emerald-300 ring-1 ring-emerald-400/40">
+                        {idx + 1}
+                      </span>
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Recommendations */}
+            <div className="rounded-2xl bg-gradient-to-br from-amber-400/15 via-amber-500/10 to-orange-500/5 p-5 ring-1 ring-amber-300/30 backdrop-blur-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-400/25 ring-1 ring-amber-300/50">
+                  <Lightbulb className="h-4 w-4 text-amber-200" />
+                </div>
+                <h3 className="text-sm font-bold text-amber-100">Recommendations</h3>
+              </div>
+              {analysisResult.recommendations.length === 0 ? (
+                <div className="flex items-start gap-2 rounded-xl bg-black/20 p-3 text-xs text-gray-200 ring-1 ring-white/5">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                  <span>Your schedule looks well-balanced &mdash; no adjustments needed.</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {analysisResult.recommendations.map((rec) => (
+                    <div
+                      key={rec.id}
+                      className="rounded-xl bg-black/30 p-3.5 ring-1 ring-amber-300/15 transition-colors hover:bg-black/40"
+                    >
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />
+                        <p className="text-xs font-bold text-amber-100">{rec.title}</p>
+                      </div>
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-gray-300">{rec.reason}</p>
+                      <p className="mt-2 text-[11px] leading-relaxed text-gray-200">
+                        <span className="font-semibold text-amber-200">Action: </span>
+                        {rec.action}
+                      </p>
+                      <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-emerald-500/10 px-2 py-1.5 ring-1 ring-emerald-400/20">
+                        <TrendingUp className="mt-0.5 h-3 w-3 shrink-0 text-emerald-300" />
+                        <p className="text-[11px] font-semibold leading-snug text-emerald-200">
+                          {rec.expectedImpact}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    )}
     </div>
   );
 }
