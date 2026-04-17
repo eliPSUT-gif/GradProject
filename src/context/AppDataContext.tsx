@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  buildAvailableTerms,
+  buildRegisterableTerms,
   buildCourses,
   buildSeedDrafts,
   buildSeedHistoricalStats,
@@ -757,24 +757,9 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
   const plannerTermCodes = Object.fromEntries(
     studentProfiles.map((profile) => {
       const latestDraft = latestDraftByStudentId.get(profile.id);
-      const availableTerms = academicTerms.length > 0
-        ? academicTerms
-            .filter((term) => {
-              if (term.academicYear > profile.admissionYear) {
-                return true;
-              }
-
-              if (term.academicYear < profile.admissionYear) {
-                return false;
-              }
-
-              const termOrder = term.termName === 'spring' ? 1 : term.termName === 'summer' ? 2 : 3;
-              const admissionOrder = profile.admissionTerm === 'spring' ? 1 : profile.admissionTerm === 'summer' ? 2 : 3;
-              return termOrder >= admissionOrder;
-            })
-            .sort((left, right) => compareTermCodesNewestFirst(right.termCode, left.termCode))
-        : buildAvailableTerms(profile.admissionYear, profile.admissionTerm);
-      return [profile.id, latestDraft?.termCode ?? availableTerms[0]?.termCode ?? `${new Date().getFullYear()}-Spring`];
+      const availableTerms = buildRegisterableTerms(profile.admissionYear, profile.admissionTerm);
+      const registerableTermCode = availableTerms[0]?.termCode ?? `${new Date().getFullYear()}-Spring`;
+      return [profile.id, latestDraft?.termCode === registerableTermCode ? latestDraft.termCode : registerableTermCode];
     })
   ) as Record<string, string>;
 
@@ -893,28 +878,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         return [];
       }
 
-      if (state.academicTerms.length === 0) {
-        return buildAvailableTerms(profile.admissionYear, profile.admissionTerm);
-      }
-
-      return state.academicTerms
-        .filter((term) => {
-          if (term.academicYear > profile.admissionYear) {
-            return true;
-          }
-
-          if (term.academicYear < profile.admissionYear) {
-            return false;
-          }
-
-          const termOrder = term.termName === 'spring' ? 1 : term.termName === 'summer' ? 2 : 3;
-          const admissionOrder = profile.admissionTerm === 'spring' ? 1 : profile.admissionTerm === 'summer' ? 2 : 3;
-          return termOrder >= admissionOrder;
-        })
-        .sort((left, right) => compareTermCodesNewestFirst(right.termCode, left.termCode))
-        .map((term) => ({ termCode: term.termCode, termType: term.termType }));
+      return buildRegisterableTerms(profile.admissionYear, profile.admissionTerm);
     },
-    [getStudentProfile, state.academicTerms]
+    [getStudentProfile]
   );
 
   const getPlannerTermCode = useCallback(
@@ -1089,9 +1055,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const loadScheduleDraft = useCallback(
     (studentId: string, draftId: string) => {
       const draft = state.scheduleDrafts.find((item) => item.id === draftId && item.studentId === studentId);
+      const profile = getStudentProfile(studentId);
       if (!draft) {
         return;
       }
+
+      const registerableTermCode = profile
+        ? buildRegisterableTerms(profile.admissionYear, profile.admissionTerm)[0]?.termCode ?? draft.termCode
+        : draft.termCode;
 
       setState((current) => ({
         ...current,
@@ -1101,7 +1072,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         },
         plannerTermCodes: {
           ...current.plannerTermCodes,
-          [studentId]: draft.termCode,
+          [studentId]: draft.termCode === registerableTermCode ? draft.termCode : registerableTermCode,
         },
         currentEvaluations: {
           ...current.currentEvaluations,
@@ -1109,7 +1080,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         },
       }));
     },
-    [state.scheduleDrafts]
+    [getStudentProfile, state.scheduleDrafts]
   );
 
   const saveScheduleDraft = useCallback(

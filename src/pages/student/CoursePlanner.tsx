@@ -128,7 +128,7 @@ export default function CoursePlanner() {
     <div className="flex items-start gap-4 max-lg:flex-col sm:gap-6">
       <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="min-w-[180px]">
+          <div className="min-w-[220px] flex-[1_1_18rem] sm:min-w-[260px]">
             <select
               value={plannerTermCode}
               onChange={(event) => setPlannerTermCode(studentId, event.target.value)}
@@ -141,11 +141,11 @@ export default function CoursePlanner() {
               ))}
             </select>
           </div>
-          <div className="relative min-w-0 flex-1">
+          <div className="relative min-w-[220px] flex-[1_1_16rem] sm:min-w-[260px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input type="text" placeholder="Search courses..." value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm transition-all focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30" />
           </div>
-          <div className="flex gap-1.5 max-sm:flex-wrap">
+          <div className="flex w-full flex-wrap gap-1.5 xl:w-auto xl:flex-nowrap">
             {TYPE_FILTERS.map((filter) => (
               <button key={filter} onClick={() => setTypeFilter(filter)} className={`rounded-lg px-3 py-2 text-xs font-semibold transition-all ${typeFilter === filter ? 'bg-[#2563eb] text-white shadow-sm' : 'border border-gray-200 bg-white text-gray-500 hover:border-[#2563eb] hover:text-[#2563eb]'}`}>
                 {filter}

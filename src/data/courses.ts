@@ -165,16 +165,107 @@ export function formatTermLabel(termCode: string) {
   const pretty = normalized === 'fall' ? 'Fall' : normalized === 'spring' ? 'Spring' : normalized === 'summer' ? 'Summer' : rawTerm;
   return `${pretty} ${year}`;
 }
+function getAdmissionTermOrder(term: AdmissionTerm) {
+  return term === 'spring' ? 1 : term === 'summer' ? 2 : 3;
+}
+
+function getTermOrderFromCode(termCode: string) {
+  const normalized = termCode.split('-')[1]?.toLowerCase();
+  return normalized === 'spring' ? 1 : normalized === 'summer' ? 2 : normalized === 'fall' ? 3 : 0;
+}
+
 function getTermRank(termCode: string) {
   const [yearString, rawTerm] = termCode.split('-');
   const year = Number(yearString);
-  const normalized = rawTerm?.toLowerCase();
-  const order = normalized === 'fall' ? 3 : normalized === 'summer' ? 2 : normalized === 'spring' ? 1 : 0;
+  const order = getTermOrderFromCode(`${yearString}-${rawTerm ?? ''}`);
   return year * 10 + order;
 }
 export function compareTermCodesNewestFirst(left: string, right: string) {
   return getTermRank(right) - getTermRank(left);
 }
+
+function isTermOnOrAfterAdmission(termCode: string, admissionYear: number, admissionTerm: AdmissionTerm) {
+  const [yearString] = termCode.split('-');
+  const year = Number(yearString);
+  if (year > admissionYear) {
+    return true;
+  }
+  if (year < admissionYear) {
+    return false;
+  }
+  return getTermOrderFromCode(termCode) >= getAdmissionTermOrder(admissionTerm);
+}
+
+function getTermOption(term: AdmissionTerm, year: number) {
+  return {
+    termCode: `${year}-${term === 'fall' ? 'Fall' : term === 'spring' ? 'Spring' : 'Summer'}`,
+    termType: term === 'summer' ? 'summer' as const : 'regular' as const,
+  };
+}
+
+export function resolveCurrentAcademicTerm(date = new Date()) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+
+  if (month >= 10 || month === 9) {
+    return { term: 'fall' as const, year };
+  }
+
+  if (month === 1 || (month === 2 && day <= 15)) {
+    return { term: 'fall' as const, year: year - 1 };
+  }
+
+  if (
+    (month === 2 && day >= 16)
+    || month === 3
+    || month === 4
+    || month === 5
+    || (month === 6 && day <= 15)
+  ) {
+    return { term: 'spring' as const, year };
+  }
+
+  if (
+    (month === 6 && day >= 16)
+    || month === 7
+    || month === 8
+  ) {
+    return { term: 'summer' as const, year };
+  }
+
+  return { term: 'fall' as const, year };
+}
+
+export function resolveNextRegisterableAcademicTerm(date = new Date()) {
+  const current = resolveCurrentAcademicTerm(date);
+  if (current.term === 'spring') {
+    return getTermOption('summer', current.year);
+  }
+  if (current.term === 'summer') {
+    return getTermOption('fall', current.year);
+  }
+  return getTermOption('spring', current.year + 1);
+}
+
+export function buildRegisterableTerms(admissionYear: number, admissionTerm: AdmissionTerm, date = new Date()) {
+  const nextTerm = resolveNextRegisterableAcademicTerm(date);
+  if (isTermOnOrAfterAdmission(nextTerm.termCode, admissionYear, admissionTerm)) {
+    return [nextTerm];
+  }
+
+  for (let year = admissionYear; year <= admissionYear + 12; year += 1) {
+    for (const term of ['spring', 'summer', 'fall'] as const) {
+      const option = getTermOption(term, year);
+      if (isTermOnOrAfterAdmission(option.termCode, admissionYear, admissionTerm)) {
+        return [option];
+      }
+    }
+  }
+
+  return [nextTerm];
+}
+
 export function buildAvailableTerms(admissionYear: number, admissionTerm: AdmissionTerm, endYear = new Date().getFullYear() + 1) {
   const allTerms: { termCode: string; termType: TermType }[] = [];
   const termSequence: AdmissionTerm[] = ['fall', 'spring', 'summer'];
