@@ -46,6 +46,7 @@ export default function CoursePlanner() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_FILTERS)[number]>('All');
   const [draftName, setDraftName] = useState('My Next Schedule');
+  const [isDraftsOpen, setIsDraftsOpen] = useState(false);
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [shouldScrollToResults, setShouldScrollToResults] = useState(false);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
@@ -91,8 +92,7 @@ export default function CoursePlanner() {
   const handleViewDraft = (draftId: string) => {
     loadScheduleDraft(studentId, draftId);
     setPlannerError(null);
-    setHasAnalyzed(true);
-    setShouldScrollToResults(true);
+    setIsDraftsOpen(false);
   };
 
   const handleClearSelection = () => {
@@ -201,28 +201,39 @@ export default function CoursePlanner() {
         </div>
       </div>
 
-      <div className="w-full shrink-0 space-y-3 sm:space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:w-96 lg:self-start lg:overflow-y-auto lg:pr-1">
+      <div className="w-full shrink-0 space-y-3 sm:space-y-4 lg:sticky lg:top-6 lg:w-96 lg:self-start">
         <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between"><h3 className="text-sm font-bold text-[#0f1e3c]">My Selection ({selectedCourses.length})</h3><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${totalCredits > termCreditLimit ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{totalCredits} / {termCreditLimit} cr</span></div>
-          {selectedCourses.length === 0 ? <p className="py-6 text-center text-xs text-gray-400">Click eligible courses to add them here.</p> : <div className="mb-4 space-y-2">{selectedCourses.map((course) => (<div key={course.code} className="flex items-start justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2"><div className="min-w-0"><span className="font-mono text-xs font-bold text-[#0f1e3c]">{course.code}</span><span className="ml-2 break-words text-xs text-gray-500">{course.name}</span></div><button onClick={() => handleToggle(course.code)} className="shrink-0 rounded-md p-1 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>))}</div>}
+          {selectedCourses.length === 0 ? <p className="py-6 text-center text-xs text-gray-400">Click eligible courses to add them here.</p> : <div className="mb-4 max-h-[24rem] space-y-2 overflow-y-auto pr-1">{selectedCourses.map((course) => (<div key={course.code} className="flex items-start justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2"><div className="min-w-0"><span className="font-mono text-xs font-bold text-[#0f1e3c]">{course.code}</span><span className="ml-2 break-words text-xs text-gray-500">{course.name}</span></div><button onClick={() => handleToggle(course.code)} className="shrink-0 rounded-md p-1 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>))}</div>}
           <div className="space-y-2">
             <button onClick={handleAnalyze} disabled={selectedCourses.length === 0} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"><Sparkles className="h-4 w-4" />Analyze My Schedule</button>
             <div className="flex gap-2"><input type="text" value={draftName} onChange={(event) => setDraftName(event.target.value)} placeholder="Draft name" className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30" /><button onClick={handleSaveDraft} disabled={selectedCourses.length === 0} className="inline-flex items-center gap-1 rounded-lg border border-[#2563eb]/20 bg-[#2563eb]/5 px-3 py-2 text-xs font-semibold text-[#2563eb] transition-colors hover:bg-[#2563eb]/10 disabled:cursor-not-allowed disabled:opacity-40"><Save className="h-3.5 w-3.5" />Save</button></div>
+            <button onClick={() => setIsDraftsOpen(true)} disabled={savedDrafts.length === 0} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white py-2.5 text-xs font-semibold text-[#0f1e3c] transition-colors hover:border-[#2563eb]/30 hover:bg-[#2563eb]/5 hover:text-[#2563eb] disabled:cursor-not-allowed disabled:opacity-40"><Eye className="h-3.5 w-3.5" />View Drafts ({savedDrafts.length})</button>
             {selectedCourses.length > 0 && <button onClick={handleClearSelection} className="w-full rounded-lg border border-gray-200 py-2.5 text-xs text-gray-500 transition-colors hover:border-red-200 hover:text-red-500">Clear Selection</button>}
           </div>
         </div>
+      </div>
+    </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-[#0f1e3c]">
-              <BookOpen className="h-4 w-4 text-[#2563eb]" />
-              Saved Drafts
-            </h3>
-            <span className="text-xs text-gray-400">{savedDrafts.length} saved</span>
+    {isDraftsOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4">
+        <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-2xl">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <div>
+              <h3 className="flex items-center gap-2 text-base font-bold text-[#0f1e3c]">
+                <BookOpen className="h-4 w-4 text-[#2563eb]" />
+                View Drafts
+              </h3>
+              <p className="mt-1 text-xs text-gray-500">Select a draft to load it into your current course selection.</p>
+            </div>
+            <button onClick={() => setIsDraftsOpen(false)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600" aria-label="Close drafts menu">
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <div className="space-y-3">
+
+          <div className="max-h-[70vh] space-y-3 overflow-y-auto p-5">
             {savedDrafts.length > 0 ? (
-              savedDrafts.slice(0, 4).map((draft) => (
+              savedDrafts.map((draft) => (
                 <div key={draft.id} className="rounded-xl border border-gray-200 p-3 transition-colors hover:border-[#2563eb]/40 hover:bg-blue-50/30">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -241,7 +252,7 @@ export default function CoursePlanner() {
                       className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#2563eb] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1d4ed8]"
                     >
                       <Eye className="h-3.5 w-3.5" />
-                      View
+                      Load Draft
                     </button>
                     <button
                       onClick={() => deleteScheduleDraft(draft.id)}
@@ -262,7 +273,7 @@ export default function CoursePlanner() {
           </div>
         </div>
       </div>
-    </div>
+    )}
 
     {hasAnalyzed && analysisResult && overallDiff && (
       <section
@@ -495,4 +506,3 @@ export default function CoursePlanner() {
     </div>
   );
 }
-
