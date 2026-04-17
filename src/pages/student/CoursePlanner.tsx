@@ -53,16 +53,18 @@ export default function CoursePlanner() {
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
-    if (shouldScrollToResults && analysisResult && resultsRef.current) {
-      const node = resultsRef.current;
-      const scrollId = window.setTimeout(() => {
-        node.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 60);
-      setShouldScrollToResults(false);
-      return () => window.clearTimeout(scrollId);
-    }
-    return undefined;
-  }, [shouldScrollToResults, analysisResult]);
+    if (!shouldScrollToResults) return;
+    if (!hasAnalyzed || !analysisResult || !resultsRef.current) return;
+    // Use rAF to let the browser finish committing the new section to the DOM,
+    // then scroll. We deliberately do NOT return a cleanup, because resetting
+    // shouldScrollToResults below re-runs the effect and would otherwise cancel
+    // the pending frame before the scroll fires.
+    const node = resultsRef.current;
+    window.requestAnimationFrame(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    setShouldScrollToResults(false);
+  }, [shouldScrollToResults, hasAnalyzed, analysisResult]);
 
   const filtered = useMemo(() => {
     return courses.filter((course) => {
