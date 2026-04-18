@@ -321,6 +321,45 @@ join public.app_users s on s.university_id = v.student_code
 join public.courses c on c.course_code = v.course_code
 on conflict do nothing;
 
+delete from public.student_completed_courses scc
+using public.app_users student_u, public.courses course_u
+where scc.student_id = student_u.id
+  and scc.course_id = course_u.id
+  and student_u.university_id = '20231001'
+  and course_u.course_code in ('20333', '20336');
+
+insert into public.student_completed_courses (student_id, course_id, completed_term_code, final_grade)
+select student_u.id, course_u.id, v.term_code, 75
+from (
+  values
+    -- Ahmad Hassan follows the recommended CS plan through the first five semesters.
+    ('20141', '2023-Fall'),
+    ('20147', '2023-Fall'),
+    ('11103', '2024-Spring'),
+    ('20134', '2024-Spring'),
+    ('20142', '2024-Spring'),
+    ('11206', '2024-Fall'),
+    ('11253', '2024-Fall'),
+    ('20135', '2024-Fall'),
+    ('11212', '2025-Spring'),
+    ('11316', '2025-Spring'),
+    ('12242', '2025-Spring'),
+    ('12243', '2025-Spring'),
+    ('20233', '2025-Spring'),
+    ('22241', '2025-Spring'),
+    ('11313', '2025-Fall'),
+    ('11323', '2025-Fall'),
+    ('11354', '2025-Fall'),
+    ('12343', '2025-Fall'),
+    ('22342', '2025-Fall')
+) as v(course_code, term_code)
+join public.app_users student_u on student_u.university_id = '20231001'
+join public.courses course_u on course_u.course_code = v.course_code
+on conflict (student_id, course_id) do update
+set
+  completed_term_code = excluded.completed_term_code,
+  final_grade = excluded.final_grade;
+
 insert into public.schedule_drafts (student_id, name, term_code, status, saved_at)
 select s.id, v.name, '2026-Spring', 'draft', v.saved_at
 from (
@@ -346,7 +385,7 @@ insert into public.schedule_draft_courses (schedule_id, course_id)
 select d.id, c.id
 from (
   values
-    ('20231001', '11323'), ('20231001', '11435'), ('20231001', '12243'), ('20231001', '12242'), ('20231001', '22541'), ('20231001', '11449'),
+    ('20231001', '11335'), ('20231001', '11355'), ('20231001', '11449'), ('20231001', '13477'), ('20231001', '14330'), ('20231001', '20333'),
     ('20221045', '11335'), ('20221045', '11355'), ('20221045', '11464'), ('20221045', '13477'), ('20221045', '22541'), ('20221045', '20336'),
     ('20221188', '11313'), ('20221188', '11316'), ('20221188', '14330'), ('20221188', '22541'), ('20221188', '20336'), ('20221188', '11435'),
     ('20220877', '11391'), ('20220877', '11493'), ('20220877', '13477'), ('20220877', '11464'), ('20220877', '12343'),
@@ -358,6 +397,16 @@ join public.app_users s on s.university_id = v.student_code
 join public.schedule_drafts d on d.student_id = s.id and d.name = 'Spring 2026 Forecast' and d.term_code = '2026-Spring'
 join public.courses c on c.course_code = v.course_code
 on conflict (schedule_id, course_id) do nothing;
+
+delete from public.schedule_draft_courses sdc
+using public.schedule_drafts d, public.app_users s, public.courses c
+where sdc.schedule_id = d.id
+  and sdc.course_id = c.id
+  and d.student_id = s.id
+  and s.university_id = '20231001'
+  and d.name = 'Spring 2026 Forecast'
+  and d.term_code = '2026-Spring'
+  and c.course_code not in ('11335', '11355', '11449', '13477', '14330', '20333');
 
 insert into public.schedule_evaluations (
   schedule_id,
@@ -386,7 +435,7 @@ select
   v.evaluated_at::timestamptz
 from (
   values
-    ('20231001', 72, 'Hard', 16, '["2 course(s) in this draft have high internet-weighted difficulty scores.","The schedule carries 16 credits, close to the 18-credit cap.","The draft keeps a healthier mix of course types.","No configured hard course combinations were detected."]', '[{"label":"Internet difficulty baseline","score":58,"detail":"2 hard course(s) selected"},{"label":"Credit load","score":19,"detail":"16 credits selected out of 18"},{"label":"Course-type balance","score":3,"detail":"4 theory, 1 hybrid, 1 practical, 0 project"},{"label":"Known hard combinations","score":0,"detail":"No flagged combinations"}]', '[{"title":"Reduce total credits","action":"Move one 3-credit course to the next term if possible."},{"title":"Consider lower-difficulty eligible options","action":"Examples: 12343 Visual Programming, 12242 Webpage Design and Internet programming LAB."}]', '["22541 Computer Architecture","11435 Data Communications & Computer Networks","11323 Database Systems"]', '2026-03-12T10:00:00Z'),
+    ('20231001', 81, 'Hard', 14, '["3 course(s) in this draft have high internet-weighted difficulty scores.","The schedule carries 14 credits, which is manageable but still theory-heavy.","The draft concentrates several core CS courses in one semester.","No configured hard course combinations were detected."]', '[{"label":"Internet difficulty baseline","score":70,"detail":"3 hard course(s) selected"},{"label":"Credit load","score":14,"detail":"14 credits selected out of 18"},{"label":"Course-type balance","score":7,"detail":"5 theory, 0 hybrid, 1 practical, 0 project"},{"label":"Known hard combinations","score":0,"detail":"No flagged combinations"}]', '[{"title":"Keep the lab paired with Operating Systems","action":"11355 fits best when taken alongside 11335 in this semester."},{"title":"Consider moving one theory course if needed","action":"If the workload feels heavy, move either 14330 or 20333 to the next term."}]', '["11335 Operating Systems","14330 Artificial Intelligence","20333 Numerical Analysis"]', '2026-03-12T10:00:00Z'),
     ('20221045', 90, 'Hard', 18, '["4 course(s) in this draft have high internet-weighted difficulty scores.","The schedule carries 18 credits, close to the 18-credit cap.","The draft is theory-heavy, which increases exam and proof pressure.","Known hard combinations were detected."]', '[{"label":"Internet difficulty baseline","score":81,"detail":"4 hard course(s) selected"},{"label":"Credit load","score":26,"detail":"18 credits selected out of 18"},{"label":"Course-type balance","score":9,"detail":"4 theory, 1 hybrid, 1 practical, 0 project"},{"label":"Known hard combinations","score":6,"detail":"11335 + 22541"}]', '[{"title":"Swap 11335 for a lighter eligible course","action":"Replace it with 11449 Computer and Society."},{"title":"Reduce total credits","action":"Move one 3-credit course to the next term if possible."}]', '["11335 Operating Systems","22541 Computer Architecture","20336 Principles of Probability"]', '2026-03-12T10:00:00Z')
 ) as v(student_code, total_score, risk_label, total_credits, explanation, factors, recommendations, top_courses, evaluated_at)
 join public.app_users s on s.university_id = v.student_code
@@ -396,6 +445,22 @@ where not exists (
   from public.schedule_evaluations e
   where e.schedule_id = d.id
 );
+
+update public.schedule_evaluations e
+set
+  total_score = 81,
+  risk_label = 'Hard',
+  total_credits = 14,
+  explanation = '["3 course(s) in this draft have high internet-weighted difficulty scores.","The schedule carries 14 credits, which is manageable but still theory-heavy.","The draft concentrates several core CS courses in one semester.","No configured hard course combinations were detected."]'::jsonb,
+  factors = '[{"label":"Internet difficulty baseline","score":70,"detail":"3 hard course(s) selected"},{"label":"Credit load","score":14,"detail":"14 credits selected out of 18"},{"label":"Course-type balance","score":7,"detail":"5 theory, 0 hybrid, 1 practical, 0 project"},{"label":"Known hard combinations","score":0,"detail":"No flagged combinations"}]'::jsonb,
+  recommendations = '[{"title":"Keep the lab paired with Operating Systems","action":"11355 fits best when taken alongside 11335 in this semester."},{"title":"Consider moving one theory course if needed","action":"If the workload feels heavy, move either 14330 or 20333 to the next term."}]'::jsonb,
+  top_courses = '["11335 Operating Systems","14330 Artificial Intelligence","20333 Numerical Analysis"]'::jsonb
+from public.schedule_drafts d
+join public.app_users s on s.id = d.student_id
+where e.schedule_id = d.id
+  and s.university_id = '20231001'
+  and d.name = 'Spring 2026 Forecast'
+  and d.term_code = '2026-Spring';
 
 insert into public.messages (sender_id, recipient_id, body, sent_at, read_at)
 select sender_u.id, recipient_u.id, v.body, v.sent_at::timestamptz, v.read_at::timestamptz

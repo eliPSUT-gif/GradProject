@@ -109,7 +109,7 @@ export const SEED_MANAGED_USERS: ManagedUser[] = [
 ];
 
 export const STUDENT_PROFILES: StudentProfile[] = [
-  { id: '20231001', name: 'Ahmad Hassan', gpa: 3.12, creditsCompleted: 74, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '20135', '20141', '20147', '20333', '20336', '22241', '22342'], admissionYear: 2023, admissionTerm: 'fall' },
+  { id: '20231001', name: 'Ahmad Hassan', gpa: 3.12, creditsCompleted: 74, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '20141', '20142', '20147', '11206', '11253', '11212', '11313', '11316', '11323', '11354', '12242', '12243', '12343', '20135', '22241', '22342'], admissionYear: 2023, admissionTerm: 'fall' },
   { id: '20221045', name: 'Omar Al-Rashid', gpa: 2.84, creditsCompleted: 88, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11354', '11435', '12243', '12242', '12343', '14330', '20135', '20141', '20142', '20147', '20333', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
   { id: '20221188', name: 'Sara Khalil', gpa: 2.96, creditsCompleted: 84, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342'], admissionYear: 2022, admissionTerm: 'fall' },
   { id: '20220877', name: 'Lina Nasser', gpa: 3.16, creditsCompleted: 92, department: 'Computer Science', advisorId: 'ADV-1001', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11316', '11323', '11335', '11354', '11355', '11435', '11449', '12243', '12242', '12343', '13477', '14330', '20135', '20141', '20142', '20147', '20333', '20336', '22241', '22342', '22541'], admissionYear: 2022, admissionTerm: 'fall' },
@@ -128,7 +128,7 @@ const DEMO_PROFILE_TEMPLATES = STUDENT_PROFILES.map((profile) => ({
 }));
 
 export const STUDENT_PLAN_SEEDS: Record<string, string[]> = {
-  '20231001': ['11323', '11435', '12243', '12242', '22541', '11449'],
+  '20231001': ['11335', '11355', '11449', '13477', '14330', '20333'],
   '20221045': ['11335', '11355', '11464', '13477', '22541', '20336'],
   '20221188': ['11313', '11316', '14330', '22541', '20336', '11435'],
   '20220877': ['11391', '11493', '13477', '11464', '12343'],
