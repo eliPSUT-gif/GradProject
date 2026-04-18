@@ -127,12 +127,15 @@ select
   v.difficulty_basis
 from (
   values
-    ('11102', 'Introduction to Computer Science', 3, 'theoretical', false, 24, 24, 'Introductory CS survey course tracked in the transcript catalog.'),
-    ('11103', 'Structured Programming', 3, 'theoretical', false, 48, 48, 'Foundational programming prerequisite.'),
-    ('11151', 'Structured Programming Lab', 1, 'practical', false, 26, 26, 'Foundational programming lab tracked in the transcript catalog.'),
-    ('20133', 'Calculus (2)', 3, 'theoretical', false, 70, 70, 'Core math prerequisite for advanced analytics courses.'),
-    ('20134', 'Discrete Mathematics (1)', 3, 'theoretical', false, 65, 65, 'Foundational logic and proof skills.'),
-    ('20233', 'Statistical Methods', 3, 'theoretical', false, 64, 64, 'Statistics prerequisite for probability.'),
+    ('11102', 'Introduction to Computer Science', 3, 'theoretical', true, 24, 24, 'PSUT introduces numbering systems, data storage, computer organization, problem-solving, and basic programming here, so it is a light but essential foundation course.'),
+    ('11103', 'Structured Programming', 3, 'theoretical', true, 48, 48, 'PSUT covers core structured-programming concepts, control structures, functions, recursion, arrays, and structures, giving it a moderate foundational coding workload.'),
+    ('11151', 'Structured Programming Lab', 1, 'practical', true, 26, 26, 'PSUT frames this as the hands-on lab companion to Structured Programming, so it is practical and lighter than the lecture course.'),
+    ('20132', 'Calculus (1)', 3, 'theoretical', true, 66, 66, 'PSUT describes limits, continuity, derivatives, trigonometric, logarithmic, exponential, hyperbolic functions, and integrals, making it a foundational but demanding math course.'),
+    ('20133', 'Calculus (2)', 3, 'theoretical', true, 70, 70, 'PSUT covers methods and applications of integration plus analytic geometry and series, making it a harder continuation of Calculus (1).'),
+    ('20134', 'Discrete Mathematics (1)', 3, 'theoretical', true, 65, 65, 'Foundational logic and proof skills.'),
+    ('20200', 'Technical Writing and Communication Skills', 3, 'theoretical', true, 24, 24, 'PSUT positions this as a communication-focused university requirement, so the workload is generally lighter than core technical and math courses.'),
+    ('20233', 'Statistical Methods', 3, 'theoretical', true, 64, 64, 'PSUT uses this as the statistics foundation before probability, so it carries moderate mathematical reasoning but less abstraction than the harder upper-level math courses.'),
+    ('20234', 'Linear Algebra', 3, 'theoretical', true, 63, 63, 'PSUT lists systems of linear equations, Gaussian elimination, Gauss-Jordan method, and matrix operations, giving it a solid mathematical reasoning load.'),
     ('11206', 'Object Oriented Programming', 3, 'theoretical', true, 52, 52, 'Moderate OOP abstraction.'),
     ('11212', 'Data Structures and Introduction to Algorithms', 3, 'theoretical', true, 78, 78, 'Common CS gatekeeper course.'),
     ('11253', 'Object Oriented Programming Lab', 1, 'practical', true, 34, 34, 'Hands-on lab.'),
@@ -161,7 +164,20 @@ from (
     ('20336', 'Principles of Probability', 3, 'theoretical', true, 76, 76, 'Symbolic probability is often hard.'),
     ('22241', 'Digital Logic Design', 3, 'hybrid', true, 66, 66, 'Binary and hardware reasoning.'),
     ('22342', 'Computer Organization and Assembly Language', 3, 'hybrid', true, 84, 84, 'Low-level systems thinking and assembly.'),
-    ('22541', 'Computer Architecture', 3, 'theoretical', true, 89, 89, 'Deep hardware and performance reasoning.')
+    ('22541', 'Computer Architecture', 3, 'theoretical', true, 89, 89, 'Deep hardware and performance reasoning.'),
+    ('31112', 'Arabic Language Communication Skills', 3, 'theoretical', true, 22, 22, 'PSUT describes this as a communication-skills course in reading, writing, listening, and speaking, which is lighter than the major technical sequence.'),
+    ('31122', 'English Language Communication Skills', 3, 'theoretical', true, 28, 28, 'PSUT focuses this course on reading, writing, speaking, and listening for academic communication, so it carries moderate language-practice work but low technical difficulty.'),
+    ('31151', 'National Education', 3, 'theoretical', true, 18, 18, 'PSUT frames this as a civic and national-awareness course, making it substantially lighter than the core CS and mathematics requirements.'),
+    ('31160', 'Leadership and Societal Responsibility', 0, 'theoretical', true, 8, 8, 'PSUT presents leadership frameworks, ethics, and social responsibility here, and the study plan lists it as a zero-credit requirement with minimal academic load.'),
+    ('31251', 'Military Science', 3, 'theoretical', true, 16, 16, 'PSUT treats Military Science as a general university requirement rather than a technical course, so it is lighter than the major sequence.'),
+    ('31254', 'Entrepreneurship and Innovation', 3, 'theoretical', true, 26, 26, 'PSUT describes entrepreneurship, competitive environments, and venture creation concepts, giving it moderate conceptual work but low mathematical or systems complexity.'),
+    ('31374', 'Life Skills', 3, 'theoretical', true, 15, 15, 'PSUT frames Life Skills as a practical personal-development requirement, which makes it lighter than the program core.'),
+    ('EUNI-01', 'Elective University Requirement', 3, 'theoretical', true, 35, 35, 'Placeholder study-plan slot for a university elective; actual difficulty depends on the chosen elective course.'),
+    ('EUNI-02', 'Elective University Requirement', 3, 'theoretical', true, 35, 35, 'Placeholder study-plan slot for a university elective; actual difficulty depends on the chosen elective course.'),
+    ('EUNI-03', 'Elective University Requirement', 3, 'theoretical', true, 35, 35, 'Placeholder study-plan slot for a university elective; actual difficulty depends on the chosen elective course.'),
+    ('EPRG-01', 'Elective Program Requirement', 3, 'theoretical', true, 45, 45, 'Placeholder study-plan slot for a program elective; actual difficulty depends on the chosen elective course.'),
+    ('EPRG-02', 'Elective Program Requirement', 3, 'theoretical', true, 45, 45, 'Placeholder study-plan slot for a program elective; actual difficulty depends on the chosen elective course.'),
+    ('EPRG-03', 'Elective Program Requirement', 3, 'theoretical', true, 45, 45, 'Placeholder study-plan slot for a program elective; actual difficulty depends on the chosen elective course.')
 ) as v(course_code, title, credits, course_type, is_plannable, internet_difficulty, difficulty_score, difficulty_basis)
 join public.departments d on d.code = 'CS'
 on conflict (course_code) do update
@@ -181,6 +197,8 @@ insert into public.course_prerequisites (course_id, prerequisite_course_id)
 select c.id, p.id
 from (
   values
+    ('11103', '11102'),
+    ('20133', '20132'),
     ('11206', '11103'),
     ('11212', '20134'),
     ('11212', '11206'),

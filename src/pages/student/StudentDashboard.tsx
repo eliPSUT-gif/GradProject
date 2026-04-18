@@ -174,7 +174,7 @@ export default function StudentDashboard() {
         <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
           <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
             <BookOpen className="h-5 w-5 text-[#2563eb]" />
-            My Schedule This Semester
+            My Schedule Next Semester
           </h2>
 
           {selectedCoursesForDisplay.length === 0 ? (

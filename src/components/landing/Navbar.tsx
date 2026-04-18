@@ -59,7 +59,7 @@ export default function Navbar() {
             to="/login"
             className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue to-blue-lt rounded-xl hover:shadow-lg hover:shadow-blue/30 hover:-translate-y-0.5 transition-all duration-200"
           >
-            Get Started
+            Login
           </Link>
         </div>
 
@@ -92,7 +92,7 @@ export default function Navbar() {
               onClick={() => setMobileOpen(false)}
               className="mt-2 inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue to-blue-lt rounded-xl"
             >
-              Get Started
+              Login
             </Link>
           </div>
         </div>
