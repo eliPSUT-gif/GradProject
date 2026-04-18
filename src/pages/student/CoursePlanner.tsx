@@ -48,6 +48,7 @@ export default function CoursePlanner() {
   const [draftName, setDraftName] = useState('My Next Schedule');
   const [isDraftsOpen, setIsDraftsOpen] = useState(false);
   const [plannerError, setPlannerError] = useState<string | null>(null);
+  const [draftFeedback, setDraftFeedback] = useState<{ tone: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [shouldScrollToResults, setShouldScrollToResults] = useState(false);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const resultsRef = useRef<HTMLElement>(null);
@@ -69,6 +70,9 @@ export default function CoursePlanner() {
 
   const filtered = useMemo(() => {
     return courses.filter((course) => {
+      if (!course.isPlannable) {
+        return false;
+      }
       const matchSearch = !deferredSearch || course.name.toLowerCase().includes(deferredSearch.toLowerCase()) || course.code.toLowerCase().includes(deferredSearch.toLowerCase());
       const matchType = typeFilter === 'All' || course.type === typeFilter.toLowerCase();
       return matchSearch && matchType;
@@ -92,24 +96,39 @@ export default function CoursePlanner() {
   const handleViewDraft = (draftId: string) => {
     loadScheduleDraft(studentId, draftId);
     setPlannerError(null);
+    setDraftFeedback(null);
     setIsDraftsOpen(false);
   };
 
   const handleClearSelection = () => {
     clearSelection(studentId);
     setPlannerError(null);
+    setDraftFeedback(null);
     setHasAnalyzed(false);
   };
 
   const handleToggle = (code: string) => {
     const result = toggleCourseSelection(studentId, code);
     setPlannerError(result.success ? null : result.error ?? 'Unable to add this course.');
+    if (result.success) {
+      setDraftFeedback(null);
+    }
   };
 
   const handleSaveDraft = () => {
     const nextDraftName = draftName.trim() || 'Saved Schedule Draft';
     const draft = saveScheduleDraft(studentId, nextDraftName);
     setPlannerError(draft ? null : 'Analyze a valid schedule before saving it.');
+    if (!draft) {
+      setDraftFeedback(null);
+      return;
+    }
+
+    setDraftFeedback(
+      draft.syncStatus === 'pending'
+        ? { tone: 'info', message: 'Draft saved locally and is syncing to Supabase.' }
+        : { tone: 'success', message: 'Draft saved successfully.' }
+    );
   };
 
   if (!isAppDataReady) {
@@ -208,6 +227,21 @@ export default function CoursePlanner() {
           <div className="space-y-2">
             <button onClick={handleAnalyze} disabled={selectedCourses.length === 0} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"><Sparkles className="h-4 w-4" />Analyze My Schedule</button>
             <div className="flex gap-2"><input type="text" value={draftName} onChange={(event) => setDraftName(event.target.value)} placeholder="Draft name" className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30" /><button onClick={handleSaveDraft} disabled={selectedCourses.length === 0} className="inline-flex items-center gap-1 rounded-lg border border-[#2563eb]/20 bg-[#2563eb]/5 px-3 py-2 text-xs font-semibold text-[#2563eb] transition-colors hover:bg-[#2563eb]/10 disabled:cursor-not-allowed disabled:opacity-40"><Save className="h-3.5 w-3.5" />Save</button></div>
+            {draftFeedback && (
+              <div className={`rounded-lg px-3 py-2 text-xs ${draftFeedback.tone === 'error' ? 'border border-red-200 bg-red-50 text-red-700' : draftFeedback.tone === 'success' ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-blue-200 bg-blue-50 text-blue-700'}`}>
+                {draftFeedback.message}
+              </div>
+            )}
+            {savedDrafts[0]?.syncStatus === 'pending' && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                Latest draft is still syncing to Supabase.
+              </div>
+            )}
+            {savedDrafts[0]?.syncStatus === 'error' && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                Latest draft was saved locally but not synced to Supabase yet. {savedDrafts[0].syncError ?? 'Please try saving again.'}
+              </div>
+            )}
             <button onClick={() => setIsDraftsOpen(true)} disabled={savedDrafts.length === 0} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white py-2.5 text-xs font-semibold text-[#0f1e3c] transition-colors hover:border-[#2563eb]/30 hover:bg-[#2563eb]/5 hover:text-[#2563eb] disabled:cursor-not-allowed disabled:opacity-40"><Eye className="h-3.5 w-3.5" />View Drafts ({savedDrafts.length})</button>
             {selectedCourses.length > 0 && <button onClick={handleClearSelection} className="w-full rounded-lg border border-gray-200 py-2.5 text-xs text-gray-500 transition-colors hover:border-red-200 hover:text-red-500">Clear Selection</button>}
           </div>
@@ -242,9 +276,14 @@ export default function CoursePlanner() {
                         {draft.evaluation.totalCredits} credits &middot; {draft.courseCodes.length} course{draft.courseCodes.length !== 1 ? 's' : ''}
                       </p>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDiffLabel(draft.evaluation.totalScore).cls}`}>
-                      {draft.evaluation.totalScore}
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDiffLabel(draft.evaluation.totalScore).cls}`}>
+                        {draft.evaluation.totalScore}
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${draft.syncStatus === 'error' ? 'bg-red-100 text-red-700' : draft.syncStatus === 'pending' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {draft.syncStatus === 'error' ? 'Not synced' : draft.syncStatus === 'pending' ? 'Syncing' : 'Saved'}
+                      </span>
+                    </div>
                   </div>
                   <div className="mt-3 flex gap-2">
                     <button

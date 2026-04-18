@@ -127,7 +127,9 @@ select
   v.difficulty_basis
 from (
   values
+    ('11102', 'Introduction to Computer Science', 3, 'theoretical', false, 24, 24, 'Introductory CS survey course tracked in the transcript catalog.'),
     ('11103', 'Structured Programming', 3, 'theoretical', false, 48, 48, 'Foundational programming prerequisite.'),
+    ('11151', 'Structured Programming Lab', 1, 'practical', false, 26, 26, 'Foundational programming lab tracked in the transcript catalog.'),
     ('20133', 'Calculus (2)', 3, 'theoretical', false, 70, 70, 'Core math prerequisite for advanced analytics courses.'),
     ('20134', 'Discrete Mathematics (1)', 3, 'theoretical', false, 65, 65, 'Foundational logic and proof skills.'),
     ('20233', 'Statistical Methods', 3, 'theoretical', false, 64, 64, 'Statistics prerequisite for probability.'),
@@ -211,6 +213,7 @@ insert into public.course_corequisites (course_id, corequisite_course_id)
 select c.id, p.id
 from (
   values
+    ('11151', '11103'),
     ('11253', '11206'),
     ('11354', '11323'),
     ('11355', '11335'),
@@ -276,92 +279,166 @@ where not exists (
     and h.term_code = term.term_code
 );
 
-insert into public.student_completed_courses (student_id, course_id, completed_term_code, final_grade)
-select s.id, c.id, '2025-Fall', 75
-from (
-  values
-    ('20231001', '11103'), ('20231001', '20134'), ('20231001', '11206'), ('20231001', '11253'),
-    ('20231001', '11212'), ('20231001', '20135'), ('20231001', '20141'), ('20231001', '20147'),
-    ('20231001', '20333'), ('20231001', '20336'), ('20231001', '22241'), ('20231001', '22342'),
-    ('20221045', '11103'), ('20221045', '20134'), ('20221045', '11206'), ('20221045', '11253'),
-    ('20221045', '11212'), ('20221045', '11313'), ('20221045', '11316'), ('20221045', '11323'),
-    ('20221045', '11354'), ('20221045', '11435'), ('20221045', '12243'), ('20221045', '12242'),
-    ('20221045', '12343'), ('20221045', '14330'), ('20221045', '20135'), ('20221045', '20141'),
-    ('20221045', '20142'), ('20221045', '20147'), ('20221045', '20333'), ('20221045', '22241'),
-    ('20221045', '22342'), ('20221045', '22541'),
-    ('20221188', '11103'), ('20221188', '20134'), ('20221188', '11206'), ('20221188', '11253'),
-    ('20221188', '11212'), ('20221188', '11323'), ('20221188', '11435'), ('20221188', '12243'),
-    ('20221188', '20135'), ('20221188', '20141'), ('20221188', '20142'), ('20221188', '20147'),
-    ('20221188', '20333'), ('20221188', '22241'), ('20221188', '22342'),
-    ('20220877', '11103'), ('20220877', '20134'), ('20220877', '11206'), ('20220877', '11253'),
-    ('20220877', '11212'), ('20220877', '11313'), ('20220877', '11316'), ('20220877', '11323'),
-    ('20220877', '11335'), ('20220877', '11354'), ('20220877', '11355'), ('20220877', '11435'),
-    ('20220877', '11449'), ('20220877', '12243'), ('20220877', '12242'), ('20220877', '12343'),
-    ('20220877', '13477'), ('20220877', '14330'), ('20220877', '20135'), ('20220877', '20141'),
-    ('20220877', '20142'), ('20220877', '20147'), ('20220877', '20333'), ('20220877', '20336'),
-    ('20220877', '22241'), ('20220877', '22342'), ('20220877', '22541'),
-    ('20220432', '11103'), ('20220432', '20134'), ('20220432', '11206'), ('20220432', '11253'),
-    ('20220432', '11212'), ('20220432', '11313'), ('20220432', '11316'), ('20220432', '11323'),
-    ('20220432', '11335'), ('20220432', '11354'), ('20220432', '11355'), ('20220432', '11391'),
-    ('20220432', '11435'), ('20220432', '11449'), ('20220432', '11464'), ('20220432', '11493'),
-    ('20220432', '12243'), ('20220432', '12242'), ('20220432', '12343'), ('20220432', '13477'),
-    ('20220432', '14330'), ('20220432', '20135'), ('20220432', '20141'), ('20220432', '20142'),
-    ('20220432', '20147'), ('20220432', '20333'), ('20220432', '20336'), ('20220432', '22241'),
-    ('20220432', '22342'), ('20220432', '22541'),
-    ('20221302', '11103'), ('20221302', '20134'), ('20221302', '11206'), ('20221302', '11253'),
-    ('20221302', '11212'), ('20221302', '11323'), ('20221302', '11435'), ('20221302', '12243'),
-    ('20221302', '20135'), ('20221302', '20141'), ('20221302', '20147'), ('20221302', '22241'),
-    ('20221302', '22342'),
-    ('20220665', '11103'), ('20220665', '20134'), ('20220665', '11206'), ('20220665', '11253'),
-    ('20220665', '11212'), ('20220665', '11313'), ('20220665', '11323'), ('20220665', '11435'),
-    ('20220665', '12243'), ('20220665', '20135'), ('20220665', '20141'), ('20220665', '20142'),
-    ('20220665', '20147'), ('20220665', '20333'), ('20220665', '22241'), ('20220665', '22342')
-) as v(student_code, course_code)
-join public.app_users s on s.university_id = v.student_code
-join public.courses c on c.course_code = v.course_code
-on conflict do nothing;
+create temporary table tmp_seed_completed_courses (
+  student_code text not null,
+  course_code text not null,
+  completed_term_code text not null,
+  final_grade numeric(5,2) not null
+) on commit drop;
 
-delete from public.student_completed_courses scc
-using public.app_users student_u, public.courses course_u
-where scc.student_id = student_u.id
-  and scc.course_id = course_u.id
-  and student_u.university_id = '20231001'
-  and course_u.course_code in ('20333', '20336');
+insert into tmp_seed_completed_courses (student_code, course_code, completed_term_code, final_grade)
+values
+  ('20231001', '11103', '2024-Spring', 75), ('20231001', '20134', '2024-Spring', 75),
+  ('20231001', '11206', '2024-Fall', 75), ('20231001', '11253', '2024-Fall', 75),
+  ('20231001', '11212', '2025-Spring', 75), ('20231001', '11313', '2025-Fall', 75),
+  ('20231001', '11316', '2025-Spring', 75), ('20231001', '11323', '2025-Fall', 75),
+  ('20231001', '11354', '2025-Fall', 75), ('20231001', '12242', '2025-Spring', 75),
+  ('20231001', '12243', '2025-Spring', 75), ('20231001', '12343', '2025-Fall', 75),
+  ('20231001', '20135', '2024-Fall', 75), ('20231001', '20141', '2023-Fall', 75),
+  ('20231001', '20142', '2024-Spring', 75), ('20231001', '20147', '2023-Fall', 75),
+  ('20231001', '20233', '2025-Spring', 75), ('20231001', '22241', '2025-Spring', 75),
+  ('20231001', '22342', '2025-Fall', 75),
+  ('20221045', '11103', '2025-Fall', 75), ('20221045', '20134', '2025-Fall', 75),
+  ('20221045', '11206', '2025-Fall', 75), ('20221045', '11253', '2025-Fall', 75),
+  ('20221045', '11212', '2025-Fall', 75), ('20221045', '11313', '2025-Fall', 75),
+  ('20221045', '11316', '2025-Fall', 75), ('20221045', '11323', '2025-Fall', 75),
+  ('20221045', '11354', '2025-Fall', 75), ('20221045', '11435', '2025-Fall', 75),
+  ('20221045', '12243', '2025-Fall', 75), ('20221045', '12242', '2025-Fall', 75),
+  ('20221045', '12343', '2025-Fall', 75), ('20221045', '14330', '2025-Fall', 75),
+  ('20221045', '20135', '2025-Fall', 75), ('20221045', '20141', '2025-Fall', 75),
+  ('20221045', '20142', '2025-Fall', 75), ('20221045', '20147', '2025-Fall', 75),
+  ('20221045', '20333', '2025-Fall', 75), ('20221045', '22241', '2025-Fall', 75),
+  ('20221045', '22342', '2025-Fall', 75), ('20221045', '22541', '2025-Fall', 75),
+  ('20221188', '11103', '2025-Fall', 75), ('20221188', '20134', '2025-Fall', 75),
+  ('20221188', '11206', '2025-Fall', 75), ('20221188', '11253', '2025-Fall', 75),
+  ('20221188', '11212', '2025-Fall', 75), ('20221188', '11323', '2025-Fall', 75),
+  ('20221188', '11435', '2025-Fall', 75), ('20221188', '12243', '2025-Fall', 75),
+  ('20221188', '20135', '2025-Fall', 75), ('20221188', '20141', '2025-Fall', 75),
+  ('20221188', '20142', '2025-Fall', 75), ('20221188', '20147', '2025-Fall', 75),
+  ('20221188', '20333', '2025-Fall', 75), ('20221188', '22241', '2025-Fall', 75),
+  ('20221188', '22342', '2025-Fall', 75),
+  ('20220877', '11103', '2025-Fall', 75), ('20220877', '20134', '2025-Fall', 75),
+  ('20220877', '11206', '2025-Fall', 75), ('20220877', '11253', '2025-Fall', 75),
+  ('20220877', '11212', '2025-Fall', 75), ('20220877', '11313', '2025-Fall', 75),
+  ('20220877', '11316', '2025-Fall', 75), ('20220877', '11323', '2025-Fall', 75),
+  ('20220877', '11335', '2025-Fall', 75), ('20220877', '11354', '2025-Fall', 75),
+  ('20220877', '11355', '2025-Fall', 75), ('20220877', '11435', '2025-Fall', 75),
+  ('20220877', '11449', '2025-Fall', 75), ('20220877', '12243', '2025-Fall', 75),
+  ('20220877', '12242', '2025-Fall', 75), ('20220877', '12343', '2025-Fall', 75),
+  ('20220877', '13477', '2025-Fall', 75), ('20220877', '14330', '2025-Fall', 75),
+  ('20220877', '20135', '2025-Fall', 75), ('20220877', '20141', '2025-Fall', 75),
+  ('20220877', '20142', '2025-Fall', 75), ('20220877', '20147', '2025-Fall', 75),
+  ('20220877', '20333', '2025-Fall', 75), ('20220877', '20336', '2025-Fall', 75),
+  ('20220877', '22241', '2025-Fall', 75), ('20220877', '22342', '2025-Fall', 75),
+  ('20220877', '22541', '2025-Fall', 75),
+  ('20220432', '11103', '2025-Fall', 75), ('20220432', '20134', '2025-Fall', 75),
+  ('20220432', '11206', '2025-Fall', 75), ('20220432', '11253', '2025-Fall', 75),
+  ('20220432', '11212', '2025-Fall', 75), ('20220432', '11313', '2025-Fall', 75),
+  ('20220432', '11316', '2025-Fall', 75), ('20220432', '11323', '2025-Fall', 75),
+  ('20220432', '11335', '2025-Fall', 75), ('20220432', '11354', '2025-Fall', 75),
+  ('20220432', '11355', '2025-Fall', 75), ('20220432', '11391', '2025-Fall', 75),
+  ('20220432', '11435', '2025-Fall', 75), ('20220432', '11449', '2025-Fall', 75),
+  ('20220432', '11464', '2025-Fall', 75), ('20220432', '11493', '2025-Fall', 75),
+  ('20220432', '12243', '2025-Fall', 75), ('20220432', '12242', '2025-Fall', 75),
+  ('20220432', '12343', '2025-Fall', 75), ('20220432', '13477', '2025-Fall', 75),
+  ('20220432', '14330', '2025-Fall', 75), ('20220432', '20135', '2025-Fall', 75),
+  ('20220432', '20141', '2025-Fall', 75), ('20220432', '20142', '2025-Fall', 75),
+  ('20220432', '20147', '2025-Fall', 75), ('20220432', '20333', '2025-Fall', 75),
+  ('20220432', '20336', '2025-Fall', 75), ('20220432', '22241', '2025-Fall', 75),
+  ('20220432', '22342', '2025-Fall', 75), ('20220432', '22541', '2025-Fall', 75),
+  ('20221302', '11103', '2025-Fall', 75), ('20221302', '20134', '2025-Fall', 75),
+  ('20221302', '11206', '2025-Fall', 75), ('20221302', '11253', '2025-Fall', 75),
+  ('20221302', '11212', '2025-Fall', 75), ('20221302', '11323', '2025-Fall', 75),
+  ('20221302', '11435', '2025-Fall', 75), ('20221302', '12243', '2025-Fall', 75),
+  ('20221302', '20135', '2025-Fall', 75), ('20221302', '20141', '2025-Fall', 75),
+  ('20221302', '20147', '2025-Fall', 75), ('20221302', '22241', '2025-Fall', 75),
+  ('20221302', '22342', '2025-Fall', 75),
+  ('20220665', '11103', '2025-Fall', 75), ('20220665', '20134', '2025-Fall', 75),
+  ('20220665', '11206', '2025-Fall', 75), ('20220665', '11253', '2025-Fall', 75),
+  ('20220665', '11212', '2025-Fall', 75), ('20220665', '11313', '2025-Fall', 75),
+  ('20220665', '11323', '2025-Fall', 75), ('20220665', '11435', '2025-Fall', 75),
+  ('20220665', '12243', '2025-Fall', 75), ('20220665', '20135', '2025-Fall', 75),
+  ('20220665', '20141', '2025-Fall', 75), ('20220665', '20142', '2025-Fall', 75),
+  ('20220665', '20147', '2025-Fall', 75), ('20220665', '20333', '2025-Fall', 75),
+  ('20220665', '22241', '2025-Fall', 75), ('20220665', '22342', '2025-Fall', 75);
 
-insert into public.student_completed_courses (student_id, course_id, completed_term_code, final_grade)
-select student_u.id, course_u.id, v.term_code, 75
-from (
-  values
-    -- Ahmad Hassan follows the recommended CS plan through the first five semesters.
-    ('20141', '2023-Fall'),
-    ('20147', '2023-Fall'),
-    ('11103', '2024-Spring'),
-    ('20134', '2024-Spring'),
-    ('20142', '2024-Spring'),
-    ('11206', '2024-Fall'),
-    ('11253', '2024-Fall'),
-    ('20135', '2024-Fall'),
-    ('11212', '2025-Spring'),
-    ('11316', '2025-Spring'),
-    ('12242', '2025-Spring'),
-    ('12243', '2025-Spring'),
-    ('20233', '2025-Spring'),
-    ('22241', '2025-Spring'),
-    ('11313', '2025-Fall'),
-    ('11323', '2025-Fall'),
-    ('11354', '2025-Fall'),
-    ('12343', '2025-Fall'),
-    ('22342', '2025-Fall')
-) as v(course_code, term_code)
-join public.app_users student_u on student_u.university_id = '20231001'
-join public.courses course_u on course_u.course_code = v.course_code
-on conflict (student_id, course_id) do update
-set
-  completed_term_code = excluded.completed_term_code,
-  final_grade = excluded.final_grade;
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'student_completed_courses'
+  ) then
+    execute $sql$
+      insert into public.student_completed_courses (student_id, course_id, completed_term_code, final_grade)
+      select s.id, c.id, t.completed_term_code, t.final_grade
+      from tmp_seed_completed_courses t
+      join public.app_users s on s.university_id = t.student_code
+      join public.courses c on c.course_code = t.course_code
+      on conflict (student_id, course_id) do update
+      set
+        completed_term_code = excluded.completed_term_code,
+        final_grade = excluded.final_grade
+    $sql$;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'student_transcript_entries'
+  ) then
+    execute $sql$
+      insert into public.student_transcript_entries (
+        student_id,
+        term_code,
+        course_id,
+        final_grade,
+        status,
+        attempt_no,
+        created_at,
+        updated_at
+      )
+      select
+        s.id,
+        t.completed_term_code,
+        c.id,
+        t.final_grade,
+        case when t.final_grade >= 60 then 'passed' else 'failed' end,
+        1,
+        timezone('utc', now()),
+        timezone('utc', now())
+      from tmp_seed_completed_courses t
+      join public.app_users s on s.university_id = t.student_code
+      join public.courses c on c.course_code = t.course_code
+      on conflict (student_id, course_id, term_code, attempt_no) do update
+      set
+        final_grade = excluded.final_grade,
+        status = excluded.status,
+        updated_at = timezone('utc', now())
+    $sql$;
+
+    execute $sql$
+      delete from public.student_transcript_entries ste
+      using public.app_users s, public.courses c
+      where ste.student_id = s.id
+        and ste.course_id = c.id
+        and s.university_id = '20231001'
+        and c.course_code in ('20333', '20336')
+        and not exists (
+          select 1
+          from tmp_seed_completed_courses t
+          where t.student_code = '20231001'
+            and t.course_code = c.course_code
+        )
+    $sql$;
+  end if;
+end
+$$;
 
 insert into public.schedule_drafts (student_id, name, term_code, status, saved_at)
-select s.id, v.name, '2026-Spring', 'draft', v.saved_at
+select s.id, v.name, '2026-Spring', 'draft', v.saved_at::timestamptz
 from (
   values
     ('20231001', 'Spring 2026 Forecast', '2026-03-12T10:05:00Z'),

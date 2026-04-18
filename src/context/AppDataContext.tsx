@@ -172,6 +172,7 @@ interface CourseRow {
   department_id: string;
   credits: number;
   course_type: Course['type'];
+  is_plannable: boolean;
   internet_difficulty: number;
   difficulty_score: number;
   difficulty_basis: string;
@@ -496,7 +497,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     supabaseSelect<AppSettingRow[]>('app_settings', 'select=key,value_json'),
     supabaseSelect<CourseRow[]>(
       'courses',
-      'select=id,course_code,title,department_id,credits,course_type,internet_difficulty,difficulty_score,difficulty_basis,updated_at&order=course_code.asc'
+      'select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis,updated_at&order=course_code.asc'
     ),
     supabaseSelect<CoursePrerequisiteRow[]>('course_prerequisites', 'select=course_id,prerequisite_course_id'),
     supabaseSelect<CourseCorequisiteRow[]>('course_corequisites', 'select=course_id,corequisite_course_id'),
@@ -589,6 +590,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       name: row.title,
       department: departmentById.get(row.department_id) ?? 'Computer Science',
       type: row.course_type,
+      isPlannable: row.is_plannable,
       credits: row.credits,
       prerequisites: prerequisiteCodesByCourseId.get(row.id) ?? [],
       concurrentCourses: corequisiteCodesByCourseId.get(row.id) ?? [],
@@ -740,6 +742,8 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       courseCodes: courseCodesByDraftId.get(row.id) ?? [],
       termCode: row.term_code ?? '2026-Spring',
       status: row.status,
+      syncStatus: 'synced',
+      syncError: null,
       savedAt: row.saved_at,
       evaluation,
     } satisfies ScheduleDraft];
@@ -1155,6 +1159,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         id: evaluationId,
         evaluatedAt: now,
       };
+      const studentAppUserId = users.find((account) => account.id === studentId)?.appUserId;
+      const shouldPersistRemotely = hasSupabaseConfig() && Boolean(studentAppUserId);
       const nextDraft = {
         id: draftId,
         studentId,
@@ -1163,6 +1169,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         savedAt: now,
         termCode,
         status: 'draft',
+        syncStatus: shouldPersistRemotely ? 'pending' : 'synced',
+        syncError: null,
         evaluation: nextEvaluation,
       } satisfies ScheduleDraft;
 
@@ -1176,13 +1184,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         scheduleDrafts: [nextDraft, ...current.scheduleDrafts.filter((draft) => draft.id !== draftId)].sort(sortDraftsNewestFirst),
       }));
 
-      const studentAppUserId = users.find((account) => account.id === studentId)?.appUserId;
-      if (hasSupabaseConfig() && studentAppUserId) {
+      if (shouldPersistRemotely && studentAppUserId) {
         void (async () => {
           try {
             const remoteCourseRows = await supabaseSelect<CourseRow[]>(
               'courses',
-              `select=id,course_code,title,department_id,credits,course_type,internet_difficulty,difficulty_score,difficulty_basis&course_code=in.(${courseCodes.map(encodeURIComponent).join(',')})`
+              `select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis&course_code=in.(${courseCodes.map(encodeURIComponent).join(',')})`
             );
             const courseIdByCode = new Map(remoteCourseRows.map((course) => [course.course_code, course.id]));
 
@@ -1222,8 +1229,29 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               top_courses: nextEvaluation.topCourses,
               evaluated_at: now,
             });
+
+            setState((current) => ({
+              ...current,
+              scheduleDrafts: current.scheduleDrafts.map((draft): ScheduleDraft =>
+                draft.id === draftId
+                  ? { ...draft, syncStatus: 'synced', syncError: null }
+                  : draft
+              ).sort(sortDraftsNewestFirst),
+            }));
           } catch (error) {
             console.error('Unable to persist schedule draft to Supabase.', error);
+            setState((current) => ({
+              ...current,
+              scheduleDrafts: current.scheduleDrafts.map((draft): ScheduleDraft =>
+                draft.id === draftId
+                  ? {
+                      ...draft,
+                      syncStatus: 'error',
+                      syncError: error instanceof Error ? error.message : 'Unable to persist this draft to Supabase.',
+                    }
+                  : draft
+              ).sort(sortDraftsNewestFirst),
+            }));
           }
         })();
       }
@@ -1330,6 +1358,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             prerequisites: input.prerequisites,
             concurrentCourses: [],
             minimumCompletedCredits: undefined,
+            isPlannable: true,
             internetDifficulty: 50,
             difficultyBasis: 'Manual course entry.',
             requirementText: formatRequirementText({
@@ -1368,7 +1397,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
           const existingRows = await supabaseSelect<CourseRow[]>(
             'courses',
-            `select=id,course_code,title,department_id,credits,course_type,internet_difficulty,difficulty_score,difficulty_basis&course_code=eq.${encodeURIComponent(input.code)}&limit=1`
+            `select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis&course_code=eq.${encodeURIComponent(input.code)}&limit=1`
           );
 
           const payload = {
@@ -1377,6 +1406,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             department_id: departmentId,
             credits: input.credits,
             course_type: input.type,
+            is_plannable: existingRows[0]?.is_plannable ?? true,
             difficulty_basis: 'Manual course entry.',
           };
 
