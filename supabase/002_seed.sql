@@ -362,80 +362,46 @@ values
   ('20220665', '20147', '2025-Fall', 75), ('20220665', '20333', '2025-Fall', 75),
   ('20220665', '22241', '2025-Fall', 75), ('20220665', '22342', '2025-Fall', 75);
 
-do $$
-begin
-  if exists (
-    select 1
-    from information_schema.tables
-    where table_schema = 'public'
-      and table_name = 'student_completed_courses'
-  ) then
-    execute $sql$
-      insert into public.student_completed_courses (student_id, course_id, completed_term_code, final_grade)
-      select s.id, c.id, t.completed_term_code, t.final_grade
-      from tmp_seed_completed_courses t
-      join public.app_users s on s.university_id = t.student_code
-      join public.courses c on c.course_code = t.course_code
-      on conflict (student_id, course_id) do update
-      set
-        completed_term_code = excluded.completed_term_code,
-        final_grade = excluded.final_grade
-    $sql$;
-  end if;
+insert into public.student_transcript_entries (
+  student_id,
+  term_code,
+  course_id,
+  final_grade,
+  status,
+  attempt_no,
+  created_at,
+  updated_at
+)
+select
+  s.id,
+  t.completed_term_code,
+  c.id,
+  t.final_grade,
+  case when t.final_grade >= 60 then 'passed' else 'failed' end,
+  1,
+  timezone('utc', now()),
+  timezone('utc', now())
+from tmp_seed_completed_courses t
+join public.app_users s on s.university_id = t.student_code
+join public.courses c on c.course_code = t.course_code
+on conflict (student_id, course_id, term_code, attempt_no) do update
+set
+  final_grade = excluded.final_grade,
+  status = excluded.status,
+  updated_at = timezone('utc', now());
 
-  if exists (
+delete from public.student_transcript_entries ste
+using public.app_users s, public.courses c
+where ste.student_id = s.id
+  and ste.course_id = c.id
+  and s.university_id = '20231001'
+  and c.course_code in ('20333', '20336')
+  and not exists (
     select 1
-    from information_schema.tables
-    where table_schema = 'public'
-      and table_name = 'student_transcript_entries'
-  ) then
-    execute $sql$
-      insert into public.student_transcript_entries (
-        student_id,
-        term_code,
-        course_id,
-        final_grade,
-        status,
-        attempt_no,
-        created_at,
-        updated_at
-      )
-      select
-        s.id,
-        t.completed_term_code,
-        c.id,
-        t.final_grade,
-        case when t.final_grade >= 60 then 'passed' else 'failed' end,
-        1,
-        timezone('utc', now()),
-        timezone('utc', now())
-      from tmp_seed_completed_courses t
-      join public.app_users s on s.university_id = t.student_code
-      join public.courses c on c.course_code = t.course_code
-      on conflict (student_id, course_id, term_code, attempt_no) do update
-      set
-        final_grade = excluded.final_grade,
-        status = excluded.status,
-        updated_at = timezone('utc', now())
-    $sql$;
-
-    execute $sql$
-      delete from public.student_transcript_entries ste
-      using public.app_users s, public.courses c
-      where ste.student_id = s.id
-        and ste.course_id = c.id
-        and s.university_id = '20231001'
-        and c.course_code in ('20333', '20336')
-        and not exists (
-          select 1
-          from tmp_seed_completed_courses t
-          where t.student_code = '20231001'
-            and t.course_code = c.course_code
-        )
-    $sql$;
-  end if;
-end
-$$;
+    from tmp_seed_completed_courses t
+    where t.student_code = '20231001'
+      and t.course_code = c.course_code
+  );
 
 insert into public.schedule_drafts (student_id, name, term_code, status, saved_at)
 select s.id, v.name, '2026-Spring', 'draft', v.saved_at::timestamptz

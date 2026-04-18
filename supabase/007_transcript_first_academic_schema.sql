@@ -107,7 +107,13 @@ drop view if exists public.student_dashboard_summary_v;
 drop view if exists public.student_transcript_v;
 drop view if exists public.student_term_metrics_v;
 
-drop trigger if exists trg_student_completed_courses_refresh_dashboard on public.student_completed_courses;
+do $$
+begin
+  if to_regclass('public.student_completed_courses') is not null then
+    execute 'drop trigger if exists trg_student_completed_courses_refresh_dashboard on public.student_completed_courses';
+  end if;
+end
+$$;
 drop function if exists public.refresh_dashboard_student_data();
 drop function if exists public.refresh_student_term_metrics(uuid);
 drop function if exists public.refresh_student_profile_metrics(uuid);
@@ -159,10 +165,6 @@ select distinct
     else 18
   end
 from (
-  select completed_term_code as term_code
-  from public.student_completed_courses
-  where completed_term_code is not null
-  union
   select term_code
   from public.schedule_drafts
   where term_code is not null
@@ -170,31 +172,87 @@ from (
 where source.term_code is not null
 on conflict (term_code) do nothing;
 
-insert into public.student_transcript_entries (
-  student_id,
-  term_code,
-  course_id,
-  final_grade,
-  status,
-  attempt_no,
-  created_at,
-  updated_at
-)
-select
-  scc.student_id,
-  coalesce(scc.completed_term_code, format('%s-Fall', public.infer_student_admission_year(scc.student_id))),
-  scc.course_id,
-  scc.final_grade,
-  case
-    when scc.final_grade is null then 'in_progress'
-    when scc.final_grade >= 60 then 'passed'
-    else 'failed'
-  end,
-  1,
-  scc.created_at,
-  timezone('utc', now())
-from public.student_completed_courses scc
-on conflict (student_id, course_id, term_code, attempt_no) do nothing;
+do $$
+begin
+  if to_regclass('public.student_completed_courses') is not null then
+    execute $sql$
+      insert into public.academic_terms (term_code, academic_year, term_name, term_type, max_credits)
+      select distinct
+        source.term_code,
+        coalesce(nullif(split_part(source.term_code, '-', 1), '')::integer, extract(year from timezone('utc', now()))::integer),
+        public.term_name_from_code(source.term_code),
+        public.term_type_from_term_name(public.term_name_from_code(source.term_code)),
+        case
+          when public.term_name_from_code(source.term_code) = 'summer' then 9
+          else 18
+        end
+      from (
+        select completed_term_code as term_code
+        from public.student_completed_courses
+        where completed_term_code is not null
+      ) source
+      where source.term_code is not null
+      on conflict (term_code) do nothing
+    $sql$;
+  end if;
+
+  if to_regclass('public.student_transcript_entries') is not null then
+    execute $sql$
+      insert into public.academic_terms (term_code, academic_year, term_name, term_type, max_credits)
+      select distinct
+        source.term_code,
+        coalesce(nullif(split_part(source.term_code, '-', 1), '')::integer, extract(year from timezone('utc', now()))::integer),
+        public.term_name_from_code(source.term_code),
+        public.term_type_from_term_name(public.term_name_from_code(source.term_code)),
+        case
+          when public.term_name_from_code(source.term_code) = 'summer' then 9
+          else 18
+        end
+      from (
+        select term_code
+        from public.student_transcript_entries
+        where term_code is not null
+      ) source
+      where source.term_code is not null
+      on conflict (term_code) do nothing
+    $sql$;
+  end if;
+end
+$$;
+
+do $$
+begin
+  if to_regclass('public.student_completed_courses') is not null then
+    execute $sql$
+      insert into public.student_transcript_entries (
+        student_id,
+        term_code,
+        course_id,
+        final_grade,
+        status,
+        attempt_no,
+        created_at,
+        updated_at
+      )
+      select
+        scc.student_id,
+        coalesce(scc.completed_term_code, format('%s-Fall', public.infer_student_admission_year(scc.student_id))),
+        scc.course_id,
+        scc.final_grade,
+        case
+          when scc.final_grade is null then 'in_progress'
+          when scc.final_grade >= 60 then 'passed'
+          else 'failed'
+        end,
+        1,
+        scc.created_at,
+        timezone('utc', now())
+      from public.student_completed_courses scc
+      on conflict (student_id, course_id, term_code, attempt_no) do nothing
+    $sql$;
+  end if;
+end
+$$;
 
 update public.student_profiles sp
 set
