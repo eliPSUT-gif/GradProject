@@ -418,14 +418,8 @@ export function evaluateSchedule(studentId: string, selectedCourses: Course[], a
   return { id: createId('eval', `${studentId}-${evaluatedAt}`), studentId, totalScore, riskLabel, totalCredits, evaluatedAt, modelVersion, explanation, factors, recommendations, topCourses: buildTopCourseStrings(selectedCourses) };
 }
 
-export function buildSeedDrafts(courses: Course[]) {
-  return Object.entries(STUDENT_PLAN_SEEDS).flatMap(([studentId, courseCodes]) => {
-    const profile = STUDENT_PROFILES.find((item) => item.id === studentId);
-    const selectedCourses = courses.filter((course) => courseCodes.includes(course.code));
-    const evaluation = evaluateSchedule(studentId, selectedCourses, courses, DEFAULT_MODEL_VERSION, profile?.completedCourseCodes ?? [], profile?.creditsCompleted ?? 0, '2026-03-12T10:00:00.000Z');
-    if (!evaluation) return [];
-    return [{ id: createId('draft', `${studentId}-spring26`), studentId, name: 'Spring 2026 Forecast', courseCodes, savedAt: '2026-03-12T10:05:00.000Z', termCode: '2026-Spring', status: 'draft', syncStatus: 'synced', syncError: null, evaluation } satisfies ScheduleDraft];
-  });
+export function buildSeedDrafts(_courses: Course[]) {
+  return [] as ScheduleDraft[];
 }
 
 export function buildStudentInsights(profiles: StudentProfile[], drafts: ScheduleDraft[]): StudentInsight[] {

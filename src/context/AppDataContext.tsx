@@ -11,7 +11,6 @@ import {
 import {
   buildRegisterableTerms,
   buildCourses,
-  buildSeedDrafts,
   buildSeedHistoricalStats,
   buildStudentInsights,
   compareTermCodesNewestFirst,
@@ -341,12 +340,16 @@ const AppDataContext = createContext<AppDataContextType>({
   upsertCourse: () => {},
 });
 
-function createId(prefix: string) {
+function createId(_prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return `${prefix}-${crypto.randomUUID()}`;
+    return crypto.randomUUID();
   }
 
-  return `${prefix}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const randomValue = Math.floor(Math.random() * 16);
+    const nextValue = character === 'x' ? randomValue : (randomValue & 0x3) | 0x8;
+    return nextValue.toString(16);
+  });
 }
 
 function sortDraftsNewestFirst(left: ScheduleDraft, right: ScheduleDraft) {
@@ -360,29 +363,19 @@ function sortEvaluationsNewestFirst(left: ScheduleEvaluation, right: ScheduleEva
 function buildDemoState(): AppDataState {
   const historicalStats = buildSeedHistoricalStats();
   const courses = buildCourses(historicalStats);
-  const scheduleDrafts = buildSeedDrafts(courses);
-  const currentEvaluations = Object.fromEntries(
-    scheduleDrafts.map((draft) => [draft.studentId, draft.evaluation])
-  ) as Record<string, ScheduleEvaluation | null>;
-  const plannerSelections = Object.fromEntries(
-    scheduleDrafts.map((draft) => [draft.studentId, draft.courseCodes])
-  ) as Record<string, string[]>;
-  const plannerTermCodes = Object.fromEntries(
-    scheduleDrafts.map((draft) => [draft.studentId, draft.termCode])
-  ) as Record<string, string>;
 
   return {
     academicTerms: [],
     courses,
-    currentEvaluations,
+    currentEvaluations: {},
     historicalStats,
     importJobs: [],
     modelLastCalculatedAt: MODEL_LAST_CALCULATED_AT,
     modelVersion: DEFAULT_MODEL_VERSION,
-    plannerSelections,
-    plannerTermCodes,
-    recentEvaluations: scheduleDrafts.map((draft) => draft.evaluation).sort(sortEvaluationsNewestFirst),
-    scheduleDrafts: scheduleDrafts.sort(sortDraftsNewestFirst),
+    plannerSelections: {},
+    plannerTermCodes: {},
+    recentEvaluations: [],
+    scheduleDrafts: [],
     studentProfiles: STUDENT_PROFILES,
     termMetrics: [],
     transcriptRows: [],
