@@ -165,6 +165,15 @@ export function formatTermLabel(termCode: string) {
   const pretty = normalized === 'fall' ? 'Fall' : normalized === 'spring' ? 'Spring' : normalized === 'summer' ? 'Summer' : rawTerm;
   return `${pretty} ${year}`;
 }
+
+export function formatCompactTermLabel(termCode: string) {
+  if (!termCode) return '-';
+  const [year, rawTerm] = termCode.split('-');
+  if (!year || !rawTerm) return termCode;
+  const normalized = rawTerm.toLowerCase();
+  const termNumber = normalized === 'fall' ? '1' : normalized === 'spring' ? '2' : normalized === 'summer' ? '3' : null;
+  return termNumber ? `${year}-${termNumber}` : termCode;
+}
 function getAdmissionTermOrder(term: AdmissionTerm) {
   return term === 'spring' ? 1 : term === 'summer' ? 2 : 3;
 }

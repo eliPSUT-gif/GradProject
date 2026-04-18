@@ -18,6 +18,7 @@ import {
   computeCourseDifficulty,
   DEFAULT_MODEL_VERSION,
   evaluateSchedule,
+  formatCompactTermLabel,
   formatRequirementText,
   formatTermLabel,
   getCreditLimitForTermCode,
@@ -75,7 +76,7 @@ export interface StudentTranscriptRow {
   courseName: string;
   credits: number;
   finalGrade: number | null;
-  status: 'passed' | 'failed' | 'withdrawn' | 'in_progress';
+  status: 'passed' | 'failed' | 'withdrawn' | 'in_progress' | 'not_taken';
   attemptNo: number;
 }
 
@@ -862,8 +863,62 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   );
 
   const getStudentTranscript = useCallback(
-    (studentId: string) => state.transcriptRows.filter((row) => row.studentId === studentId),
-    [state.transcriptRows]
+    (studentId: string) => {
+      const profile = getStudentProfile(studentId);
+      const recordedRows = state.transcriptRows.filter((row) => row.studentId === studentId);
+
+      if (!profile) {
+        return recordedRows;
+      }
+
+      const latestRecordedByCode = new Map<string, StudentTranscriptRow>();
+      recordedRows.forEach((row) => {
+        if (!latestRecordedByCode.has(row.courseCode)) {
+          latestRecordedByCode.set(row.courseCode, row);
+        }
+      });
+
+      const transcriptRows = state.courses.map((course) => {
+        const recorded = latestRecordedByCode.get(course.code);
+        if (recorded) {
+          return {
+            ...recorded,
+            termLabel: formatCompactTermLabel(recorded.termCode),
+          } satisfies StudentTranscriptRow;
+        }
+
+        return {
+          studentId,
+          termCode: '',
+          termLabel: '-',
+          termType: 'regular',
+          courseCode: course.code,
+          courseName: course.name,
+          credits: course.credits,
+          finalGrade: null,
+          status: 'not_taken',
+          attemptNo: 0,
+        } satisfies StudentTranscriptRow;
+      });
+
+      return transcriptRows.sort((left, right) => {
+        const leftTaken = left.termCode ? 1 : 0;
+        const rightTaken = right.termCode ? 1 : 0;
+        if (leftTaken !== rightTaken) {
+          return rightTaken - leftTaken;
+        }
+
+        if (left.termCode && right.termCode) {
+          const termCompare = compareTermCodesNewestFirst(right.termCode, left.termCode);
+          if (termCompare !== 0) {
+            return termCompare;
+          }
+        }
+
+        return left.courseCode.localeCompare(right.courseCode);
+      });
+    },
+    [getStudentProfile, state.courses, state.transcriptRows]
   );
 
   const getStudentTermMetrics = useCallback(

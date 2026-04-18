@@ -73,13 +73,6 @@ export default function StudentDashboard() {
   const score = currentEvaluation?.totalScore ?? drafts[0]?.evaluation.totalScore ?? null;
   const diffInfo = score !== null ? getDiffLabel(score) : null;
   const meterPct = score !== null ? clamp(score, 0, 100) : 50;
-  const transcriptByTerm = useMemo(() => {
-    return transcriptRows.reduce<Record<string, typeof transcriptRows>>((groups, row) => {
-      groups[row.termCode] = [...(groups[row.termCode] ?? []), row];
-      return groups;
-    }, {});
-  }, [transcriptRows]);
-
   const recommendations = currentEvaluation?.recommendations ?? drafts[0]?.evaluation.recommendations ?? [];
   const explanation = currentEvaluation?.explanation ?? drafts[0]?.evaluation.explanation ?? [];
   const [assistanceFeedback, setAssistanceFeedback] = useState<string | null>(null);
@@ -180,11 +173,11 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
         {kpis.map((item) => {
           const Icon = item.icon;
           return (
-            <div key={item.label} className="relative overflow-hidden rounded-xl border border-gray-200 bg-white p-3 transition-shadow hover:shadow-md sm:p-5">
+            <div key={item.label} className="relative flex h-full min-h-[152px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-3 transition-shadow hover:shadow-md sm:min-h-[170px] sm:p-5">
               <div className="absolute inset-x-0 top-0 h-[3px]" style={{ backgroundColor: item.accent }} />
               <div className="mb-2 flex items-center gap-1.5 sm:mb-3 sm:gap-2">
                 <Icon className="h-3.5 w-3.5 text-gray-400 sm:h-4 sm:w-4" />
@@ -457,40 +450,38 @@ export default function StudentDashboard() {
         <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
           <div className="mb-4">
             <h2 className="text-lg font-bold text-[#0f1e3c]">Full Transcript</h2>
-            <p className="mt-1 text-sm text-gray-500">All completed courses and recorded marks.</p>
+            <p className="mt-1 text-sm text-gray-500">All degree courses, including untaken courses and recorded marks.</p>
           </div>
           {transcriptRows.length > 0 ? (
-            <div className="space-y-5">
-              {Object.entries(transcriptByTerm).map(([termCode, rows]) => (
-                <div key={termCode} className="overflow-hidden rounded-xl border border-gray-200">
-                  <div className="flex items-center justify-between bg-slate-50 px-4 py-3">
-                    <p className="font-semibold text-[#0f1e3c]">{formatTermLabel(termCode)}</p>
-                    <span className="text-xs font-medium text-gray-500">{rows.length} course{rows.length !== 1 ? 's' : ''}</span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">
-                          <th className="px-4 py-3 pr-4">Code</th>
-                          <th className="px-4 py-3 pr-4">Course</th>
-                          <th className="px-4 py-3 pr-4 text-center">Credits</th>
-                          <th className="px-4 py-3 text-center">Grade</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((row) => (
-                          <tr key={`${row.termCode}-${row.courseCode}-${row.attemptNo}`} className="border-b border-gray-50 last:border-0">
-                            <td className="px-4 py-3 font-mono font-semibold text-[#0f1e3c]">{row.courseCode}</td>
-                            <td className="px-4 py-3 text-gray-700">{row.courseName}</td>
-                            <td className="px-4 py-3 text-center text-gray-600">{row.credits}</td>
-                            <td className="px-4 py-3 text-center font-semibold text-[#0f1e3c]">{row.finalGrade === null ? '-' : row.finalGrade.toFixed(0)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-hidden rounded-xl border border-gray-200">
+              <div className="flex items-center justify-between bg-slate-50 px-4 py-3">
+                <p className="font-semibold text-[#0f1e3c]">Degree Transcript</p>
+                <span className="text-xs font-medium text-gray-500">{transcriptRows.length} course{transcriptRows.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">
+                      <th className="px-4 py-3 pr-4">Code</th>
+                      <th className="px-4 py-3 pr-4">Course</th>
+                      <th className="px-4 py-3 pr-4 text-center">Credits</th>
+                      <th className="px-4 py-3 pr-4 text-center">Term</th>
+                      <th className="px-4 py-3 text-center">Grade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transcriptRows.map((row) => (
+                      <tr key={row.courseCode} className="border-b border-gray-50 last:border-0">
+                        <td className="px-4 py-3 font-mono font-semibold text-[#0f1e3c]">{row.courseCode}</td>
+                        <td className="px-4 py-3 text-gray-700">{row.courseName}</td>
+                        <td className="px-4 py-3 text-center text-gray-600">{row.credits}</td>
+                        <td className="px-4 py-3 text-center text-gray-600">{row.termLabel}</td>
+                        <td className="px-4 py-3 text-center font-semibold text-[#0f1e3c]">{row.finalGrade === null ? '-' : row.finalGrade.toFixed(0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-6 text-sm text-gray-500">
