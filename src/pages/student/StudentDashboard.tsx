@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -24,6 +24,7 @@ export default function StudentDashboard() {
     currentEvaluations,
     getPlannerTermCode,
     getSelectedCourses,
+    getStudentTranscriptSemesters,
     getStudentTermMetrics,
     getStudentTranscript,
     isAppDataReady,
@@ -34,11 +35,13 @@ export default function StudentDashboard() {
   const advisorId = getAssignedAdvisorId(studentId);
   const selectedCourses = getSelectedCourses(studentId);
   const transcriptRows = getStudentTranscript(studentId);
+  const transcriptSemesters = getStudentTranscriptSemesters(studentId);
   const termMetrics = getStudentTermMetrics(studentId);
   const plannerTermCode = getPlannerTermCode(studentId);
   const currentEvaluation = currentEvaluations[studentId] ?? null;
   const profile = studentInsights.find((item) => item.id === studentId);
-  const [activeTab, setActiveTab] = useState<'overview' | 'transcript'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'transcript' | 'semester-transcript'>('overview');
+  const [selectedSemesterTermCode, setSelectedSemesterTermCode] = useState('');
   const selectedCoursesForDisplay = useMemo(
     () =>
       selectedCourses.length > 0
@@ -57,6 +60,23 @@ export default function StudentDashboard() {
   const meterPct = score !== null ? clamp(score, 0, 100) : 50;
   const explanation = currentEvaluation?.explanation ?? [];
   const [assistanceFeedback, setAssistanceFeedback] = useState<string | null>(null);
+  const selectedSemester = transcriptSemesters.find((semester) => semester.termCode === selectedSemesterTermCode)
+    ?? transcriptSemesters[0]
+    ?? null;
+
+  useEffect(() => {
+    if (
+      transcriptSemesters.length > 0
+      && !transcriptSemesters.some((semester) => semester.termCode === selectedSemesterTermCode)
+    ) {
+      setSelectedSemesterTermCode(transcriptSemesters[0].termCode);
+      return;
+    }
+
+    if (transcriptSemesters.length === 0 && selectedSemesterTermCode) {
+      setSelectedSemesterTermCode('');
+    }
+  }, [selectedSemesterTermCode, transcriptSemesters]);
 
   const kpis = [
     {
@@ -165,6 +185,12 @@ export default function StudentDashboard() {
           className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${activeTab === 'transcript' ? 'bg-[#0f1e3c] text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50'}`}
         >
           Transcript
+        </button>
+        <button
+          onClick={() => setActiveTab('semester-transcript')}
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${activeTab === 'semester-transcript' ? 'bg-[#0f1e3c] text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50'}`}
+        >
+          Semester Transcript
         </button>
       </div>
 
@@ -335,7 +361,7 @@ export default function StudentDashboard() {
       </div>
 
       </>
-      ) : (
+      ) : activeTab === 'transcript' ? (
         <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
           <div className="mb-4">
             <h2 className="text-lg font-bold text-[#0f1e3c]">Full Transcript</h2>
@@ -375,6 +401,73 @@ export default function StudentDashboard() {
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-6 text-sm text-gray-500">
               No transcript rows are available yet.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-[#0f1e3c]">Semester Transcript</h2>
+              <p className="mt-1 text-sm text-gray-500">Review the recorded courses and marks for one semester at a time.</p>
+            </div>
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-600">
+              Semester
+              <select
+                value={selectedSemester?.termCode ?? ''}
+                onChange={(event) => setSelectedSemesterTermCode(event.target.value)}
+                className="min-w-[200px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-[#0f1e3c] outline-none ring-0 transition-colors focus:border-[#2563eb]"
+              >
+                {transcriptSemesters.map((semester) => (
+                  <option key={semester.termCode} value={semester.termCode}>
+                    {semester.termLabel}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {selectedSemester ? (
+            <div className="overflow-hidden rounded-xl border border-gray-200">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3">
+                <div>
+                  <p className="font-semibold text-[#0f1e3c]">{selectedSemester.termLabel}</p>
+                  <p className="text-xs text-gray-500">
+                    {selectedSemester.courseCount} course{selectedSemester.courseCount !== 1 ? 's' : ''} | {selectedSemester.completedCredits} completed credits | GPA {selectedSemester.gpa?.toFixed(2) ?? '-'}
+                  </p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">
+                      <th className="px-4 py-3 pr-4">Code</th>
+                      <th className="px-4 py-3 pr-4">Course</th>
+                      <th className="px-4 py-3 pr-4 text-center">Credits</th>
+                      <th className="px-4 py-3 pr-4 text-center">Status</th>
+                      <th className="px-4 py-3 text-center">Grade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedSemester.rows.map((row) => (
+                      <tr key={`${row.termCode}-${row.courseCode}`} className="border-b border-gray-50 last:border-0">
+                        <td className="px-4 py-3 font-mono font-semibold text-[#0f1e3c]">{row.courseCode}</td>
+                        <td className="px-4 py-3 text-gray-700">{row.courseName}</td>
+                        <td className="px-4 py-3 text-center text-gray-600">{row.credits}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                            {row.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center font-semibold text-[#0f1e3c]">{row.finalGrade === null ? '-' : row.finalGrade.toFixed(0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-sm text-gray-500">
+              No semester transcript data is available yet.
             </div>
           )}
         </div>

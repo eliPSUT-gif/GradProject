@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  buildAvailableTerms,
   buildRegisterableTerms,
   buildCourses,
   buildSeedHistoricalStats,
@@ -89,6 +90,17 @@ export interface StudentTermMetric {
   gpa: number | null;
 }
 
+export interface StudentTranscriptSemester {
+  studentId: string;
+  termCode: string;
+  termLabel: string;
+  termType: TermType;
+  courseCount: number;
+  completedCredits: number;
+  gpa: number | null;
+  rows: StudentTranscriptRow[];
+}
+
 export interface CoursePrerequisiteGrade {
   code: string;
   name: string;
@@ -106,6 +118,7 @@ interface AppDataContextType {
   getPlannerTermCode: (studentId: string) => string;
   getSelectedCourses: (studentId: string) => Course[];
   getStudentDrafts: (studentId: string) => ScheduleDraft[];
+  getStudentTranscriptSemesters: (studentId: string) => StudentTranscriptSemester[];
   getStudentTermMetrics: (studentId: string) => StudentTermMetric[];
   getStudentTranscript: (studentId: string) => StudentTranscriptRow[];
   getStudentAvailableTerms: (studentId: string) => { termCode: string; termType: TermType }[];
@@ -303,6 +316,7 @@ const AppDataContext = createContext<AppDataContextType>({
   getPlannerTermCode: () => '',
   getSelectedCourses: () => [],
   getStudentDrafts: () => [],
+  getStudentTranscriptSemesters: () => [],
   getStudentTermMetrics: () => [],
   getStudentTranscript: () => [],
   getStudentAvailableTerms: () => [],
@@ -360,9 +374,186 @@ function sortEvaluationsNewestFirst(left: ScheduleEvaluation, right: ScheduleEva
   return right.evaluatedAt.localeCompare(left.evaluatedAt);
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function hashSeed(seed: string) {
+  return seed.split('').reduce((sum, character, index) => (
+    sum + character.charCodeAt(0) * (index + 1)
+  ), 0);
+}
+
+function seededUnit(seed: string) {
+  const value = Math.sin(hashSeed(seed)) * 10000;
+  return value - Math.floor(value);
+}
+
+function normalizeTranscriptMark(mark: number | null) {
+  if (mark === null) {
+    return null;
+  }
+
+  return mark < 35 ? 35 : mark;
+}
+
+function buildDemoTranscriptData(studentProfiles: StudentProfile[], courses: Course[]) {
+  const nextRegisterableTermByStudent = new Map(
+    studentProfiles.map((profile) => [
+      profile.id,
+      buildRegisterableTerms(profile.admissionYear, profile.admissionTerm)[0]?.termCode ?? `${new Date().getFullYear()}-Spring`,
+    ])
+  );
+
+  const transcriptRows: StudentTranscriptRow[] = [];
+
+  studentProfiles.forEach((profile) => {
+    const nextRegisterableTermCode = nextRegisterableTermByStudent.get(profile.id) ?? `${new Date().getFullYear()}-Spring`;
+    const eligibleTerms = buildAvailableTerms(
+      profile.admissionYear,
+      profile.admissionTerm,
+      Number(nextRegisterableTermCode.split('-')[0] ?? new Date().getFullYear())
+    ).filter((term) => compareTermCodesNewestFirst(term.termCode, nextRegisterableTermCode) > 0);
+
+    const completedCourses = profile.completedCourseCodes
+      .map((code) => courses.find((course) => course.code === code))
+      .filter((course): course is Course => Boolean(course));
+
+    if (completedCourses.length === 0 || eligibleTerms.length === 0) {
+      return;
+    }
+
+    const termsToUse = clamp(
+      Math.round(profile.creditsCompleted / 15),
+      3,
+      Math.min(eligibleTerms.length, completedCourses.length)
+    );
+    const plannedTerms = eligibleTerms.slice(0, termsToUse);
+
+    completedCourses.forEach((course, index) => {
+      const progress = index / Math.max(completedCourses.length - 1, 1);
+      const preferredTermIndex = Math.min(
+        plannedTerms.length - 1,
+        Math.floor(progress * plannedTerms.length)
+      );
+      const wobble = seededUnit(`${profile.id}:${course.code}:term`) > 0.72 ? 1 : 0;
+      const termIndex = Math.min(plannedTerms.length - 1, preferredTermIndex + wobble);
+      const term = plannedTerms[termIndex] ?? plannedTerms[plannedTerms.length - 1];
+      const studentStrength = clamp((profile.gpa - 3) * 14, -8, 8);
+      const termMomentum = (termIndex / Math.max(plannedTerms.length - 1, 1)) * 4;
+      const randomOffset = Math.round((seededUnit(`${profile.id}:${course.code}:grade`) - 0.5) * 12);
+      const grade = Math.round(clamp(
+        89
+        + studentStrength
+        + termMomentum
+        - (course.diffScore * 0.24)
+        + randomOffset,
+        61,
+        96
+      ));
+
+      transcriptRows.push({
+        studentId: profile.id,
+        termCode: term.termCode,
+        termLabel: formatTermLabel(term.termCode),
+        termType: term.termType,
+        courseCode: course.code,
+        courseName: course.name,
+        credits: course.credits,
+        finalGrade: grade,
+        status: 'passed',
+        attemptNo: 1,
+      });
+    });
+  });
+
+  transcriptRows.sort((left, right) => {
+    const termCompare = compareTermCodesNewestFirst(left.termCode, right.termCode);
+    if (termCompare !== 0) {
+      return termCompare;
+    }
+
+    return left.courseCode.localeCompare(right.courseCode);
+  });
+
+  const termMetricMap = new Map<string, StudentTermMetric>();
+  transcriptRows.forEach((row) => {
+    const key = `${row.studentId}:${row.termCode}`;
+    const existing = termMetricMap.get(key) ?? {
+      studentId: row.studentId,
+      termCode: row.termCode,
+      termLabel: formatTermLabel(row.termCode),
+      termType: row.termType,
+      courseCount: 0,
+      completedCredits: 0,
+      gpa: null,
+    };
+
+    termMetricMap.set(key, {
+      ...existing,
+      courseCount: existing.courseCount + 1,
+      completedCredits: existing.completedCredits + (row.status === 'passed' ? row.credits : 0),
+    });
+  });
+
+  const groupedRows = new Map<string, StudentTranscriptRow[]>();
+  transcriptRows.forEach((row) => {
+    const key = `${row.studentId}:${row.termCode}`;
+    groupedRows.set(key, [...(groupedRows.get(key) ?? []), row]);
+  });
+
+  const termMetrics = [...termMetricMap.values()]
+    .map((metric) => {
+      const rows = groupedRows.get(`${metric.studentId}:${metric.termCode}`) ?? [];
+      const normalizedMarks = rows
+        .map((row) => normalizeTranscriptMark(row.finalGrade))
+        .filter((mark): mark is number => mark !== null);
+      const gpa = normalizedMarks.length > 0
+        ? Math.round((normalizedMarks.reduce((sum, mark) => sum + mark, 0) * 4 / 100 / normalizedMarks.length) * 100) / 100
+        : null;
+
+      return {
+        ...metric,
+        gpa,
+      } satisfies StudentTermMetric;
+    })
+    .sort((left, right) => compareTermCodesNewestFirst(left.termCode, right.termCode));
+
+  return { transcriptRows, termMetrics };
+}
+
+function buildTranscriptSemesters(
+  studentId: string,
+  transcriptRows: StudentTranscriptRow[],
+  termMetrics: StudentTermMetric[]
+) {
+  const rowsByTermCode = new Map<string, StudentTranscriptRow[]>();
+  transcriptRows
+    .filter((row) => row.studentId === studentId && row.termCode)
+    .forEach((row) => {
+      rowsByTermCode.set(row.termCode, [...(rowsByTermCode.get(row.termCode) ?? []), row]);
+    });
+
+  return termMetrics
+    .filter((metric) => metric.studentId === studentId)
+    .map((metric) => ({
+      studentId,
+      termCode: metric.termCode,
+      termLabel: metric.termLabel,
+      termType: metric.termType,
+      courseCount: metric.courseCount,
+      completedCredits: metric.completedCredits,
+      gpa: metric.gpa,
+      rows: [...(rowsByTermCode.get(metric.termCode) ?? [])].sort((left, right) => left.courseCode.localeCompare(right.courseCode)),
+    }) satisfies StudentTranscriptSemester)
+    .filter((semester) => semester.rows.length > 0);
+}
+
 function buildDemoState(): AppDataState {
   const historicalStats = buildSeedHistoricalStats();
   const courses = buildCourses(historicalStats);
+  const studentProfiles = STUDENT_PROFILES;
+  const { transcriptRows, termMetrics } = buildDemoTranscriptData(studentProfiles, courses);
 
   return {
     academicTerms: [],
@@ -376,9 +567,9 @@ function buildDemoState(): AppDataState {
     plannerTermCodes: {},
     recentEvaluations: [],
     scheduleDrafts: [],
-    studentProfiles: STUDENT_PROFILES,
-    termMetrics: [],
-    transcriptRows: [],
+    studentProfiles,
+    termMetrics,
+    transcriptRows,
   };
 }
 
@@ -921,6 +1112,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const getStudentTermMetrics = useCallback(
     (studentId: string) => state.termMetrics.filter((row) => row.studentId === studentId),
     [state.termMetrics]
+  );
+
+  const getStudentTranscriptSemesters = useCallback(
+    (studentId: string) => buildTranscriptSemesters(studentId, state.transcriptRows, state.termMetrics),
+    [state.termMetrics, state.transcriptRows]
   );
 
   const getStudentAvailableTerms = useCallback(
@@ -1510,6 +1706,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       getPlannerTermCode,
       getSelectedCourses,
       getStudentDrafts,
+      getStudentTranscriptSemesters,
       getStudentTermMetrics,
       getStudentTranscript,
       getStudentAvailableTerms,
@@ -1543,6 +1740,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       getPlannerTermCode,
       getSelectedCourses,
       getStudentDrafts,
+      getStudentTranscriptSemesters,
       getStudentTermMetrics,
       getStudentTranscript,
       getStudentAvailableTerms,
