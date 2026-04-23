@@ -397,6 +397,37 @@ function normalizeTranscriptMark(mark: number | null) {
   return mark < 35 ? 35 : mark;
 }
 
+function allocateCoursesAcrossTerms<TCourse extends { credits: number }>(
+  courses: TCourse[],
+  termCodes: string[],
+  targetHoursPerTerm: number
+) {
+  const assignments = new Map<number, number>();
+  let currentTermIndex = 0;
+  let currentTermHours = 0;
+
+  courses.forEach((course, courseIndex) => {
+    const remainingCourses = courses.length - courseIndex;
+    const remainingTerms = termCodes.length - currentTermIndex;
+    const shouldAdvance =
+      currentTermHours > 0
+      && currentTermIndex < termCodes.length - 1
+      && currentTermHours + course.credits > targetHoursPerTerm
+      && remainingTerms > 1
+      && remainingCourses >= remainingTerms;
+
+    if (shouldAdvance) {
+      currentTermIndex += 1;
+      currentTermHours = 0;
+    }
+
+    assignments.set(courseIndex, currentTermIndex);
+    currentTermHours += course.credits;
+  });
+
+  return assignments;
+}
+
 function buildDemoTranscriptData(studentProfiles: StudentProfile[], courses: Course[]) {
   const nextRegisterableTermByStudent = new Map(
     studentProfiles.map((profile) => [
@@ -423,21 +454,17 @@ function buildDemoTranscriptData(studentProfiles: StudentProfile[], courses: Cou
       return;
     }
 
+    const totalHours = completedCourses.reduce((sum, course) => sum + course.credits, 0);
     const termsToUse = clamp(
-      Math.round(profile.creditsCompleted / 15),
-      3,
+      Math.ceil(totalHours / 14),
+      1,
       Math.min(eligibleTerms.length, completedCourses.length)
     );
     const plannedTerms = eligibleTerms.slice(0, termsToUse);
+    const termAssignments = allocateCoursesAcrossTerms(completedCourses, plannedTerms.map((term) => term.termCode), 14);
 
     completedCourses.forEach((course, index) => {
-      const progress = index / Math.max(completedCourses.length - 1, 1);
-      const preferredTermIndex = Math.min(
-        plannedTerms.length - 1,
-        Math.floor(progress * plannedTerms.length)
-      );
-      const wobble = seededUnit(`${profile.id}:${course.code}:term`) > 0.72 ? 1 : 0;
-      const termIndex = Math.min(plannedTerms.length - 1, preferredTermIndex + wobble);
+      const termIndex = termAssignments.get(index) ?? 0;
       const term = plannedTerms[termIndex] ?? plannedTerms[plannedTerms.length - 1];
       const studentStrength = clamp((profile.gpa - 3) * 14, -8, 8);
       const termMomentum = (termIndex / Math.max(plannedTerms.length - 1, 1)) * 4;

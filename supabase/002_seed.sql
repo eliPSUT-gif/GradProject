@@ -437,8 +437,8 @@ term_candidates as (
 student_counts as (
   select
     student_code,
-    count(*) as total_courses,
-    greatest(3, round(max(completed_credits) / 15.0))::integer as terms_to_use
+    coalesce(sum(credits), 0) as total_hours,
+    greatest(1, ceil(coalesce(sum(credits), 0) / 14.0))::integer as terms_to_use
   from seeded_courses
   group by student_code
 ),
@@ -452,16 +452,20 @@ distributed_courses as (
     sc.credits,
     sc.difficulty_score,
     sc.gpa,
-    counts.total_courses,
-    least(counts.terms_to_use, counts.total_courses) as terms_to_use,
+    counts.total_hours,
+    counts.terms_to_use,
     least(
-      least(counts.terms_to_use, counts.total_courses),
-      floor(((sc.course_order - 1)::numeric / greatest(counts.total_courses, 1)) * least(counts.terms_to_use, counts.total_courses))::integer
-      + 1
-      + case
-          when get_byte(decode(substr(md5(sc.student_code || ':' || sc.course_code || ':term'), 1, 2), 'hex'), 0) % 10 >= 7 then 1
-          else 0
-        end
+      counts.terms_to_use,
+      greatest(
+        1,
+        ceil(
+          sum(sc.credits) over (
+            partition by sc.student_code
+            order by sc.course_order
+            rows between unbounded preceding and current row
+          ) / 14.0
+        )::integer
+      )
     ) as assigned_term_index
   from seeded_courses sc
   join student_counts counts on counts.student_code = sc.student_code

@@ -521,7 +521,7 @@ export default function AdvisorStudentDetailPage() {
                 <div>
                   <p className="font-semibold text-[#0f1e3c]">{selectedSemester.termLabel}</p>
                   <p className="text-xs text-gray-500">
-                    {selectedSemester.courseCount} course{selectedSemester.courseCount !== 1 ? 's' : ''} | {selectedSemester.completedCredits} completed credits | GPA {selectedSemester.gpa?.toFixed(2) ?? '-'}
+                    {selectedSemester.completedCredits} hour{selectedSemester.completedCredits !== 1 ? 's' : ''} | {selectedSemester.courseCount} course{selectedSemester.courseCount !== 1 ? 's' : ''} | GPA {selectedSemester.gpa?.toFixed(2) ?? '-'}
                   </p>
                 </div>
               </div>
