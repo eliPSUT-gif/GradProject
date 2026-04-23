@@ -397,26 +397,85 @@ function normalizeTranscriptMark(mark: number | null) {
   return mark < 35 ? 35 : mark;
 }
 
+function getCourseFillPriority(course: Course) {
+  if (/^(311|312|313|EUNI)/.test(course.code)) {
+    return 0;
+  }
+
+  if (/^(11102|11151|20132|20133|20200|20233|20234)$/.test(course.code)) {
+    return 100;
+  }
+
+  if (/^EPRG/.test(course.code)) {
+    return 200;
+  }
+
+  return 300;
+}
+
+function fillCompletedCoursesToTarget(profile: StudentProfile, courses: Course[]) {
+  const completedCourses = profile.completedCourseCodes
+    .map((code) => courses.find((course) => course.code === code))
+    .filter((course): course is Course => Boolean(course));
+  const completedCodes = new Set(completedCourses.map((course) => course.code));
+  const currentHours = completedCourses.reduce((sum, course) => sum + course.credits, 0);
+  const remainingHours = profile.creditsCompleted - currentHours;
+
+  if (remainingHours <= 0) {
+    return completedCourses;
+  }
+
+  const candidates = courses
+    .filter((course) => course.credits > 0 && !completedCodes.has(course.code))
+    .sort((left, right) => {
+      const priorityDiff = getCourseFillPriority(left) - getCourseFillPriority(right);
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
+      return left.diffScore - right.diffScore;
+    });
+
+  const bestByHours: Array<{ courses: Course[]; priority: number } | null> = Array(remainingHours + 1).fill(null);
+  bestByHours[0] = { courses: [], priority: 0 };
+
+  candidates.forEach((candidate) => {
+    const candidatePriority = getCourseFillPriority(candidate) + candidate.diffScore / 100;
+    for (let hours = remainingHours; hours >= candidate.credits; hours -= 1) {
+      const previous = bestByHours[hours - candidate.credits];
+      if (!previous) {
+        continue;
+      }
+
+      const next = {
+        courses: [...previous.courses, candidate],
+        priority: previous.priority + candidatePriority,
+      };
+      const existing = bestByHours[hours];
+      if (!existing || next.priority < existing.priority) {
+        bestByHours[hours] = next;
+      }
+    }
+  });
+
+  return bestByHours[remainingHours]
+    ? [...completedCourses, ...bestByHours[remainingHours].courses]
+    : completedCourses;
+}
+
 function allocateCoursesAcrossTerms<TCourse extends { credits: number }>(
   courses: TCourse[],
-  termCodes: string[],
-  targetHoursPerTerm: number
+  terms: { termCode: string; termType: TermType }[]
 ) {
   const assignments = new Map<number, number>();
   let currentTermIndex = 0;
   let currentTermHours = 0;
 
   courses.forEach((course, courseIndex) => {
-    const remainingCourses = courses.length - courseIndex;
-    const remainingTerms = termCodes.length - currentTermIndex;
-    const shouldAdvance =
-      currentTermHours > 0
-      && currentTermIndex < termCodes.length - 1
-      && currentTermHours + course.credits > targetHoursPerTerm
-      && remainingTerms > 1
-      && remainingCourses >= remainingTerms;
-
-    if (shouldAdvance) {
+    while (
+      currentTermIndex < terms.length - 1
+      && currentTermHours + course.credits > getCreditLimitForTermCode(terms[currentTermIndex].termCode)
+    ) {
       currentTermIndex += 1;
       currentTermHours = 0;
     }
@@ -446,28 +505,19 @@ function buildDemoTranscriptData(studentProfiles: StudentProfile[], courses: Cou
       Number(nextRegisterableTermCode.split('-')[0] ?? new Date().getFullYear())
     ).filter((term) => compareTermCodesNewestFirst(term.termCode, nextRegisterableTermCode) > 0);
 
-    const completedCourses = profile.completedCourseCodes
-      .map((code) => courses.find((course) => course.code === code))
-      .filter((course): course is Course => Boolean(course));
+    const completedCourses = fillCompletedCoursesToTarget(profile, courses);
 
     if (completedCourses.length === 0 || eligibleTerms.length === 0) {
       return;
     }
 
-    const totalHours = completedCourses.reduce((sum, course) => sum + course.credits, 0);
-    const termsToUse = clamp(
-      Math.ceil(totalHours / 14),
-      1,
-      Math.min(eligibleTerms.length, completedCourses.length)
-    );
-    const plannedTerms = eligibleTerms.slice(0, termsToUse);
-    const termAssignments = allocateCoursesAcrossTerms(completedCourses, plannedTerms.map((term) => term.termCode), 14);
+    const termAssignments = allocateCoursesAcrossTerms(completedCourses, eligibleTerms);
 
     completedCourses.forEach((course, index) => {
       const termIndex = termAssignments.get(index) ?? 0;
-      const term = plannedTerms[termIndex] ?? plannedTerms[plannedTerms.length - 1];
+      const term = eligibleTerms[termIndex] ?? eligibleTerms[eligibleTerms.length - 1];
       const studentStrength = clamp((profile.gpa - 3) * 14, -8, 8);
-      const termMomentum = (termIndex / Math.max(plannedTerms.length - 1, 1)) * 4;
+      const termMomentum = (termIndex / Math.max(eligibleTerms.length - 1, 1)) * 4;
       const randomOffset = Math.round((seededUnit(`${profile.id}:${course.code}:grade`) - 0.5) * 12);
       const grade = Math.round(clamp(
         89

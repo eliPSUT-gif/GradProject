@@ -297,87 +297,251 @@ where not exists (
     and h.term_code = term.term_code
 );
 
-create temporary table tmp_seed_completed_courses (
+create temporary table tmp_seed_transcript_entries (
   student_code text not null,
+  term_code text not null,
   course_code text not null,
-  course_order integer not null
+  final_grade numeric(5,2) not null,
+  status text not null,
+  attempt_no integer not null
 ) on commit drop;
 
-insert into tmp_seed_completed_courses (student_code, course_code, course_order)
+insert into tmp_seed_transcript_entries (student_code, term_code, course_code, final_grade, status, attempt_no)
 values
-  ('20231001', '11103', 1), ('20231001', '20134', 2),
-  ('20231001', '11206', 3), ('20231001', '11253', 4),
-  ('20231001', '11212', 5), ('20231001', '11313', 6),
-  ('20231001', '11316', 7), ('20231001', '11323', 8),
-  ('20231001', '11354', 9), ('20231001', '12242', 10),
-  ('20231001', '12243', 11), ('20231001', '12343', 12),
-  ('20231001', '20135', 13), ('20231001', '20141', 14),
-  ('20231001', '20142', 15), ('20231001', '20147', 16),
-  ('20231001', '20233', 17), ('20231001', '22241', 18),
-  ('20231001', '22342', 19),
-  ('20221045', '11103', 1), ('20221045', '20134', 2),
-  ('20221045', '11206', 3), ('20221045', '11253', 4),
-  ('20221045', '11212', 5), ('20221045', '11313', 6),
-  ('20221045', '11316', 7), ('20221045', '11323', 8),
-  ('20221045', '11354', 9), ('20221045', '11435', 10),
-  ('20221045', '12243', 11), ('20221045', '12242', 12),
-  ('20221045', '12343', 13), ('20221045', '14330', 14),
-  ('20221045', '20135', 15), ('20221045', '20141', 16),
-  ('20221045', '20142', 17), ('20221045', '20147', 18),
-  ('20221045', '20333', 19), ('20221045', '22241', 20),
-  ('20221045', '22342', 21), ('20221045', '22541', 22),
-  ('20221188', '11103', 1), ('20221188', '20134', 2),
-  ('20221188', '11206', 3), ('20221188', '11253', 4),
-  ('20221188', '11212', 5), ('20221188', '11323', 6),
-  ('20221188', '11435', 7), ('20221188', '12243', 8),
-  ('20221188', '20135', 9), ('20221188', '20141', 10),
-  ('20221188', '20142', 11), ('20221188', '20147', 12),
-  ('20221188', '20333', 13), ('20221188', '22241', 14),
-  ('20221188', '22342', 15),
-  ('20220877', '11103', 1), ('20220877', '20134', 2),
-  ('20220877', '11206', 3), ('20220877', '11253', 4),
-  ('20220877', '11212', 5), ('20220877', '11313', 6),
-  ('20220877', '11316', 7), ('20220877', '11323', 8),
-  ('20220877', '11335', 9), ('20220877', '11354', 10),
-  ('20220877', '11355', 11), ('20220877', '11435', 12),
-  ('20220877', '11449', 13), ('20220877', '12243', 14),
-  ('20220877', '12242', 15), ('20220877', '12343', 16),
-  ('20220877', '13477', 17), ('20220877', '14330', 18),
-  ('20220877', '20135', 19), ('20220877', '20141', 20),
-  ('20220877', '20142', 21), ('20220877', '20147', 22),
-  ('20220877', '20333', 23), ('20220877', '20336', 24),
-  ('20220877', '22241', 25), ('20220877', '22342', 26),
-  ('20220877', '22541', 27),
-  ('20220432', '11103', 1), ('20220432', '20134', 2),
-  ('20220432', '11206', 3), ('20220432', '11253', 4),
-  ('20220432', '11212', 5), ('20220432', '11313', 6),
-  ('20220432', '11316', 7), ('20220432', '11323', 8),
-  ('20220432', '11335', 9), ('20220432', '11354', 10),
-  ('20220432', '11355', 11), ('20220432', '11391', 12),
-  ('20220432', '11435', 13), ('20220432', '11449', 14),
-  ('20220432', '11464', 15), ('20220432', '11493', 16),
-  ('20220432', '12243', 17), ('20220432', '12242', 18),
-  ('20220432', '12343', 19), ('20220432', '13477', 20),
-  ('20220432', '14330', 21), ('20220432', '20135', 22),
-  ('20220432', '20141', 23), ('20220432', '20142', 24),
-  ('20220432', '20147', 25), ('20220432', '20333', 26),
-  ('20220432', '20336', 27), ('20220432', '22241', 28),
-  ('20220432', '22342', 29), ('20220432', '22541', 30),
-  ('20221302', '11103', 1), ('20221302', '20134', 2),
-  ('20221302', '11206', 3), ('20221302', '11253', 4),
-  ('20221302', '11212', 5), ('20221302', '11323', 6),
-  ('20221302', '11435', 7), ('20221302', '12243', 8),
-  ('20221302', '20135', 9), ('20221302', '20141', 10),
-  ('20221302', '20147', 11), ('20221302', '22241', 12),
-  ('20221302', '22342', 13),
-  ('20220665', '11103', 1), ('20220665', '20134', 2),
-  ('20220665', '11206', 3), ('20220665', '11253', 4),
-  ('20220665', '11212', 5), ('20220665', '11313', 6),
-  ('20220665', '11323', 7), ('20220665', '11435', 8),
-  ('20220665', '12243', 9), ('20220665', '20135', 10),
-  ('20220665', '20141', 11), ('20220665', '20142', 12),
-  ('20220665', '20147', 13), ('20220665', '20333', 14),
-  ('20220665', '22241', 15), ('20220665', '22342', 16);
+  ('20231001', '2023-Fall', '11103', 88, 'passed', 1),
+  ('20231001', '2023-Fall', '20134', 83, 'passed', 1),
+  ('20231001', '2023-Fall', '11206', 82, 'passed', 1),
+  ('20231001', '2023-Fall', '11253', 88, 'passed', 1),
+  ('20231001', '2023-Fall', '11212', 77, 'passed', 1),
+  ('20231001', '2023-Fall', '11313', 72, 'passed', 1),
+  ('20231001', '2024-Spring', '11316', 70, 'passed', 1),
+  ('20231001', '2024-Spring', '11323', 76, 'passed', 1),
+  ('20231001', '2024-Spring', '11354', 88, 'passed', 1),
+  ('20231001', '2024-Spring', '12242', 90, 'passed', 1),
+  ('20231001', '2024-Spring', '12243', 83, 'passed', 1),
+  ('20231001', '2024-Spring', '12343', 79, 'passed', 1),
+  ('20231001', '2024-Spring', '20135', 77, 'passed', 1),
+  ('20231001', '2024-Summer', '20141', 77, 'passed', 1),
+  ('20231001', '2024-Summer', '20142', 78, 'passed', 1),
+  ('20231001', '2024-Summer', '20147', 87, 'passed', 1),
+  ('20231001', '2024-Summer', '20233', 77, 'passed', 1),
+  ('20231001', '2024-Fall', '22241', 78, 'passed', 1),
+  ('20231001', '2024-Fall', '22342', 77, 'passed', 1),
+  ('20231001', '2024-Fall', '31374', 96, 'passed', 1),
+  ('20231001', '2024-Fall', '31251', 91, 'passed', 1),
+  ('20231001', '2024-Fall', '31151', 90, 'passed', 1),
+  ('20231001', '2024-Fall', '31112', 89, 'passed', 1),
+  ('20231001', '2025-Spring', '31254', 92, 'passed', 1),
+  ('20231001', '2025-Spring', '31122', 94, 'passed', 1),
+  ('20231001', '2025-Spring', 'EUNI-01', 91, 'passed', 1),
+  ('20231001', '2025-Spring', 'EUNI-02', 92, 'passed', 1),
+  ('20231001', '2025-Spring', '11494', 77, 'passed', 1),
+  ('20221045', '2022-Fall', '11103', 80, 'passed', 1),
+  ('20221045', '2022-Fall', '20134', 73, 'passed', 1),
+  ('20221045', '2022-Fall', '11206', 69, 'passed', 1),
+  ('20221045', '2022-Fall', '11253', 83, 'passed', 1),
+  ('20221045', '2022-Fall', '11212', 73, 'passed', 1),
+  ('20221045', '2022-Fall', '11313', 71, 'passed', 1),
+  ('20221045', '2023-Spring', '11316', 71, 'passed', 1),
+  ('20221045', '2023-Spring', '11323', 80, 'passed', 1),
+  ('20221045', '2023-Spring', '11354', 80, 'passed', 1),
+  ('20221045', '2023-Spring', '11435', 74, 'passed', 1),
+  ('20221045', '2023-Spring', '12243', 80, 'passed', 1),
+  ('20221045', '2023-Spring', '12242', 76, 'passed', 1),
+  ('20221045', '2023-Spring', '12343', 74, 'passed', 1),
+  ('20221045', '2023-Summer', '14330', 64, 'passed', 1),
+  ('20221045', '2023-Summer', '20135', 71, 'passed', 1),
+  ('20221045', '2023-Summer', '20141', 71, 'passed', 1),
+  ('20221045', '2023-Fall', '20142', 77, 'passed', 1),
+  ('20221045', '2023-Fall', '20147', 86, 'passed', 1),
+  ('20221045', '2023-Fall', '20333', 70, 'passed', 1),
+  ('20221045', '2023-Fall', '22241', 69, 'passed', 1),
+  ('20221045', '2023-Fall', '22342', 67, 'passed', 1),
+  ('20221045', '2023-Fall', '22541', 73, 'passed', 1),
+  ('20221045', '2023-Fall', '31374', 91, 'passed', 1),
+  ('20221045', '2024-Spring', '31251', 82, 'passed', 1),
+  ('20221045', '2024-Spring', '31151', 81, 'passed', 1),
+  ('20221045', '2024-Spring', '31112', 83, 'passed', 1),
+  ('20221045', '2024-Spring', '31254', 79, 'passed', 1),
+  ('20221045', '2024-Spring', '31122', 79, 'passed', 1),
+  ('20221045', '2024-Spring', 'EUNI-01', 86, 'passed', 1),
+  ('20221045', '2024-Summer', 'EUNI-02', 77, 'passed', 1),
+  ('20221045', '2024-Summer', 'EUNI-03', 82, 'passed', 1),
+  ('20221045', '2024-Summer', '11102', 90, 'passed', 1),
+  ('20221045', '2024-Fall', '11151', 89, 'passed', 1),
+  ('20221188', '2022-Fall', '11103', 77, 'passed', 1),
+  ('20221188', '2022-Fall', '20134', 73, 'passed', 1),
+  ('20221188', '2022-Fall', '11206', 75, 'passed', 1),
+  ('20221188', '2022-Fall', '11253', 76, 'passed', 1),
+  ('20221188', '2022-Fall', '11212', 67, 'passed', 1),
+  ('20221188', '2022-Fall', '11323', 79, 'passed', 1),
+  ('20221188', '2023-Spring', '11435', 69, 'passed', 1),
+  ('20221188', '2023-Spring', '12243', 77, 'passed', 1),
+  ('20221188', '2023-Spring', '20135', 72, 'passed', 1),
+  ('20221188', '2023-Spring', '20141', 73, 'passed', 1),
+  ('20221188', '2023-Spring', '20142', 80, 'passed', 1),
+  ('20221188', '2023-Spring', '20147', 86, 'passed', 1),
+  ('20221188', '2023-Spring', '20333', 69, 'passed', 1),
+  ('20221188', '2023-Summer', '22241', 71, 'passed', 1),
+  ('20221188', '2023-Summer', '22342', 71, 'passed', 1),
+  ('20221188', '2023-Summer', '31374', 83, 'passed', 1),
+  ('20221188', '2023-Fall', '31251', 87, 'passed', 1),
+  ('20221188', '2023-Fall', '31151', 83, 'passed', 1),
+  ('20221188', '2023-Fall', '31112', 90, 'passed', 1),
+  ('20221188', '2023-Fall', '31254', 90, 'passed', 1),
+  ('20221188', '2023-Fall', '31122', 85, 'passed', 1),
+  ('20221188', '2023-Fall', 'EUNI-01', 84, 'passed', 1),
+  ('20221188', '2024-Spring', 'EUNI-02', 90, 'passed', 1),
+  ('20221188', '2024-Spring', 'EUNI-03', 83, 'passed', 1),
+  ('20221188', '2024-Spring', '11102', 91, 'passed', 1),
+  ('20221188', '2024-Spring', '20200', 87, 'passed', 1),
+  ('20221188', '2024-Spring', '20234', 76, 'passed', 1),
+  ('20221188', '2024-Spring', '20233', 81, 'passed', 1),
+  ('20221188', '2024-Summer', '20132', 77, 'passed', 1),
+  ('20221188', '2024-Summer', '11494', 74, 'passed', 1),
+  ('20220877', '2022-Fall', '11103', 82, 'passed', 1),
+  ('20220877', '2022-Fall', '20134', 81, 'passed', 1),
+  ('20220877', '2022-Fall', '11206', 80, 'passed', 1),
+  ('20220877', '2022-Fall', '11253', 79, 'passed', 1),
+  ('20220877', '2022-Fall', '11212', 68, 'passed', 1),
+  ('20220877', '2022-Fall', '11313', 74, 'passed', 1),
+  ('20220877', '2023-Spring', '11316', 76, 'passed', 1),
+  ('20220877', '2023-Spring', '11323', 81, 'passed', 1),
+  ('20220877', '2023-Spring', '11335', 73, 'passed', 1),
+  ('20220877', '2023-Spring', '11354', 79, 'passed', 1),
+  ('20220877', '2023-Spring', '11355', 72, 'passed', 1),
+  ('20220877', '2023-Spring', '11435', 73, 'passed', 1),
+  ('20220877', '2023-Spring', '11449', 94, 'passed', 1),
+  ('20220877', '2023-Spring', '12243', 82, 'passed', 1),
+  ('20220877', '2023-Summer', '12242', 85, 'passed', 1),
+  ('20220877', '2023-Summer', '12343', 80, 'passed', 1),
+  ('20220877', '2023-Summer', '13477', 77, 'passed', 1),
+  ('20220877', '2023-Fall', '14330', 74, 'passed', 1),
+  ('20220877', '2023-Fall', '20135', 80, 'passed', 1),
+  ('20220877', '2023-Fall', '20141', 80, 'passed', 1),
+  ('20220877', '2023-Fall', '20142', 81, 'passed', 1),
+  ('20220877', '2023-Fall', '20147', 87, 'passed', 1),
+  ('20220877', '2023-Fall', '20333', 80, 'passed', 1),
+  ('20220877', '2023-Fall', '20336', 82, 'passed', 1),
+  ('20220877', '2024-Spring', '22241', 77, 'passed', 1),
+  ('20220877', '2024-Spring', '22342', 71, 'passed', 1),
+  ('20220877', '2024-Spring', '22541', 73, 'passed', 1),
+  ('20220877', '2024-Spring', '31374', 93, 'passed', 1),
+  ('20220877', '2024-Spring', '31251', 95, 'passed', 1),
+  ('20220877', '2024-Spring', '31151', 89, 'passed', 1),
+  ('20220877', '2024-Summer', '31112', 86, 'passed', 1),
+  ('20220877', '2024-Summer', '31254', 87, 'passed', 1),
+  ('20220877', '2024-Summer', '31122', 87, 'passed', 1),
+  ('20220877', '2024-Fall', 'EUNI-01', 85, 'passed', 1),
+  ('20220877', '2024-Fall', 'EUNI-02', 89, 'passed', 1),
+  ('20220432', '2022-Fall', '11103', 90, 'passed', 1),
+  ('20220432', '2022-Fall', '20134', 80, 'passed', 1),
+  ('20220432', '2022-Fall', '11206', 82, 'passed', 1),
+  ('20220432', '2022-Fall', '11253', 92, 'passed', 1),
+  ('20220432', '2022-Fall', '11212', 81, 'passed', 1),
+  ('20220432', '2022-Fall', '11313', 77, 'passed', 1),
+  ('20220432', '2023-Spring', '11316', 77, 'passed', 1),
+  ('20220432', '2023-Spring', '11323', 83, 'passed', 1),
+  ('20220432', '2023-Spring', '11335', 80, 'passed', 1),
+  ('20220432', '2023-Spring', '11354', 82, 'passed', 1),
+  ('20220432', '2023-Spring', '11355', 82, 'passed', 1),
+  ('20220432', '2023-Spring', '11391', 96, 'passed', 1),
+  ('20220432', '2023-Spring', '11435', 76, 'passed', 1),
+  ('20220432', '2023-Spring', '11449', 90, 'passed', 1),
+  ('20220432', '2023-Summer', '11464', 78, 'passed', 1),
+  ('20220432', '2023-Summer', '11493', 85, 'passed', 1),
+  ('20220432', '2023-Summer', '12243', 92, 'passed', 1),
+  ('20220432', '2023-Summer', '12242', 92, 'passed', 1),
+  ('20220432', '2023-Fall', '12343', 88, 'passed', 1),
+  ('20220432', '2023-Fall', '13477', 89, 'passed', 1),
+  ('20220432', '2023-Fall', '14330', 76, 'passed', 1),
+  ('20220432', '2023-Fall', '20135', 75, 'passed', 1),
+  ('20220432', '2023-Fall', '20141', 89, 'passed', 1),
+  ('20220432', '2023-Fall', '20142', 84, 'passed', 1),
+  ('20220432', '2023-Fall', '20147', 96, 'passed', 1),
+  ('20220432', '2024-Spring', '20333', 88, 'passed', 1),
+  ('20220432', '2024-Spring', '20336', 87, 'passed', 1),
+  ('20220432', '2024-Spring', '22241', 81, 'passed', 1),
+  ('20220432', '2024-Spring', '22342', 85, 'passed', 1),
+  ('20220432', '2024-Spring', '22541', 76, 'passed', 1),
+  ('20220432', '2024-Spring', '31374', 95, 'passed', 1),
+  ('20220432', '2024-Summer', '31251', 91, 'passed', 1),
+  ('20220432', '2024-Summer', '31151', 93, 'passed', 1),
+  ('20220432', '2024-Summer', '31112', 96, 'passed', 1),
+  ('20220432', '2024-Fall', '31254', 90, 'passed', 1),
+  ('20220432', '2024-Fall', '31122', 92, 'passed', 1),
+  ('20220432', '2024-Fall', 'EUNI-01', 90, 'passed', 1),
+  ('20220432', '2024-Fall', 'EUNI-02', 89, 'passed', 1),
+  ('20220432', '2024-Fall', '11494', 85, 'passed', 1),
+  ('20221302', '2022-Fall', '11103', 83, 'passed', 1),
+  ('20221302', '2022-Fall', '20134', 84, 'passed', 1),
+  ('20221302', '2022-Fall', '11206', 83, 'passed', 1),
+  ('20221302', '2022-Fall', '11253', 91, 'passed', 1),
+  ('20221302', '2022-Fall', '11212', 80, 'passed', 1),
+  ('20221302', '2022-Fall', '11323', 88, 'passed', 1),
+  ('20221302', '2023-Spring', '11435', 77, 'passed', 1),
+  ('20221302', '2023-Spring', '12243', 86, 'passed', 1),
+  ('20221302', '2023-Spring', '20135', 75, 'passed', 1),
+  ('20221302', '2023-Spring', '20141', 80, 'passed', 1),
+  ('20221302', '2023-Spring', '20147', 96, 'passed', 1),
+  ('20221302', '2023-Spring', '22241', 79, 'passed', 1),
+  ('20221302', '2023-Spring', '22342', 81, 'passed', 1),
+  ('20221302', '2023-Summer', '31374', 90, 'passed', 1),
+  ('20221302', '2023-Summer', '31251', 96, 'passed', 1),
+  ('20221302', '2023-Summer', '31151', 91, 'passed', 1),
+  ('20221302', '2023-Fall', '31112', 91, 'passed', 1),
+  ('20221302', '2023-Fall', '31254', 96, 'passed', 1),
+  ('20221302', '2023-Fall', '31122', 92, 'passed', 1),
+  ('20221302', '2023-Fall', 'EUNI-01', 93, 'passed', 1),
+  ('20221302', '2023-Fall', 'EUNI-02', 93, 'passed', 1),
+  ('20221302', '2023-Fall', 'EUNI-03', 90, 'passed', 1),
+  ('20221302', '2024-Spring', '11102', 92, 'passed', 1),
+  ('20221302', '2024-Spring', '20200', 96, 'passed', 1),
+  ('20221302', '2024-Spring', '20234', 92, 'passed', 1),
+  ('20221302', '2024-Spring', '20233', 90, 'passed', 1),
+  ('20221302', '2024-Spring', '20132', 83, 'passed', 1),
+  ('20220665', '2022-Fall', '11103', 76, 'passed', 1),
+  ('20220665', '2022-Fall', '20134', 72, 'passed', 1),
+  ('20220665', '2022-Fall', '11206', 74, 'passed', 1),
+  ('20220665', '2022-Fall', '11253', 81, 'passed', 1),
+  ('20220665', '2022-Fall', '11212', 77, 'passed', 1),
+  ('20220665', '2022-Fall', '11313', 69, 'passed', 1),
+  ('20220665', '2023-Spring', '11323', 82, 'passed', 1),
+  ('20220665', '2023-Spring', '11435', 80, 'passed', 1),
+  ('20220665', '2023-Spring', '12243', 75, 'passed', 1),
+  ('20220665', '2023-Spring', '20135', 68, 'passed', 1),
+  ('20220665', '2023-Spring', '20141', 73, 'passed', 1),
+  ('20220665', '2023-Spring', '20142', 75, 'passed', 1),
+  ('20220665', '2023-Spring', '20147', 88, 'passed', 1),
+  ('20220665', '2023-Summer', '20333', 77, 'passed', 1),
+  ('20220665', '2023-Summer', '22241', 72, 'passed', 1),
+  ('20220665', '2023-Summer', '22342', 77, 'passed', 1),
+  ('20220665', '2023-Fall', '31374', 84, 'passed', 1),
+  ('20220665', '2023-Fall', '31251', 84, 'passed', 1),
+  ('20220665', '2023-Fall', '31151', 84, 'passed', 1),
+  ('20220665', '2023-Fall', '31112', 94, 'passed', 1),
+  ('20220665', '2023-Fall', '31254', 82, 'passed', 1),
+  ('20220665', '2023-Fall', '31122', 90, 'passed', 1),
+  ('20220665', '2024-Spring', 'EUNI-01', 82, 'passed', 1),
+  ('20220665', '2024-Spring', 'EUNI-02', 91, 'passed', 1),
+  ('20220665', '2024-Spring', 'EUNI-03', 81, 'passed', 1),
+  ('20220665', '2024-Spring', '11102', 84, 'passed', 1),
+  ('20220665', '2024-Spring', '20200', 94, 'passed', 1),
+  ('20220665', '2024-Spring', '20234', 74, 'passed', 1),
+  ('20220665', '2024-Summer', '20233', 84, 'passed', 1);
+
+delete from public.student_transcript_entries ste
+using public.app_users s
+where ste.student_id = s.id
+  and s.university_id in (
+    '20231001',
+    '20221045',
+    '20221188',
+    '20220877',
+    '20220432',
+    '20221302',
+    '20220665'
+  );
 
 insert into public.student_transcript_entries (
   student_id,
@@ -389,131 +553,23 @@ insert into public.student_transcript_entries (
   created_at,
   updated_at
 )
-with seeded_courses as (
-  select
-    t.student_code,
-    t.course_code,
-    t.course_order,
-    student_u.id as student_id,
-    c.id as course_id,
-    c.course_type,
-    c.credits,
-    c.difficulty_score,
-    sp.gpa,
-    sp.completed_credits,
-    sp.admission_year,
-    sp.admission_term
-  from tmp_seed_completed_courses t
-  join public.app_users student_u on student_u.university_id = t.student_code
-  join public.student_profiles sp on sp.user_id = student_u.id
-  join public.courses c on c.course_code = t.course_code
-),
-term_candidates as (
-  select
-    sc.student_code,
-    at.term_code,
-    at.term_type,
-    row_number() over (
-      partition by sc.student_code
-      order by
-        at.academic_year,
-        case at.term_name when 'spring' then 1 when 'summer' then 2 else 3 end
-    ) as term_index
-  from (select distinct student_code, admission_year, admission_term from seeded_courses) sc
-  join public.academic_terms at on (
-    (
-      at.academic_year * 10
-      + case at.term_name when 'spring' then 1 when 'summer' then 2 else 3 end
-    ) >= (
-      sc.admission_year * 10
-      + case sc.admission_term when 'spring' then 1 when 'summer' then 2 else 3 end
-    )
-    and (
-      at.academic_year * 10
-      + case at.term_name when 'spring' then 1 when 'summer' then 2 else 3 end
-    ) < 20262
-  )
-),
-student_counts as (
-  select
-    student_code,
-    coalesce(sum(credits), 0) as total_hours,
-    greatest(1, ceil(coalesce(sum(credits), 0) / 14.0))::integer as terms_to_use
-  from seeded_courses
-  group by student_code
-),
-distributed_courses as (
-  select
-    sc.student_id,
-    sc.course_id,
-    sc.course_code,
-    sc.course_order,
-    sc.course_type,
-    sc.credits,
-    sc.difficulty_score,
-    sc.gpa,
-    counts.total_hours,
-    counts.terms_to_use,
-    least(
-      counts.terms_to_use,
-      greatest(
-        1,
-        ceil(
-          sum(sc.credits) over (
-            partition by sc.student_code
-            order by sc.course_order
-            rows between unbounded preceding and current row
-          ) / 14.0
-        )::integer
-      )
-    ) as assigned_term_index
-  from seeded_courses sc
-  join student_counts counts on counts.student_code = sc.student_code
-)
 select
-  dc.student_id,
-  tc.term_code,
-  dc.course_id,
-  round(
-    greatest(
-      61,
-      least(
-        96,
-        89
-        + ((dc.gpa - 3.0) * 14)
-        + (((tc.term_index - 1)::numeric / greatest(dc.terms_to_use - 1, 1)) * 4)
-        - (dc.difficulty_score * 0.24)
-        + ((get_byte(decode(substr(md5(dc.student_id::text || ':' || dc.course_code || ':grade'), 1, 2), 'hex'), 0) % 13) - 6)
-      )
-    )::numeric,
-    2
-  ) as final_grade,
-  'passed',
-  1,
+  s.id,
+  t.term_code,
+  c.id,
+  t.final_grade,
+  t.status,
+  t.attempt_no,
   timezone('utc', now()),
   timezone('utc', now())
-from distributed_courses dc
-join term_candidates tc
-  on tc.student_code = (select university_id from public.app_users where id = dc.student_id)
- and tc.term_index = dc.assigned_term_index
+from tmp_seed_transcript_entries t
+join public.app_users s on s.university_id = t.student_code
+join public.courses c on c.course_code = t.course_code
 on conflict (student_id, course_id, term_code, attempt_no) do update
 set
   final_grade = excluded.final_grade,
   status = excluded.status,
   updated_at = timezone('utc', now());
-
-delete from public.student_transcript_entries ste
-using public.app_users s, public.courses c
-where ste.student_id = s.id
-  and ste.course_id = c.id
-  and s.university_id = '20231001'
-  and c.course_code in ('20333', '20336')
-  and not exists (
-    select 1
-    from tmp_seed_completed_courses t
-    where t.student_code = '20231001'
-      and t.course_code = c.course_code
-  );
 
 delete from public.schedule_drafts
 where name = 'Spring 2026 Forecast'
