@@ -274,6 +274,7 @@ $$;
 
 create or replace view public.student_transcript_v as
 select
+  ste.id,
   ste.student_id,
   ste.term_code,
   coalesce(at.term_type, public.term_type_from_term_name(public.term_name_from_code(ste.term_code))) as term_type,

@@ -71,6 +71,7 @@ const NAV: Record<Role, NavSection[]> = {
       title: 'System',
       items: [
         { label: 'Overview', to: '/app/admin', icon: LayoutDashboard },
+        { label: 'Students', to: '/app/admin/students', icon: Users },
         { label: 'Courses', to: '/app/admin/courses', icon: BookOpen },
       ],
     },
@@ -92,6 +93,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/app/advisor': 'Advisor Dashboard',
   '/app/advisor/messages': 'Messages',
   '/app/admin': 'Admin Overview',
+  '/app/admin/students': 'Student Management',
   '/app/admin/courses': 'Course Management',
   '/app/admin/users': 'User Management',
   '/app/admin/model': 'Model Status',

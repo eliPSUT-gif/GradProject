@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { KeyRound, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useAuth, type UserFormInput } from '../../context/AuthContext';
 import type { Role } from '../../data/courses';
 
@@ -13,8 +13,9 @@ const EMPTY_FORM: UserFormInput = {
 };
 
 export default function UserManagementPage() {
-  const { updateUserStatus, upsertUser, users } = useAuth();
+  const { resetUserPassword, updateUserStatus, upsertUser, users } = useAuth();
   const [form, setForm] = useState<UserFormInput>(EMPTY_FORM);
+  const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,6 +32,19 @@ export default function UserManagementPage() {
 
     setMessage(`User ${form.id} saved successfully.`);
     setForm(EMPTY_FORM);
+  };
+
+  const handleResetPassword = async (userId: string) => {
+    setMessage(null);
+    setError(null);
+    const nextPassword = resetPasswords[userId] ?? EMPTY_FORM.password;
+    const result = await resetUserPassword(userId, nextPassword);
+    if (!result.success) {
+      setError(result.error ?? 'Unable to reset password.');
+      return;
+    }
+
+    setMessage(`Temporary password reset for ${userId}.`);
   };
 
   return (
@@ -116,6 +130,7 @@ export default function UserManagementPage() {
                 <th className="pb-2 pr-4">Name</th>
                 <th className="pb-2 pr-4">Role</th>
                 <th className="pb-2 pr-4">Status</th>
+                <th className="pb-2 pr-4">Temporary Password</th>
                 <th className="pb-2">Action</th>
               </tr>
             </thead>
@@ -131,6 +146,14 @@ export default function UserManagementPage() {
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${account.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                       {account.status}
                     </span>
+                  </td>
+                  <td className="py-2.5 pr-4">
+                    <input
+                      type="password"
+                      value={resetPasswords[account.id] ?? EMPTY_FORM.password}
+                      onChange={(event) => setResetPasswords((current) => ({ ...current, [account.id]: event.target.value }))}
+                      className="w-44 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+                    />
                   </td>
                   <td className="py-2.5">
                     <div className="flex gap-2">
@@ -152,6 +175,13 @@ export default function UserManagementPage() {
                         className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100"
                       >
                         {account.status === 'active' ? 'Disable' : 'Enable'}
+                      </button>
+                      <button
+                        onClick={() => void handleResetPassword(account.id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        Reset
                       </button>
                     </div>
                   </td>

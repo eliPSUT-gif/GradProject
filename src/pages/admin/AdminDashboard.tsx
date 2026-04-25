@@ -1,60 +1,66 @@
 import {
-  Activity,
-  AlertTriangle,
-  Bot,
+  ClipboardList,
   Clock,
-  Database,
-  Server,
+  GraduationCap,
   UserCheck,
+  UserPlus,
   Users,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
+import { formatTermLabel } from '../../data/courses';
 
 export default function AdminDashboard() {
   const { users } = useAuth();
-  const { importJobs, modelCoverage, modelLastCalculatedAt, modelVersion, studentInsights } = useAppData();
+  const {
+    getStudentDrafts,
+    getStudentTranscriptSemesters,
+    studentInsights,
+    transcriptRows,
+  } = useAppData();
 
-  const totalStudents = users.filter((user) => user.role === 'student').length;
-  const activeAdvisors = users.filter((user) => user.role === 'advisor' && user.status === 'active').length;
-  const highRiskSchedules = studentInsights.filter((student) => student.status === 'at-risk').length;
+  const currentYear = new Date().getFullYear();
+  const studentsCreatedThisYear = users.filter((account) => account.role === 'student' && account.id.startsWith(String(currentYear))).length;
+  const activeAdvisors = users.filter((account) => account.role === 'advisor' && account.status === 'active');
+  const studentsWithoutAdvisor = studentInsights.filter((student) => !student.advisorId).length;
+  const inProgressRows = transcriptRows.filter((row) => row.status === 'in_progress');
+  const pendingDrafts = studentInsights.flatMap((student) => {
+    const transcriptTerms = new Set(getStudentTranscriptSemesters(student.id).map((semester) => semester.termCode));
+    return getStudentDrafts(student.id)
+      .filter((draft) => !transcriptTerms.has(draft.termCode))
+      .map((draft) => ({ student, draft }));
+  });
 
   const kpis = [
     {
-      icon: Users,
-      label: 'Total Students',
-      value: String(totalStudents),
-      subtitle: 'Managed in this demo instance',
+      icon: UserPlus,
+      label: `Students Created ${currentYear}`,
+      value: String(studentsCreatedThisYear),
+      subtitle: 'Generated registrar IDs',
       accent: '#2563eb',
     },
     {
       icon: UserCheck,
       label: 'Active Advisors',
-      value: String(activeAdvisors),
-      subtitle: 'Role-based access enabled',
+      value: String(activeAdvisors.length),
+      subtitle: 'Available for assignment',
       accent: '#0d9488',
     },
     {
-      icon: AlertTriangle,
-      label: 'High-Risk Schedules',
-      value: String(highRiskSchedules),
-      subtitle: 'Needs advisor follow-up',
-      accent: '#dc2626',
+      icon: ClipboardList,
+      label: 'Pending Sheets',
+      value: String(pendingDrafts.length),
+      subtitle: 'Saved plans not yet converted',
+      accent: '#f59e0b',
     },
     {
-      icon: Bot,
-      label: 'Model Coverage',
-      value: `${modelCoverage}%`,
-      subtitle: `Version ${modelVersion}`,
+      icon: GraduationCap,
+      label: 'Open Mark Rows',
+      value: String(inProgressRows.length),
+      subtitle: 'Waiting for end-of-term marks',
       accent: '#16a34a',
     },
-  ];
-
-  const healthItems = [
-    { icon: Activity, label: 'Uptime', value: '99.9%', bg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
-    { icon: Server, label: 'Avg Response', value: '< 1 s', bg: 'bg-blue-100', iconColor: 'text-blue-600' },
-    { icon: Database, label: 'Historical Rows', value: String(importJobs.reduce((sum, job) => sum + job.importedRows, 0)), bg: 'bg-amber-100', iconColor: 'text-amber-600' },
-    { icon: Bot, label: 'Score Model', value: modelVersion, bg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
   ];
 
   return (
@@ -76,110 +82,82 @@ export default function AdminDashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-5 sm:text-lg">
-            <Activity className="h-5 w-5 text-[#2563eb]" />
-            System Health
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_1fr]">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:text-lg">
+              <ClipboardList className="h-5 w-5 text-[#2563eb]" />
+              Semester Marks Queue
+            </h2>
+            <Link to="/app/admin/students" className="text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8]">
+              Open marks
+            </Link>
+          </div>
+          <ul className="divide-y divide-gray-100">
+            {pendingDrafts.slice(0, 6).map(({ student, draft }) => (
+              <li key={draft.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <div>
+                  <p className="text-sm font-semibold text-[#0f1e3c]">{student.name}</p>
+                  <p className="text-xs text-gray-500">{formatTermLabel(draft.termCode)} | {draft.courseCodes.length} selected courses</p>
+                </div>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Needs sheet</span>
+              </li>
+            ))}
+            {pendingDrafts.length === 0 && (
+              <li className="py-6 text-center text-sm text-gray-500">No saved course plans are waiting for transcript sheets.</li>
+            )}
+          </ul>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:text-lg">
+            <Users className="h-5 w-5 text-[#2563eb]" />
+            Advisor Assignment Panel
           </h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {healthItems.map((item) => {
-              const Icon = item.icon;
+          <div className="space-y-3">
+            {activeAdvisors.map((advisor) => {
+              const load = studentInsights.filter((student) => student.advisorId === advisor.id).length;
               return (
-                <div key={item.label} className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${item.bg}`}>
-                    <Icon className={`h-5 w-5 ${item.iconColor}`} />
-                  </div>
-                  <div>
-                    <p className="font-display text-lg font-bold text-[#0f1e3c]">{item.value}</p>
-                    <p className="text-xs text-gray-400">{item.label}</p>
+                <div key={advisor.id} className="rounded-xl border border-gray-200 p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-semibold text-[#0f1e3c]">{advisor.name}</p>
+                      <p className="text-xs text-gray-500">{advisor.id}</p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{load} students</span>
                   </div>
                 </div>
               );
             })}
+            {studentsWithoutAdvisor > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                {studentsWithoutAdvisor} student{studentsWithoutAdvisor === 1 ? '' : 's'} still need advisor assignment.
+              </div>
+            )}
           </div>
-        </div>
-
-        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-5 sm:text-lg">
-            <Clock className="h-5 w-5 text-[#2563eb]" />
-            Import Activity
-          </h2>
-          <ul className="divide-y divide-gray-100">
-            {importJobs.slice(0, 5).map((job) => (
-              <li key={job.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                <div>
-                  <p className="text-sm font-semibold text-[#0f1e3c]">{job.fileName}</p>
-                  <p className="text-xs text-gray-500">
-                    {job.importedRows} imported | {job.rejectedRows} rejected | {job.status.replaceAll('_', ' ')}
-                  </p>
-                </div>
-                <span className="whitespace-nowrap text-xs text-gray-400">{new Date(job.createdAt).toLocaleString()}</span>
-              </li>
-            ))}
-          </ul>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-5 sm:text-lg">
-            <AlertTriangle className="h-5 w-5 text-[#2563eb]" />
-            Risk Distribution
-          </h2>
-          <div className="space-y-4">
-            {[
-              {
-                label: 'Easy',
-                count: studentInsights.filter((student) => student.latestEvaluation?.riskLabel === 'Easy').length,
-                barColor: 'bg-emerald-500',
-              },
-              {
-                label: 'Balanced',
-                count: studentInsights.filter((student) => student.latestEvaluation?.riskLabel === 'Balanced').length,
-                barColor: 'bg-amber-500',
-              },
-              {
-                label: 'High Risk',
-                count: studentInsights.filter((student) => student.latestEvaluation?.riskLabel === 'Hard').length,
-                barColor: 'bg-red-500',
-              },
-            ].map((band) => (
-              <div key={band.label}>
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="font-medium text-gray-700">{band.label}</span>
-                  <span className="text-gray-500">{band.count} students</span>
-                </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
-                  <div className={`h-full rounded-full ${band.barColor}`} style={{ width: `${studentInsights.length === 0 ? 0 : (band.count / studentInsights.length) * 100}%` }} />
-                </div>
+      <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
+        <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:text-lg">
+          <Clock className="h-5 w-5 text-[#2563eb]" />
+          In-Progress Transcript Rows
+        </h2>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {inProgressRows.slice(0, 9).map((row) => {
+            const student = studentInsights.find((item) => item.id === row.studentId);
+            return (
+              <div key={row.id ?? `${row.studentId}-${row.termCode}-${row.courseCode}`} className="rounded-xl border border-gray-200 p-4">
+                <p className="font-semibold text-[#0f1e3c]">{student?.name ?? row.studentId}</p>
+                <p className="mt-1 text-sm text-gray-500">{row.courseCode} | {formatTermLabel(row.termCode)}</p>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-5 sm:text-lg">
-            <Bot className="h-5 w-5 text-[#2563eb]" />
-            Model Status
-          </h2>
-          <div className="space-y-4 text-sm text-gray-700">
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Current version</p>
-              <p className="mt-2 font-display text-3xl font-bold text-[#0f1e3c]">{modelVersion}</p>
-            </div>
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="font-semibold text-[#0f1e3c]">Scoring coverage</p>
-              <p className="mt-1 text-gray-600">{modelCoverage}% of catalog courses currently have valid difficulty scores with stored model metadata.</p>
-            </div>
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="font-semibold text-[#0f1e3c]">Last recalculation</p>
-              <p className="mt-1 text-gray-600">{new Date(modelLastCalculatedAt).toLocaleString()}</p>
-            </div>
-          </div>
+            );
+          })}
+          {inProgressRows.length === 0 && (
+            <p className="text-sm text-gray-500">No in-progress transcript rows are waiting for marks.</p>
+          )}
         </div>
       </div>
     </div>
   );
 }
-

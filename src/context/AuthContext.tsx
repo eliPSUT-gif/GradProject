@@ -58,6 +58,7 @@ interface UserFormInput {
   subtitle: string;
   password: string;
   status: ManagedUser['status'];
+  email?: string | null;
 }
 
 interface RemoteAppUserRow {
@@ -82,6 +83,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAuthReady: boolean;
   changePassword: (userId: string, currentPassword: string, nextPassword: string) => Promise<PasswordChangeResult>;
+  resetUserPassword: (userId: string, nextPassword: string) => Promise<PasswordChangeResult>;
   upsertUser: (input: UserFormInput) => PasswordChangeResult;
   updateUserStatus: (userId: string, status: ManagedUser['status']) => void;
 }
@@ -105,6 +107,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   isAuthReady: false,
   changePassword: async () => ({ success: false, error: 'Auth provider not ready.' }),
+  resetUserPassword: async () => ({ success: false, error: 'Auth provider not ready.' }),
   upsertUser: () => ({ success: false, error: 'Auth provider not ready.' }),
   updateUserStatus: () => {},
 });
@@ -148,6 +151,35 @@ function getPasswordValidationError(password: string) {
   }
 
   return null;
+}
+
+function buildManagedEmail(userId: string, role: Role) {
+  if (/^\S+@\S+\.\S+$/.test(userId)) {
+    return userId;
+  }
+
+  const domain = role === 'student' ? 'students.example.edu' : 'staff.example.edu';
+  return `${userId.toLowerCase()}@${domain}`;
+}
+
+async function callAdminAuthEndpoint(path: string, payload: unknown) {
+  const {
+    data: { session },
+  } = await getSupabaseSession();
+
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session?.access_token ?? ''}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(body?.error ?? `Admin auth request failed with ${response.status}`);
+  }
 }
 
 function normalizeManagedUser(account: ManagedUser) {
@@ -757,13 +789,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: validationError };
     }
 
+    const existingUser = users.find((account) => account.id === input.id);
+    const nextEmail = input.email ?? existingUser?.email ?? buildManagedEmail(input.id, input.role);
+
     setUsers((current) => {
-      const existingUser = current.find((account) => account.id === input.id);
       const nextUser = normalizeManagedUser({
         ...input,
         initials: getInitials(input.name),
         lastLogin: existingUser?.lastLogin ?? 'Never',
-        email: existingUser?.email,
+        email: nextEmail,
         appUserId: existingUser?.appUserId,
         authUserId: existingUser?.authUserId ?? null,
         lastSeenAt: existingUser?.lastSeenAt ?? null,
@@ -782,7 +816,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (hasSupabaseConfig()) {
-      const existingEmail = users.find((account) => account.id === input.id)?.email ?? null;
+      void callAdminAuthEndpoint('/api/admin-create-user', {
+        universityId: input.id,
+        email: nextEmail,
+        password: input.password,
+        role: input.role,
+        fullName: input.name,
+        subtitle: input.subtitle,
+        status: input.status,
+      }).catch((error) => {
+        console.error('Unable to create Supabase auth user through admin endpoint.', error);
+      });
+
       void supabaseUpsert(
         'app_users',
         {
@@ -792,7 +837,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           initials: getInitials(input.name),
           subtitle: input.subtitle,
           status: input.status,
-          email: existingEmail,
+          email: nextEmail,
         },
         'university_id'
       ).catch((error) => {
@@ -820,6 +865,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id]);
 
+  const resetUserPassword = useCallback(
+    async (userId: string, nextPassword: string): Promise<PasswordChangeResult> => {
+      const validationError = getPasswordValidationError(nextPassword);
+      if (validationError) {
+        return { success: false, error: validationError };
+      }
+
+      if (!users.some((account) => account.id === userId)) {
+        return { success: false, error: 'User account was not found.' };
+      }
+
+      if (hasSupabaseConfig()) {
+        try {
+          await callAdminAuthEndpoint('/api/admin-reset-password', {
+            universityId: userId,
+            password: nextPassword,
+          });
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unable to reset password.',
+          };
+        }
+      }
+
+      setUsers((current) =>
+        current.map((account) =>
+          account.id === userId ? { ...account, password: nextPassword } : account
+        )
+      );
+
+      return { success: true };
+    },
+    [users]
+  );
+
   const value = useMemo(
     () => ({
       user,
@@ -829,10 +910,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: !!user,
       isAuthReady,
       changePassword,
+      resetUserPassword,
       upsertUser,
       updateUserStatus,
     }),
-    [changePassword, isAuthReady, login, logout, updateUserStatus, upsertUser, user, users]
+    [changePassword, isAuthReady, login, logout, resetUserPassword, updateUserStatus, upsertUser, user, users]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -24,6 +24,7 @@ import {
   getCreditLimitForTermCode,
   getCourseSelectionStatus,
   getDiffLabel,
+  getInitials,
   MODEL_LAST_CALCULATED_AT,
   STUDENT_PROFILES,
   type AdmissionTerm,
@@ -44,8 +45,9 @@ import {
   supabaseInsert,
   supabasePatch,
   supabaseSelect,
+  supabaseUpsert,
 } from '../lib/supabase';
-import { useAuth } from './AuthContext';
+import { useAuth, type UserFormInput } from './AuthContext';
 
 type PlannerActionResult = { success: boolean; error?: string };
 
@@ -68,6 +70,7 @@ interface ImportHistoricalDataResult {
 }
 
 export interface StudentTranscriptRow {
+  id?: string;
   studentId: string;
   termCode: string;
   termLabel: string;
@@ -107,9 +110,32 @@ export interface CoursePrerequisiteGrade {
   grade: number | null;
 }
 
+export interface TranscriptEntryInput {
+  id?: string;
+  studentId: string;
+  termCode: string;
+  courseCode: string;
+  finalGrade: number | null;
+  status: Exclude<StudentTranscriptRow['status'], 'not_taken'>;
+  attemptNo: number;
+}
+
+export interface StudentAccountInput {
+  id: string;
+  name: string;
+  enrollmentYear: number;
+  admissionTerm: AdmissionTerm;
+  department: string;
+  advisorId: string;
+  temporaryPassword: string;
+}
+
 interface AppDataContextType {
   analyzeSchedule: (studentId: string) => ScheduleEvaluation | null;
   clearSelection: (studentId: string) => void;
+  assignAdvisor: (studentId: string, advisorId: string) => Promise<PlannerActionResult>;
+  createStudentAccount: (input: StudentAccountInput) => Promise<PlannerActionResult & { studentId?: string }>;
+  createTranscriptFromDraft: (studentId: string, termCode: string) => Promise<PlannerActionResult>;
   courses: Course[];
   currentEvaluations: Record<string, ScheduleEvaluation | null>;
   deleteScheduleDraft: (draftId: string) => void;
@@ -127,6 +153,7 @@ interface AppDataContextType {
   importHistoricalData: (fileName: string, raw: string) => ImportHistoricalDataResult;
   importJobs: ImportJob[];
   isAppDataReady: boolean;
+  deleteTranscriptEntry: (entryId: string) => Promise<PlannerActionResult>;
   loadScheduleDraft: (studentId: string, draftId: string) => void;
   modelCoverage: number;
   modelLastCalculatedAt: string;
@@ -141,6 +168,7 @@ interface AppDataContextType {
   toggleCourseSelection: (studentId: string, courseCode: string) => PlannerActionResult;
   transcriptRows: StudentTranscriptRow[];
   termMetrics: StudentTermMetric[];
+  upsertTranscriptEntry: (input: TranscriptEntryInput) => Promise<PlannerActionResult>;
   upsertCourse: (input: CourseFormInput) => void;
 }
 
@@ -230,6 +258,7 @@ interface StudentProfileRow {
 }
 
 interface StudentCompletedCourseRow {
+  id: string;
   student_id: string;
   term_code: string;
   term_type: TermType;
@@ -308,8 +337,12 @@ const EMPTY_SELECTION_STATUS: SelectionStatus = {
 const AppDataContext = createContext<AppDataContextType>({
   analyzeSchedule: () => null,
   clearSelection: () => {},
+  assignAdvisor: async () => ({ success: false, error: 'App data is not ready.' }),
+  createStudentAccount: async () => ({ success: false, error: 'App data is not ready.' }),
+  createTranscriptFromDraft: async () => ({ success: false, error: 'App data is not ready.' }),
   courses: [],
   currentEvaluations: {},
+  deleteTranscriptEntry: async () => ({ success: false, error: 'App data is not ready.' }),
   deleteScheduleDraft: () => {},
   getCourseSelectionState: () => EMPTY_SELECTION_STATUS,
   getCoursePrerequisitesWithGrades: () => [],
@@ -351,6 +384,7 @@ const AppDataContext = createContext<AppDataContextType>({
   toggleCourseSelection: () => ({ success: false, error: 'App data is not ready.' }),
   transcriptRows: [],
   termMetrics: [],
+  upsertTranscriptEntry: async () => ({ success: false, error: 'App data is not ready.' }),
   upsertCourse: () => {},
 });
 
@@ -530,6 +564,7 @@ function buildDemoTranscriptData(studentProfiles: StudentProfile[], courses: Cou
       ));
 
       transcriptRows.push({
+        id: `demo-transcript-${profile.id}-${term.termCode}-${course.code}-1`,
         studentId: profile.id,
         termCode: term.termCode,
         termLabel: formatTermLabel(term.termCode),
@@ -624,6 +659,99 @@ function buildTranscriptSemesters(
       rows: [...(rowsByTermCode.get(metric.termCode) ?? [])].sort((left, right) => left.courseCode.localeCompare(right.courseCode)),
     }) satisfies StudentTranscriptSemester)
     .filter((semester) => semester.rows.length > 0);
+}
+
+function sortTranscriptRows(rows: StudentTranscriptRow[]) {
+  return [...rows].sort((left, right) => {
+    const termCompare = compareTermCodesNewestFirst(left.termCode, right.termCode);
+    if (termCompare !== 0) {
+      return termCompare;
+    }
+
+    const attemptCompare = (right.attemptNo ?? 1) - (left.attemptNo ?? 1);
+    if (attemptCompare !== 0) {
+      return attemptCompare;
+    }
+
+    return left.courseCode.localeCompare(right.courseCode);
+  });
+}
+
+function deriveTermMetrics(transcriptRows: StudentTranscriptRow[]) {
+  const rowsByTerm = new Map<string, StudentTranscriptRow[]>();
+  transcriptRows
+    .filter((row) => row.termCode && row.status !== 'not_taken')
+    .forEach((row) => {
+      const key = `${row.studentId}:${row.termCode}`;
+      rowsByTerm.set(key, [...(rowsByTerm.get(key) ?? []), row]);
+    });
+
+  return [...rowsByTerm.entries()].map(([key, rows]) => {
+    const [studentId, termCode] = key.split(':');
+    const normalizedMarks = rows
+      .map((row) => normalizeTranscriptMark(row.finalGrade))
+      .filter((mark): mark is number => mark !== null);
+    const gpa = normalizedMarks.length > 0
+      ? Math.round((normalizedMarks.reduce((sum, mark) => sum + mark, 0) * 4 / 100 / normalizedMarks.length) * 100) / 100
+      : null;
+
+    return {
+      studentId,
+      termCode,
+      termLabel: formatTermLabel(termCode),
+      termType: rows[0]?.termType ?? 'regular',
+      courseCount: rows.length,
+      completedCredits: rows.reduce((sum, row) => sum + (row.status === 'passed' ? row.credits : 0), 0),
+      gpa,
+    } satisfies StudentTermMetric;
+  }).sort((left, right) => compareTermCodesNewestFirst(left.termCode, right.termCode));
+}
+
+function syncDerivedTranscriptState(state: AppDataState, transcriptRows: StudentTranscriptRow[]) {
+  const sortedRows = sortTranscriptRows(transcriptRows);
+  const termMetrics = deriveTermMetrics(sortedRows);
+  const studentProfiles = state.studentProfiles.map((profile) => {
+    const studentRows = sortedRows.filter((row) => row.studentId === profile.id);
+    const passedByCourse = new Map<string, StudentTranscriptRow>();
+    studentRows
+      .filter((row) => row.status === 'passed')
+      .forEach((row) => {
+        if (!passedByCourse.has(row.courseCode)) {
+          passedByCourse.set(row.courseCode, row);
+        }
+      });
+    const gradedMarks = studentRows
+      .map((row) => normalizeTranscriptMark(row.finalGrade))
+      .filter((mark): mark is number => mark !== null);
+
+    return {
+      ...profile,
+      completedCourseCodes: [...passedByCourse.keys()],
+      creditsCompleted: [...passedByCourse.values()].reduce((sum, row) => sum + row.credits, 0),
+      gpa: gradedMarks.length > 0
+        ? Math.round((gradedMarks.reduce((sum, mark) => sum + mark, 0) * 4 / 100 / gradedMarks.length) * 100) / 100
+        : profile.gpa,
+    } satisfies StudentProfile;
+  });
+
+  return {
+    ...state,
+    studentProfiles,
+    termMetrics,
+    transcriptRows: sortedRows,
+  } satisfies AppDataState;
+}
+
+function getTranscriptStatusForGrade(grade: number | null, fallback: TranscriptEntryInput['status']) {
+  if (fallback === 'withdrawn' || fallback === 'in_progress') {
+    return fallback;
+  }
+
+  if (grade === null) {
+    return 'in_progress';
+  }
+
+  return grade >= 60 ? 'passed' : 'failed';
 }
 
 function buildDemoState(): AppDataState {
@@ -768,7 +896,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'select=id,course_id,term_code,avg_grade,pass_rate,fail_rate,enrollment_count,withdrawals'
     ),
     supabaseSelect<StudentProfileRow[]>('student_dashboard_summary_v', 'select=student_id,student_name,department_name,advisor_id,gpa,admission_year,admission_term,completed_credits'),
-    supabaseSelect<StudentCompletedCourseRow[]>('student_transcript_v', 'select=student_id,term_code,term_type,course_code,course_name,credits,final_grade,status,attempt_no'),
+    supabaseSelect<StudentCompletedCourseRow[]>('student_transcript_v', 'select=id,student_id,term_code,term_type,course_code,course_name,credits,final_grade,status,attempt_no'),
     supabaseSelect<ScheduleDraftRow[]>('schedule_drafts', 'select=id,student_id,name,term_code,status,saved_at&order=saved_at.desc'),
     supabaseSelect<ScheduleDraftCourseRow[]>('schedule_draft_courses', 'select=schedule_id,course_id'),
     supabaseSelect<ScheduleEvaluationRow[]>(
@@ -907,6 +1035,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
 
     const termCode = row.term_code;
     transcriptRows.push({
+      id: row.id,
       studentId: studentUniversityId,
       termCode,
       termLabel: formatTermLabel(termCode),
@@ -1076,7 +1205,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
 }
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const { isAuthReady, user, users } = useAuth();
+  const { isAuthReady, upsertUser, user, users } = useAuth();
   const [state, setState] = useState<AppDataState>(() => (
     hasSupabaseConfig() ? buildEmptyRemoteState() : buildDemoState()
   ));
@@ -1540,6 +1669,326 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const assignAdvisor = useCallback(async (studentId: string, advisorId: string): Promise<PlannerActionResult> => {
+    if (!users.some((account) => account.id === advisorId && account.role === 'advisor')) {
+      return { success: false, error: 'Advisor account was not found.' };
+    }
+
+    setState((current) => ({
+      ...current,
+      studentProfiles: current.studentProfiles.map((profile) =>
+        profile.id === studentId ? { ...profile, advisorId } : profile
+      ),
+    }));
+
+    if (hasSupabaseConfig()) {
+      const studentAppUserId = users.find((account) => account.id === studentId)?.appUserId;
+      const advisorAppUserId = users.find((account) => account.id === advisorId)?.appUserId;
+      if (studentAppUserId && advisorAppUserId) {
+        try {
+          await supabasePatch('student_profiles', `user_id=eq.${encodeURIComponent(studentAppUserId)}`, {
+            advisor_id: advisorAppUserId,
+          });
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unable to assign advisor.',
+          };
+        }
+      }
+    }
+
+    return { success: true };
+  }, [users]);
+
+  const createStudentAccount = useCallback(async (input: StudentAccountInput): Promise<PlannerActionResult & { studentId?: string }> => {
+    const userInput: UserFormInput = {
+      id: input.id,
+      name: input.name,
+      role: 'student',
+      subtitle: `Student | ${input.department}`,
+      password: input.temporaryPassword,
+      status: 'active',
+    };
+    const userResult = upsertUser(userInput);
+    if (!userResult.success) {
+      return userResult;
+    }
+
+    const nextProfile = {
+      id: input.id,
+      name: input.name,
+      gpa: 0,
+      creditsCompleted: 0,
+      department: input.department,
+      advisorId: input.advisorId,
+      completedCourseCodes: [],
+      admissionYear: input.enrollmentYear,
+      admissionTerm: input.admissionTerm,
+    } satisfies StudentProfile;
+
+    setState((current) => ({
+      ...current,
+      studentProfiles: [
+        nextProfile,
+        ...current.studentProfiles.filter((profile) => profile.id !== input.id),
+      ],
+    }));
+
+    if (hasSupabaseConfig()) {
+      try {
+        const email = `${input.id.toLowerCase()}@students.example.edu`;
+        const appUserRows = await supabaseUpsert<Array<{ id: string }>>(
+          'app_users',
+          {
+            university_id: input.id,
+            role: 'student',
+            full_name: input.name,
+            initials: getInitials(input.name),
+            email,
+            subtitle: `Student | ${input.department}`,
+            status: 'active',
+          },
+          'university_id'
+        );
+        const studentAppUserId = appUserRows[0]?.id;
+        const departmentRows = await supabaseSelect<DepartmentRow[]>(
+          'departments',
+          `select=id,name&name=eq.${encodeURIComponent(input.department)}&limit=1`
+        );
+        const advisorAppUserId = users.find((account) => account.id === input.advisorId)?.appUserId ?? null;
+        const departmentId = departmentRows[0]?.id;
+
+        if (studentAppUserId && departmentId) {
+          await supabaseUpsert(
+            'student_profiles',
+            {
+              user_id: studentAppUserId,
+              department_id: departmentId,
+              advisor_id: advisorAppUserId,
+              gpa: 0,
+              completed_credits: 0,
+              admission_year: input.enrollmentYear,
+              admission_term: input.admissionTerm,
+            },
+            'user_id'
+          );
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unable to persist student account.',
+          studentId: input.id,
+        };
+      }
+    }
+
+    return { success: true, studentId: input.id };
+  }, [upsertUser, users]);
+
+  const validateTranscriptInput = useCallback((input: TranscriptEntryInput, currentRows: StudentTranscriptRow[]) => {
+    const course = state.courses.find((item) => item.code === input.courseCode);
+    if (!course) {
+      return 'Course was not found.';
+    }
+
+    if (input.finalGrade !== null && (!Number.isFinite(input.finalGrade) || input.finalGrade < 0 || input.finalGrade > 100)) {
+      return 'Marks must be between 0 and 100.';
+    }
+
+    if (input.attemptNo < 1) {
+      return 'Attempt number must be at least 1.';
+    }
+
+    const termRows = currentRows.filter((row) =>
+      row.studentId === input.studentId
+      && row.termCode === input.termCode
+      && row.id !== input.id
+      && row.status !== 'withdrawn'
+    );
+    const nextTermHours = termRows.reduce((sum, row) => sum + row.credits, 0) + (input.status === 'withdrawn' ? 0 : course.credits);
+    const termLimit = getCreditLimitForTermCode(input.termCode);
+    if (nextTermHours > termLimit) {
+      return `${formatTermLabel(input.termCode)} cannot exceed ${termLimit} hours.`;
+    }
+
+    const duplicatePassed = currentRows.some((row) =>
+      row.studentId === input.studentId
+      && row.courseCode === input.courseCode
+      && row.status === 'passed'
+      && row.id !== input.id
+    );
+    if (input.status === 'passed' && duplicatePassed && input.attemptNo <= 1) {
+      return 'This course was already passed. Use attempt number 2 or higher for an intentional retake.';
+    }
+
+    return null;
+  }, [state.courses]);
+
+  const createTranscriptFromDraft = useCallback(async (studentId: string, termCode: string): Promise<PlannerActionResult> => {
+    const draft = getStudentDrafts(studentId).find((item) => item.termCode === termCode);
+    if (!draft) {
+      return { success: false, error: 'No saved course plan exists for this student and semester.' };
+    }
+
+    const draftCourses = state.courses.filter((course) => draft.courseCodes.includes(course.code));
+    const totalHours = draftCourses.reduce((sum, course) => sum + course.credits, 0);
+    const termLimit = getCreditLimitForTermCode(termCode);
+    if (totalHours > termLimit) {
+      return { success: false, error: `${formatTermLabel(termCode)} cannot exceed ${termLimit} hours.` };
+    }
+
+    const existingRows = state.transcriptRows.filter((row) => row.studentId === studentId && row.termCode === termCode);
+    const existingCourseCodes = new Set(existingRows.map((row) => row.courseCode));
+    const rowsToCreate = draftCourses
+      .filter((course) => !existingCourseCodes.has(course.code))
+      .map((course) => ({
+        id: createId('transcript'),
+        studentId,
+        termCode,
+        termLabel: formatTermLabel(termCode),
+        termType: /summer/i.test(termCode) ? 'summer' : 'regular',
+        courseCode: course.code,
+        courseName: course.name,
+        credits: course.credits,
+        finalGrade: null,
+        status: 'in_progress',
+        attemptNo: 1,
+      }) satisfies StudentTranscriptRow);
+
+    if (rowsToCreate.length === 0) {
+      return { success: true };
+    }
+
+    setState((current) => syncDerivedTranscriptState(current, [...current.transcriptRows, ...rowsToCreate]));
+
+    if (hasSupabaseConfig()) {
+      const studentAppUserId = users.find((account) => account.id === studentId)?.appUserId;
+      if (studentAppUserId) {
+        try {
+          const courseRows = await supabaseSelect<CourseRow[]>(
+            'courses',
+            `select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis&course_code=in.(${rowsToCreate.map((row) => encodeURIComponent(row.courseCode)).join(',')})`
+          );
+          const courseIdByCode = new Map(courseRows.map((course) => [course.course_code, course.id]));
+          await supabaseInsert(
+            'student_transcript_entries',
+            rowsToCreate.flatMap((row) => {
+              const courseId = courseIdByCode.get(row.courseCode);
+              return courseId
+                ? [{
+                    id: row.id,
+                    student_id: studentAppUserId,
+                    term_code: row.termCode,
+                    course_id: courseId,
+                    final_grade: null,
+                    status: 'in_progress',
+                    attempt_no: row.attemptNo,
+                  }]
+                : [];
+            })
+          );
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unable to create transcript sheet.',
+          };
+        }
+      }
+    }
+
+    return { success: true };
+  }, [getStudentDrafts, state.courses, state.transcriptRows, users]);
+
+  const upsertTranscriptEntry = useCallback(async (input: TranscriptEntryInput): Promise<PlannerActionResult> => {
+    const normalizedStatus = getTranscriptStatusForGrade(input.finalGrade, input.status);
+    const normalizedInput = { ...input, status: normalizedStatus } satisfies TranscriptEntryInput;
+    const validationError = validateTranscriptInput(normalizedInput, state.transcriptRows);
+    if (validationError) {
+      return { success: false, error: validationError };
+    }
+
+    const course = state.courses.find((item) => item.code === normalizedInput.courseCode);
+    if (!course) {
+      return { success: false, error: 'Course was not found.' };
+    }
+
+    const entryId = normalizedInput.id ?? createId('transcript');
+    const nextRow = {
+      id: entryId,
+      studentId: normalizedInput.studentId,
+      termCode: normalizedInput.termCode,
+      termLabel: formatTermLabel(normalizedInput.termCode),
+      termType: /summer/i.test(normalizedInput.termCode) ? 'summer' : 'regular',
+      courseCode: course.code,
+      courseName: course.name,
+      credits: course.credits,
+      finalGrade: normalizedInput.finalGrade,
+      status: normalizedStatus,
+      attemptNo: normalizedInput.attemptNo,
+    } satisfies StudentTranscriptRow;
+
+    setState((current) => syncDerivedTranscriptState(current, [
+      ...current.transcriptRows.filter((row) => row.id !== entryId),
+      nextRow,
+    ]));
+
+    if (hasSupabaseConfig()) {
+      const studentAppUserId = users.find((account) => account.id === normalizedInput.studentId)?.appUserId;
+      try {
+        const courseRows = await supabaseSelect<CourseRow[]>(
+          'courses',
+          `select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis&course_code=eq.${encodeURIComponent(course.code)}&limit=1`
+        );
+        const courseId = courseRows[0]?.id;
+        if (studentAppUserId && courseId) {
+          const payload = {
+            id: entryId,
+            student_id: studentAppUserId,
+            term_code: normalizedInput.termCode,
+            course_id: courseId,
+            final_grade: normalizedInput.finalGrade,
+            status: normalizedStatus,
+            attempt_no: normalizedInput.attemptNo,
+          };
+
+          if (normalizedInput.id) {
+            await supabasePatch('student_transcript_entries', `id=eq.${encodeURIComponent(normalizedInput.id)}`, payload);
+          } else {
+            await supabaseInsert('student_transcript_entries', payload);
+          }
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unable to save transcript entry.',
+        };
+      }
+    }
+
+    return { success: true };
+  }, [state.courses, state.transcriptRows, users, validateTranscriptInput]);
+
+  const deleteTranscriptEntry = useCallback(async (entryId: string): Promise<PlannerActionResult> => {
+    setState((current) => syncDerivedTranscriptState(
+      current,
+      current.transcriptRows.filter((row) => row.id !== entryId)
+    ));
+
+    if (hasSupabaseConfig()) {
+      try {
+        await supabaseDelete('student_transcript_entries', `id=eq.${encodeURIComponent(entryId)}`);
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unable to delete transcript entry.',
+        };
+      }
+    }
+
+    return { success: true };
+  }, []);
+
   const recalculateScores = useCallback(() => {
     setState((current) => {
       const now = new Date().toISOString();
@@ -1775,8 +2224,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     () => ({
       analyzeSchedule,
       clearSelection,
+      assignAdvisor,
+      createStudentAccount,
+      createTranscriptFromDraft,
       courses: state.courses,
       currentEvaluations: state.currentEvaluations,
+      deleteTranscriptEntry,
       deleteScheduleDraft,
       getCourseSelectionState,
       getCoursePrerequisitesWithGrades,
@@ -1806,11 +2259,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       termMetrics: state.termMetrics,
       transcriptRows: state.transcriptRows,
       toggleCourseSelection,
+      upsertTranscriptEntry,
       upsertCourse,
     }),
     [
       analyzeSchedule,
+      assignAdvisor,
       clearSelection,
+      createStudentAccount,
+      createTranscriptFromDraft,
+      deleteTranscriptEntry,
       deleteScheduleDraft,
       getCourseSelectionState,
       getCoursePrerequisitesWithGrades,
@@ -1841,6 +2299,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       state.transcriptRows,
       studentInsights,
       toggleCourseSelection,
+      upsertTranscriptEntry,
       upsertCourse,
     ]
   );
