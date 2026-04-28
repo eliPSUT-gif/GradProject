@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyRound, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useAuth, type UserFormInput } from '../../context/AuthContext';
 import type { Role } from '../../data/courses';
 
@@ -16,8 +16,10 @@ export default function UserManagementPage() {
   const { resetUserPassword, updateUserStatus, upsertUser, users } = useAuth();
   const [form, setForm] = useState<UserFormInput>(EMPTY_FORM);
   const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
+  const [showResetPasswords, setShowResetPasswords] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showTemporaryPassword, setShowTemporaryPassword] = useState(false);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -101,12 +103,23 @@ export default function UserManagementPage() {
           </label>
           <label className="block">
             Temporary password
-            <input
-              type="password"
-              value={form.password}
-              onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-            />
+            <div className="relative mt-1">
+              <input
+                type={showTemporaryPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+                className="w-full rounded-lg border border-gray-200 py-2 pl-3 pr-11 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+              />
+              <button
+                type="button"
+                onClick={() => setShowTemporaryPassword((current) => !current)}
+                className="absolute right-2 top-1/2 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#2563eb]"
+                aria-label={showTemporaryPassword ? 'Hide temporary password' : 'Show temporary password'}
+                title={showTemporaryPassword ? 'Hide temporary password' : 'Show temporary password'}
+              >
+                {showTemporaryPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </label>
         </div>
 
@@ -148,12 +161,23 @@ export default function UserManagementPage() {
                     </span>
                   </td>
                   <td className="py-2.5 pr-4">
-                    <input
-                      type="password"
-                      value={resetPasswords[account.id] ?? EMPTY_FORM.password}
-                      onChange={(event) => setResetPasswords((current) => ({ ...current, [account.id]: event.target.value }))}
-                      className="w-44 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-                    />
+                    <div className="relative w-48">
+                      <input
+                        type={showResetPasswords[account.id] ? 'text' : 'password'}
+                        value={resetPasswords[account.id] ?? EMPTY_FORM.password}
+                        onChange={(event) => setResetPasswords((current) => ({ ...current, [account.id]: event.target.value }))}
+                        className="w-full rounded-lg border border-gray-200 py-1.5 pl-3 pr-9 text-xs focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowResetPasswords((current) => ({ ...current, [account.id]: !current[account.id] }))}
+                        className="absolute right-1.5 top-1/2 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#2563eb]"
+                        aria-label={showResetPasswords[account.id] ? 'Hide temporary password' : 'Show temporary password'}
+                        title={showResetPasswords[account.id] ? 'Hide temporary password' : 'Show temporary password'}
+                      >
+                        {showResetPasswords[account.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
                   </td>
                   <td className="py-2.5">
                     <div className="flex gap-2">

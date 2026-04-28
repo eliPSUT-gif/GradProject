@@ -22,6 +22,7 @@ Why:
 - `006_sync_gpa_with_average_mark.sql`: no-op compatibility migration
 - `007_transcript_first_academic_schema.sql`: transcript-first academic cleanup and new derived views
 - `008_gpa_only_cleanup.sql`: GPA-only cleanup for transcript-derived 4.00-scale GPA
+- `009_transcript_entry_ids_for_admin_editing.sql`: exposes transcript entry IDs/course IDs for admin transcript editing
 
 ## Import Order
 
@@ -35,6 +36,7 @@ Why:
 8. Run `supabase/006_sync_gpa_with_average_mark.sql`.
 9. Run `supabase/007_transcript_first_academic_schema.sql`.
 10. Run `supabase/008_gpa_only_cleanup.sql`.
+11. Run `supabase/009_transcript_entry_ids_for_admin_editing.sql`.
 
 ## What To Send Me After Import
 

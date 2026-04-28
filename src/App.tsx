@@ -8,6 +8,7 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminSettingsPage from './pages/admin/AdminSettingsPage';
+import AdminStudentTranscriptPage from './pages/admin/AdminStudentTranscriptPage';
 import AdminStudentsPage from './pages/admin/AdminStudentsPage';
 import CourseManagement from './pages/admin/CourseManagement';
 import ModelStatusPage from './pages/admin/ModelStatusPage';
@@ -80,6 +81,7 @@ export default function App() {
                 <Route path="advisor/settings" element={<Navigate to="/app/advisor" replace />} />
                 <Route path="admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
                 <Route path="admin/students" element={<ProtectedRoute allowedRoles={['admin']}><AdminStudentsPage /></ProtectedRoute>} />
+                <Route path="admin/students/:studentId/transcript" element={<ProtectedRoute allowedRoles={['admin']}><AdminStudentTranscriptPage /></ProtectedRoute>} />
                 <Route path="admin/courses" element={<ProtectedRoute allowedRoles={['admin']}><CourseManagement /></ProtectedRoute>} />
                 <Route path="admin/users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagementPage /></ProtectedRoute>} />
                 <Route path="admin/model" element={<ProtectedRoute allowedRoles={['admin']}><ModelStatusPage /></ProtectedRoute>} />

@@ -118,6 +118,7 @@ export default function AppLayout() {
   const sections = NAV[role];
   const pageTitle = location.pathname.startsWith('/app/advisor/student/')
     ? 'Student Details'
+    : location.pathname.startsWith('/app/admin/students/') ? 'Student Transcript'
     : PAGE_TITLES[location.pathname] ?? 'Dashboard';
   const unreadCount = user ? getUnreadMessageCount(user.id) : 0;
   const messageRoute = role === 'advisor' ? '/app/advisor/messages' : role === 'student' ? '/app/messages' : null;
