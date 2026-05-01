@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { Eye, EyeOff, KeyRound, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { KeyRound, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import PasswordInput from '../../components/PasswordInput';
+import { useAppData } from '../../context/AppDataContext';
 import { useAuth, type UserFormInput } from '../../context/AuthContext';
-import type { Role } from '../../data/courses';
+import type { AdmissionTerm, Role } from '../../data/courses';
 
 const EMPTY_FORM: UserFormInput = {
   id: '',
@@ -14,17 +16,51 @@ const EMPTY_FORM: UserFormInput = {
 
 export default function UserManagementPage() {
   const { resetUserPassword, updateUserStatus, upsertUser, users } = useAuth();
+  const { courses, createStudentAccount } = useAppData();
   const [form, setForm] = useState<UserFormInput>(EMPTY_FORM);
   const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
-  const [showResetPasswords, setShowResetPasswords] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showTemporaryPassword, setShowTemporaryPassword] = useState(false);
+  const [enrollmentYear, setEnrollmentYear] = useState(new Date().getFullYear());
+  const [admissionTerm, setAdmissionTerm] = useState<AdmissionTerm>('fall');
+  const [department, setDepartment] = useState('Computer Science');
+  const [advisorId, setAdvisorId] = useState('');
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const departments = useMemo(() => {
+    const knownDepartments = [...new Set(courses.map((course) => course.department))].sort();
+    return knownDepartments.length > 0 ? knownDepartments : ['Computer Science'];
+  }, [courses]);
+  const advisors = useMemo(
+    () => users.filter((account) => account.role === 'advisor' && account.status === 'active'),
+    [users]
+  );
+  const isStudentForm = form.role === 'student';
+
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setMessage(null);
     setError(null);
+
+    const existingUser = users.find((account) => account.id === form.id);
+    if (isStudentForm && !existingUser) {
+      const result = await createStudentAccount({
+        id: form.id,
+        name: form.name,
+        enrollmentYear,
+        admissionTerm,
+        department,
+        advisorId,
+        temporaryPassword: form.password,
+      });
+      if (!result.success) {
+        setError(result.error ?? 'Unable to create student.');
+        return;
+      }
+
+      setMessage(`Student ${result.studentId ?? form.id} created successfully.`);
+      setForm(EMPTY_FORM);
+      return;
+    }
 
     const result = upsertUser(form);
     if (!result.success) {
@@ -85,7 +121,14 @@ export default function UserManagementPage() {
             Role
             <select
               value={form.role}
-              onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as Role }))}
+              onChange={(event) => {
+                const role = event.target.value as Role;
+                setForm((current) => ({
+                  ...current,
+                  role,
+                  subtitle: role === 'student' ? `Student | ${department}` : current.subtitle,
+                }));
+              }}
               className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
             >
               <option value="student">Student</option>
@@ -103,24 +146,70 @@ export default function UserManagementPage() {
           </label>
           <label className="block">
             Temporary password
-            <div className="relative mt-1">
-              <input
-                type={showTemporaryPassword ? 'text' : 'password'}
-                value={form.password}
-                onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                className="w-full rounded-lg border border-gray-200 py-2 pl-3 pr-11 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-              />
-              <button
-                type="button"
-                onClick={() => setShowTemporaryPassword((current) => !current)}
-                className="absolute right-2 top-1/2 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#2563eb]"
-                aria-label={showTemporaryPassword ? 'Hide temporary password' : 'Show temporary password'}
-                title={showTemporaryPassword ? 'Hide temporary password' : 'Show temporary password'}
-              >
-                {showTemporaryPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
+            <PasswordInput
+              buttonLabel="temporary password"
+              value={form.password}
+              onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+              wrapperClassName="mt-1"
+              className="w-full rounded-lg border border-gray-200 py-2 pl-3 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+            />
           </label>
+          {isStudentForm && (
+            <div className="grid grid-cols-1 gap-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4 md:grid-cols-2">
+              <label className="block">
+                Enrollment year
+                <input
+                  type="number"
+                  min="2000"
+                  max="2100"
+                  value={enrollmentYear}
+                  onChange={(event) => setEnrollmentYear(Number(event.target.value))}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+                />
+              </label>
+              <label className="block">
+                Admission semester
+                <select
+                  value={admissionTerm}
+                  onChange={(event) => setAdmissionTerm(event.target.value as AdmissionTerm)}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 capitalize focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+                >
+                  <option value="fall">Fall</option>
+                  <option value="spring">Spring</option>
+                  <option value="summer">Summer</option>
+                </select>
+              </label>
+              <label className="block">
+                Department
+                <select
+                  value={department}
+                  onChange={(event) => {
+                    const nextDepartment = event.target.value;
+                    setDepartment(nextDepartment);
+                    setForm((current) => ({ ...current, subtitle: `Student | ${nextDepartment}` }));
+                  }}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+                >
+                  {departments.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                Assigned advisor
+                <select
+                  value={advisorId}
+                  onChange={(event) => setAdvisorId(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+                >
+                  <option value="">No advisor selected</option>
+                  {advisors.map((advisor) => (
+                    <option key={advisor.id} value={advisor.id}>{advisor.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
         </div>
 
         {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
@@ -161,23 +250,13 @@ export default function UserManagementPage() {
                     </span>
                   </td>
                   <td className="py-2.5 pr-4">
-                    <div className="relative w-48">
-                      <input
-                        type={showResetPasswords[account.id] ? 'text' : 'password'}
-                        value={resetPasswords[account.id] ?? EMPTY_FORM.password}
-                        onChange={(event) => setResetPasswords((current) => ({ ...current, [account.id]: event.target.value }))}
-                        className="w-full rounded-lg border border-gray-200 py-1.5 pl-3 pr-9 text-xs focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowResetPasswords((current) => ({ ...current, [account.id]: !current[account.id] }))}
-                        className="absolute right-1.5 top-1/2 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#2563eb]"
-                        aria-label={showResetPasswords[account.id] ? 'Hide temporary password' : 'Show temporary password'}
-                        title={showResetPasswords[account.id] ? 'Hide temporary password' : 'Show temporary password'}
-                      >
-                        {showResetPasswords[account.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                      </button>
-                    </div>
+                    <PasswordInput
+                      buttonLabel="temporary password"
+                      value={resetPasswords[account.id] ?? EMPTY_FORM.password}
+                      onChange={(event) => setResetPasswords((current) => ({ ...current, [account.id]: event.target.value }))}
+                      wrapperClassName="w-48"
+                      className="w-full rounded-lg border border-gray-200 py-1.5 pl-3 text-xs focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+                    />
                   </td>
                   <td className="py-2.5">
                     <div className="flex gap-2">

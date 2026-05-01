@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { LockKeyhole, ShieldAlert } from 'lucide-react';
+import PasswordInput from '../../components/PasswordInput';
 import { useAuth } from '../../context/AuthContext';
 
 export default function StudentSettingsPage() {
@@ -55,29 +56,32 @@ export default function StudentSettingsPage() {
         <div className="space-y-4">
           <label className="block text-sm text-gray-600">
             Current password
-            <input
-              type="password"
+            <PasswordInput
+              buttonLabel="current password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+              wrapperClassName="mt-1"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
             />
           </label>
           <label className="block text-sm text-gray-600">
             New password
-            <input
-              type="password"
+            <PasswordInput
+              buttonLabel="new password"
               value={nextPassword}
               onChange={(event) => setNextPassword(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+              wrapperClassName="mt-1"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
             />
           </label>
           <label className="block text-sm text-gray-600">
             Confirm new password
-            <input
-              type="password"
+            <PasswordInput
+              buttonLabel="password confirmation"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+              wrapperClassName="mt-1"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
             />
           </label>
         </div>

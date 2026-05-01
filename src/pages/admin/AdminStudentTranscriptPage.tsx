@@ -111,7 +111,7 @@ export default function AdminStudentTranscriptPage() {
     const key = getDraftKey(row);
     return draftRows[key] ?? {
       finalGrade: formatGradeValue(row.finalGrade),
-      termCode: row.termCode,
+      termCode: row.termCode || termOptions[0]?.termCode || '',
     };
   };
 
@@ -120,10 +120,6 @@ export default function AdminStudentTranscriptPage() {
     const finalGrade = parseGradeValue(draft.finalGrade);
     if (draft.finalGrade.trim() && (!Number.isFinite(finalGrade) || finalGrade === null || finalGrade < 0 || finalGrade > 100)) {
       return [`${row.courseCode} needs a mark from 0 to 100, or a blank mark.`];
-    }
-
-    if (!draft.termCode) {
-      return [`${row.courseCode} needs a semester.`];
     }
 
     if (!row.id) {
@@ -172,7 +168,7 @@ export default function AdminStudentTranscriptPage() {
       const result = await upsertTranscriptEntry({
         id: row.id,
         studentId: row.studentId,
-        termCode: draft.termCode,
+        termCode: draft.termCode || row.termCode || termOptions[0]?.termCode || '',
         courseCode: row.courseCode,
         finalGrade,
         status: getStatusFromGrade(finalGrade),
