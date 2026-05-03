@@ -147,6 +147,16 @@ interface PasswordResetInquiryRpcResult {
   resolved_at: string | null;
 }
 
+function normalizePasswordResetInquiryRpcResult(
+  payload: PasswordResetInquiryRpcResult | PasswordResetInquiryRpcResult[] | null
+) {
+  if (Array.isArray(payload)) {
+    return payload[0] ?? null;
+  }
+
+  return payload;
+}
+
 interface AppDataContextType {
   analyzeSchedule: (studentId: string) => ScheduleEvaluation | null;
   clearSelection: (studentId: string) => void;
@@ -1979,10 +1989,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
     if (hasSupabaseConfig()) {
       try {
-        const inquiry = await supabaseRpc<PasswordResetInquiryRpcResult>('submit_password_reset_inquiry', {
-          p_university_id: normalizedId,
-          p_requester_role: role,
-        });
+        const inquiry = normalizePasswordResetInquiryRpcResult(
+          await supabaseRpc<PasswordResetInquiryRpcResult | PasswordResetInquiryRpcResult[]>('submit_password_reset_inquiry', {
+            p_university_id: normalizedId,
+            p_requester_role: role,
+          })
+        );
 
         if (!inquiry?.id) {
           return { success: false, error: 'Unable to send this request.' };
