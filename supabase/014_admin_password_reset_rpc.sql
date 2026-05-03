@@ -85,3 +85,5 @@ $$;
 grant execute on function public.admin_reset_user_password(text, text) to authenticated;
 
 commit;
+
+notify pgrst, 'reload schema';

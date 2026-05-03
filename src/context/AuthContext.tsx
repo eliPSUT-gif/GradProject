@@ -171,6 +171,11 @@ function isMissingAdminEnvironmentError(error: unknown) {
     && error.message.toLowerCase().includes('supabase admin environment is not configured');
 }
 
+function isMissingRpcSchemaCacheError(error: unknown) {
+  return error instanceof Error
+    && (error.message.includes('PGRST202') || error.message.includes('schema cache'));
+}
+
 async function callAdminAuthEndpoint(path: string, payload: unknown) {
   const {
     data: { session },
@@ -920,6 +925,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               p_password: nextPassword,
             });
           } catch (fallbackError) {
+            if (isMissingRpcSchemaCacheError(fallbackError)) {
+              return {
+                success: false,
+                error: 'The password reset database function is not active yet. Run supabase/014_admin_password_reset_rpc.sql in Supabase, then refresh this page and try again.',
+              };
+            }
+
             return {
               success: false,
               error: fallbackError instanceof Error ? fallbackError.message : 'Unable to reset password.',
