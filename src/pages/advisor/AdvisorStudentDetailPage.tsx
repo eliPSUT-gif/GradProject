@@ -1,20 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  AlertTriangle,
   ArrowLeft,
   BarChart3,
   BookOpen,
-  CheckCircle2,
+  Eye,
   Gauge,
   GraduationCap,
-  Info,
-  Lightbulb,
   MessageSquare,
   Save,
-  TrendingUp,
+  X,
 } from 'lucide-react';
-import { getDiffLabel } from '../../data/courses';
+import { formatTermLabel, getDiffLabel } from '../../data/courses';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
 
@@ -33,7 +30,6 @@ export default function AdvisorStudentDetailPage() {
     getStudentTermMetrics,
     getStudentTranscript,
     isAppDataReady,
-    recentEvaluations,
     studentInsights,
   } = useAppData();
 
@@ -46,6 +42,8 @@ export default function AdvisorStudentDetailPage() {
   const currentEvaluation = currentEvaluations[studentId] ?? null;
   const [activeTab, setActiveTab] = useState<'overview' | 'transcript' | 'semester-transcript'>('overview');
   const [selectedSemesterTermCode, setSelectedSemesterTermCode] = useState('');
+  const [isDraftsOpen, setIsDraftsOpen] = useState(false);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
 
   const selectedCoursesForDisplay = useMemo(
     () =>
@@ -64,16 +62,20 @@ export default function AdvisorStudentDetailPage() {
     [selectedCoursesForDisplay]
   );
 
-  const evaluationHistory = useMemo(
-    () => recentEvaluations.filter((item) => item.studentId === studentId).slice(0, 4),
-    [recentEvaluations, studentId]
-  );
-
   const score = currentEvaluation?.totalScore ?? drafts[0]?.evaluation.totalScore ?? null;
   const diffInfo = score !== null ? getDiffLabel(score) : null;
   const meterPct = score !== null ? clamp(score, 0, 100) : 50;
-  const recommendations = currentEvaluation?.recommendations ?? drafts[0]?.evaluation.recommendations ?? [];
   const explanation = currentEvaluation?.explanation ?? drafts[0]?.evaluation.explanation ?? [];
+  const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) ?? null;
+  const selectedDraftCourses = useMemo(
+    () =>
+      selectedDraft
+        ? selectedDraft.courseCodes
+            .map((code) => courses.find((course) => course.code === code))
+            .filter((course): course is NonNullable<typeof course> => Boolean(course))
+        : [],
+    [courses, selectedDraft]
+  );
   const selectedSemester = transcriptSemesters.find((semester) => semester.termCode === selectedSemesterTermCode)
     ?? transcriptSemesters[0]
     ?? null;
@@ -100,22 +102,14 @@ export default function AdvisorStudentDetailPage() {
     navigate('/app/advisor/messages', { state: { focusUserId: profile.id, scrollToBottom: true } });
   };
 
-  const recIcon = (impactDelta: number) => {
-    if (impactDelta >= 8) {
-      return <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />;
-    }
-
-    if (impactDelta === 0) {
-      return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />;
-    }
-
-    return <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />;
+  const handleOpenDrafts = () => {
+    setSelectedDraftId(null);
+    setIsDraftsOpen(true);
   };
 
-  const recBg = (impactDelta: number) => {
-    if (impactDelta >= 8) return 'bg-amber-50 border-amber-200';
-    if (impactDelta === 0) return 'bg-emerald-50 border-emerald-200';
-    return 'bg-blue-50 border-blue-200';
+  const handleCloseDrafts = () => {
+    setSelectedDraftId(null);
+    setIsDraftsOpen(false);
   };
 
   if (!isAppDataReady) {
@@ -324,41 +318,6 @@ export default function AdvisorStudentDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
-          <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
-            <h2 className="flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:text-lg">
-              <Lightbulb className="h-5 w-5 text-amber-500" />
-              Recommendations
-            </h2>
-            <button onClick={handleMessageStudent} className="hidden items-center gap-2 text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8] sm:inline-flex">
-              <MessageSquare className="h-4 w-4" />
-              Message student
-            </button>
-          </div>
-          <div className="space-y-3">
-            {recommendations.length > 0 ? (
-              recommendations.map((recommendation) => (
-                <div
-                  key={recommendation.id}
-                  className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${recBg(recommendation.impactDelta)}`}
-                >
-                  {recIcon(recommendation.impactDelta)}
-                  <div>
-                    <p className="font-semibold text-gray-800">{recommendation.title}</p>
-                    <p className="mt-1 text-gray-700">{recommendation.reason}</p>
-                    <p className="mt-1 text-gray-600">{recommendation.action}</p>
-                    <p className="mt-1 text-xs font-semibold text-gray-500">{recommendation.expectedImpact}</p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-gray-700">
-                No recommendations are available until the student saves an analyzed draft.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
           <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
             <BarChart3 className="h-5 w-5 text-[#2563eb]" />
             Past Semester GPA
@@ -386,67 +345,47 @@ export default function AdvisorStudentDetailPage() {
             )}
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
-          <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
-            <Save className="h-5 w-5 text-[#2563eb]" />
-            Saved Drafts
-          </h2>
-          <div className="space-y-3">
-            {drafts.length > 0 ? (
-              drafts.slice(0, 4).map((draft) => (
-                <div key={draft.id} className="rounded-xl border border-gray-200 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-[#0f1e3c]">{draft.name}</p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        {draft.courseCodes.length} courses | {draft.evaluation.totalCredits} credits
-                      </p>
-                      <p className="mt-2 text-xs text-gray-500">Saved {new Date(draft.savedAt).toLocaleString()}</p>
-                    </div>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDiffLabel(draft.evaluation.totalScore).cls}`}>
-                      {draft.evaluation.totalScore} {draft.evaluation.riskLabel}
-                    </span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-                This student has no saved drafts yet.
-              </div>
-            )}
-          </div>
-        </div>
 
         <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
-          <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:mb-4 sm:text-lg">
-            <TrendingUp className="h-5 w-5 text-[#2563eb]" />
-            Recent Evaluations
-          </h2>
-          <div className="space-y-3">
-            {evaluationHistory.length > 0 ? (
-              evaluationHistory.map((evaluation) => (
-                <div key={evaluation.id} className="rounded-xl border border-gray-200 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-[#0f1e3c]">{new Date(evaluation.evaluatedAt).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">Model {evaluation.modelVersion}</p>
-                    </div>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDiffLabel(evaluation.totalScore).cls}`}>
-                      {evaluation.totalScore} {evaluation.riskLabel}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-gray-600">Top contributors: {evaluation.topCourses.join(', ')}</p>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-                No recent evaluations are available yet.
-              </div>
+          <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+            <h2 className="flex items-center gap-2 text-base font-bold text-[#0f1e3c] sm:text-lg">
+              <Save className="h-5 w-5 text-[#2563eb]" />
+              Saved Drafts
+            </h2>
+            {drafts.length > 0 && (
+              <button
+                onClick={handleOpenDrafts}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/20 bg-[#2563eb]/5 px-3 py-2 text-xs font-semibold text-[#2563eb] transition-colors hover:bg-[#2563eb]/10"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                View all drafts
+              </button>
             )}
           </div>
+          {drafts.length > 0 ? (
+            <div className="rounded-xl border border-gray-200 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Latest draft</p>
+                  <p className="mt-1 font-semibold text-[#0f1e3c]">{drafts[0].name}</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {drafts[0].courseCodes.length} courses | {drafts[0].evaluation.totalCredits} credits
+                  </p>
+                  <p className="mt-2 text-xs text-gray-500">Saved {new Date(drafts[0].savedAt).toLocaleString()}</p>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDiffLabel(drafts[0].evaluation.totalScore).cls}`}>
+                  {drafts[0].evaluation.totalScore} {drafts[0].evaluation.riskLabel}
+                </span>
+              </div>
+              <p className="mt-4 text-xs text-gray-500">
+                {drafts.length} saved draft{drafts.length !== 1 ? 's' : ''} available for review.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+              This student has no saved drafts yet.
+            </div>
+          )}
         </div>
       </div>
       </>
@@ -559,6 +498,131 @@ export default function AdvisorStudentDetailPage() {
               No semester transcript data is available yet.
             </div>
           )}
+        </div>
+      )}
+
+      {isDraftsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4">
+          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+              <div>
+                <h3 className="flex items-center gap-2 text-base font-bold text-[#0f1e3c]">
+                  <Save className="h-4 w-4 text-[#2563eb]" />
+                  {selectedDraft ? selectedDraft.name : 'Saved Drafts'}
+                </h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  {selectedDraft
+                    ? `${formatTermLabel(selectedDraft.termCode)} | ${selectedDraft.courseCodes.length} courses | ${selectedDraft.evaluation.totalCredits} credits`
+                    : `${drafts.length} draft${drafts.length !== 1 ? 's' : ''} saved by ${profile.name}`}
+                </p>
+              </div>
+              <button
+                onClick={handleCloseDrafts}
+                className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Close saved drafts"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              {selectedDraft ? (
+                <div className="space-y-4">
+                  <button
+                    onClick={() => setSelectedDraftId(null)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    Back to drafts
+                  </button>
+
+                  <div className="rounded-xl border border-gray-200 bg-slate-50 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-[#0f1e3c]">{selectedDraft.name}</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Saved {new Date(selectedDraft.savedAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDiffLabel(selectedDraft.evaluation.totalScore).cls}`}>
+                        {selectedDraft.evaluation.totalScore} {selectedDraft.evaluation.riskLabel}
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedDraftCourses.length > 0 ? (
+                    <div className="overflow-hidden rounded-xl border border-gray-200">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">
+                              <th className="px-4 py-3 pr-4">Code</th>
+                              <th className="px-4 py-3 pr-4">Course</th>
+                              <th className="px-4 py-3 pr-4">Type</th>
+                              <th className="px-4 py-3 pr-4 text-center">Credits</th>
+                              <th className="px-4 py-3 text-center">Difficulty</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedDraftCourses.map((course) => {
+                              const label = getDiffLabel(course.diffScore);
+                              return (
+                                <tr key={course.code} className="border-b border-gray-50 last:border-0">
+                                  <td className="px-4 py-3 font-mono font-semibold text-[#0f1e3c]">{course.code}</td>
+                                  <td className="px-4 py-3 text-gray-700">{course.name}</td>
+                                  <td className="px-4 py-3">
+                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold capitalize text-gray-600">{course.type}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-gray-600">{course.credits}</td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${label.cls}`}>
+                                      {course.diffScore}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+                      No courses were found for this draft.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {drafts.map((draft) => (
+                    <div key={draft.id} className="rounded-xl border border-gray-200 p-4 transition-colors hover:border-[#2563eb]/40 hover:bg-blue-50/30">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-[#0f1e3c]">{draft.name}</p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {formatTermLabel(draft.termCode)} | {draft.courseCodes.length} courses | {draft.evaluation.totalCredits} credits
+                          </p>
+                          <p className="mt-2 text-xs text-gray-500">Saved {new Date(draft.savedAt).toLocaleString()}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDiffLabel(draft.evaluation.totalScore).cls}`}>
+                            {draft.evaluation.totalScore} {draft.evaluation.riskLabel}
+                          </span>
+                          <button
+                            onClick={() => setSelectedDraftId(draft.id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563eb] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1d4ed8]"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View courses
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
