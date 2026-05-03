@@ -653,45 +653,13 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             private: true,
           },
         })
-          .on('broadcast', { event: BROADCAST_EVENT_CREATED }, ({ payload }) => {
-            const nextNotification = payload as MessageCreatedBroadcast;
-            if (nextNotification.recipientId === user.id) {
-              const notification: AppNotification = {
-                id: `message:${nextNotification.recipientId}:${nextNotification.senderId}`,
-                kind: 'message',
-                senderId: nextNotification.senderId,
-                recipientId: nextNotification.recipientId,
-                createdAt: nextNotification.sentAt,
-              };
-
-              startTransition(() => {
-                setNotifications((current) => upsertNotification(current, notification));
-                setToastNotifications((current) => upsertNotification(current, notification));
-              });
-            }
-
+          .on('broadcast', { event: BROADCAST_EVENT_CREATED }, () => {
             void queueMessagesRefresh();
           })
           .on('broadcast', { event: BROADCAST_EVENT_READ }, () => {
             void queueMessagesRefresh();
           })
-          .on('broadcast', { event: BROADCAST_EVENT_ASSISTANCE }, ({ payload }) => {
-            const nextNotification = payload as AssistanceRequestBroadcast;
-            if (nextNotification.recipientId === user.id) {
-              const notification: AppNotification = {
-                id: `assistance:${nextNotification.recipientId}:${nextNotification.senderId}`,
-                kind: 'assistance',
-                senderId: nextNotification.senderId,
-                recipientId: nextNotification.recipientId,
-                createdAt: nextNotification.requestedAt,
-              };
-
-              startTransition(() => {
-                setNotifications((current) => upsertNotification(current, notification));
-                setToastNotifications((current) => upsertNotification(current, notification));
-              });
-            }
-
+          .on('broadcast', { event: BROADCAST_EVENT_ASSISTANCE }, () => {
             void queueMessagesRefresh();
           })
           .subscribe((status) => {
@@ -715,10 +683,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           ({ new: insertedRow }) => {
             const insertedMessage = mapRemoteMessage(insertedRow as RemoteMessageRow, userIdByAppUserId);
             if (insertedMessage?.recipientId === user.id) {
-              const notification = buildNotificationFromMessage(insertedMessage);
               startTransition(() => {
-                setNotifications((current) => upsertNotification(current, notification));
-                setToastNotifications((current) => upsertNotification(current, notification));
+                setMessages((current) => mergeMessages(current, [insertedMessage]));
               });
             }
 
