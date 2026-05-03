@@ -12,12 +12,12 @@ import {
   buildAvailableTerms,
   buildRegisterableTerms,
   buildCourses,
+  buildMockPlannerAiEvaluation,
   buildSeedHistoricalStats,
   buildStudentInsights,
   compareTermCodesNewestFirst,
   computeCourseDifficulty,
   DEFAULT_MODEL_VERSION,
-  evaluateSchedule,
   formatCompactTermLabel,
   formatRequirementText,
   formatTermLabel,
@@ -160,6 +160,7 @@ interface AppDataContextType {
   modelVersion: string;
   plannerSelections: Record<string, string[]>;
   plannerTermCodes: Record<string, string>;
+  requestPlannerAnalysis: (studentId: string) => ScheduleEvaluation | null;
   recentEvaluations: ScheduleEvaluation[];
   recalculateScores: () => void;
   saveScheduleDraft: (studentId: string, name: string) => ScheduleDraft | null;
@@ -376,6 +377,7 @@ const AppDataContext = createContext<AppDataContextType>({
   modelVersion: DEFAULT_MODEL_VERSION,
   plannerSelections: {},
   plannerTermCodes: {},
+  requestPlannerAnalysis: () => null,
   recentEvaluations: [],
   recalculateScores: () => {},
   saveScheduleDraft: () => null,
@@ -1477,11 +1479,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  const analyzeSchedule = useCallback(
+  const requestPlannerAnalysis = useCallback(
     (studentId: string) => {
       const profile = getStudentProfile(studentId);
       const selectedCourses = getSelectedCourses(studentId);
-      const evaluation = evaluateSchedule(
+      // TODO: Replace this placeholder orchestration with an API request that
+      // sends studentId, planner term, selected courses, and transcript context,
+      // then maps the trained model response into ScheduleEvaluation.
+      const evaluation = buildMockPlannerAiEvaluation(
         studentId,
         selectedCourses,
         state.courses,
@@ -1504,6 +1509,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return evaluation;
     },
     [getSelectedCourses, getStudentProfile, state.courses, state.modelVersion]
+  );
+
+  const analyzeSchedule = useCallback(
+    (studentId: string) => requestPlannerAnalysis(studentId),
+    [requestPlannerAnalysis]
   );
 
   const loadScheduleDraft = useCallback(
@@ -2002,7 +2012,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const recalculatedDrafts = current.scheduleDrafts.flatMap((draft) => {
         const profile = current.studentProfiles.find((item) => item.id === draft.studentId);
         const selectedCourses = recalculatedCourses.filter((course) => draft.courseCodes.includes(course.code));
-        const evaluation = evaluateSchedule(
+        const evaluation = buildMockPlannerAiEvaluation(
           draft.studentId,
           selectedCourses,
           recalculatedCourses,
@@ -2251,6 +2261,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       modelVersion: state.modelVersion,
       plannerSelections: state.plannerSelections,
       plannerTermCodes: state.plannerTermCodes,
+      requestPlannerAnalysis,
       recentEvaluations: state.recentEvaluations,
       recalculateScores,
       saveScheduleDraft,
@@ -2284,6 +2295,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       isAppDataReady,
       loadScheduleDraft,
       recalculateScores,
+      requestPlannerAnalysis,
       saveScheduleDraft,
       setPlannerTermCode,
       state.courses,

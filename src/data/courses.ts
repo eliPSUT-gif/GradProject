@@ -59,6 +59,7 @@ export interface StudentInsight extends StudentProfile { difficulty: number; sta
 export interface SelectionStatus { eligible: boolean; reasons: string[]; wouldExceedCredits: boolean; }
 
 export const DEFAULT_MODEL_VERSION = 'internet-weighted-v2.0.0';
+export const PLANNER_AI_PLACEHOLDER_MODEL_VERSION = 'planner-ai-placeholder-v1';
 export const MODEL_LAST_CALCULATED_AT = '2026-03-13T10:30:00.000Z';
 export const MAX_SEMESTER_CREDITS = 18;
 export const MAX_SUMMER_CREDITS = 9;
@@ -393,7 +394,7 @@ function findAlternativeCourse(sourceCourse: Course, allCourses: Course[], selec
   return allCourses.filter((candidate) => candidate.isPlannable && candidate.code !== sourceCourse.code && !selectedCodes.has(candidate.code)).filter((candidate) => candidate.type === sourceCourse.type || candidate.type === 'hybrid' || sourceCourse.type === 'hybrid').filter((candidate) => isEligibleAlternative(candidate, completedCourseCodes, [...currentWithoutSource, candidate.code], completedCredits, allCourses)).sort((left, right) => left.diffScore - right.diffScore)[0];
 }
 
-export function evaluateSchedule(studentId: string, selectedCourses: Course[], allCourses: Course[], modelVersion: string, completedCourseCodes: string[] = [], completedCredits = 0, evaluatedAt = new Date().toISOString()): ScheduleEvaluation | null {
+export function buildMockPlannerAiEvaluation(studentId: string, selectedCourses: Course[], allCourses: Course[], _modelVersion: string, completedCourseCodes: string[] = [], completedCredits = 0, evaluatedAt = new Date().toISOString()): ScheduleEvaluation | null {
   if (selectedCourses.length === 0) return null;
   const totalCredits = selectedCourses.reduce((sum, course) => sum + course.credits, 0);
   const averageDifficulty = average(selectedCourses.map((course) => course.diffScore));
@@ -409,17 +410,18 @@ export function evaluateSchedule(studentId: string, selectedCourses: Course[], a
   const comboPenalty = comboHits.length * 6;
   const totalScore = Math.round(clamp(averageDifficulty * 0.68 + creditPenalty + hardPenalty + mixPenalty + comboPenalty, 0, 100));
   const riskLabel = getDiffLabel(totalScore).label;
+  const termCreditCap = totalCredits <= MAX_SUMMER_CREDITS ? MAX_SUMMER_CREDITS : MAX_SEMESTER_CREDITS;
   const factors: EvaluationFactor[] = [
-    { label: 'Internet difficulty baseline', score: Math.round(averageDifficulty), detail: `${hardCourses.length} hard course(s) selected` },
-    { label: 'Credit load', score: Math.round(creditPenalty), detail: `${totalCredits} credits selected out of ${MAX_SEMESTER_CREDITS}` },
+    { label: 'AI workload estimate', score: Math.round(averageDifficulty), detail: `${hardCourses.length} course(s) are contributing notable workload pressure` },
+    { label: 'Credit load', score: Math.round(creditPenalty), detail: `${totalCredits} credits selected out of ${termCreditCap}` },
     { label: 'Course-type balance', score: Math.round(mixPenalty), detail: `${theoryCourses} theory, ${hybridCourses} hybrid, ${practicalCourses} practical, ${projectCourses} project` },
-    { label: 'Known hard combinations', score: comboPenalty, detail: comboHits.length > 0 ? comboHits.map((pair) => pair.join(' + ')).join(', ') : 'No flagged combinations' }
+    { label: 'Pattern flags', score: comboPenalty, detail: comboHits.length > 0 ? comboHits.map((pair) => pair.join(' + ')).join(', ') : 'No flagged combinations' }
   ];
   const explanation = [
-    `${hardCourses.length} course(s) in this draft have high internet-weighted difficulty scores.`,
-    totalCredits > 15 ? `The schedule carries ${totalCredits} credits, close to the ${MAX_SEMESTER_CREDITS}-credit cap.` : 'The credit load stays in a manageable planning range.',
-    theoryCourses >= selectedCourses.length - 1 ? 'The draft is theory-heavy, which increases exam and proof pressure.' : 'The draft keeps a healthier mix of course types.',
-    comboHits.length > 0 ? `Known hard combinations were detected: ${comboHits.map((pair) => pair.join(' + ')).join(', ')}.` : 'No configured hard course combinations were detected.'
+    `${hardCourses.length} course(s) in this draft are reading as higher-effort options in the placeholder AI review.`,
+    totalCredits > 15 ? `The current plan is approaching the regular-term ceiling with ${totalCredits} selected credits.` : 'The selected credit load looks manageable for the current planning pass.',
+    theoryCourses >= selectedCourses.length - 1 ? 'The placeholder AI review sees this draft as theory-heavy, which usually raises weekly study intensity.' : 'The placeholder AI review sees a healthier mix of course types in this draft.',
+    comboHits.length > 0 ? `The placeholder AI review flagged known difficult pairings: ${comboHits.map((pair) => pair.join(' + ')).join(', ')}.` : 'The placeholder AI review did not detect any configured hard-course pairings.'
   ];
   const selectedCodes = new Set(selectedCourses.map((course) => course.code));
   const recommendations: Recommendation[] = [];
@@ -427,15 +429,30 @@ export function evaluateSchedule(studentId: string, selectedCourses: Course[], a
     const hardestCourse = [...hardCourses].sort((left, right) => right.diffScore - left.diffScore)[0];
     if (hardestCourse) {
       const alternative = findAlternativeCourse(hardestCourse, allCourses, selectedCodes, completedCourseCodes, completedCredits, selectedCourses);
-      recommendations.push({ id: createId('rec', `${studentId}-${hardestCourse.code}`), title: `Swap ${hardestCourse.code} for a lighter eligible course`, reason: `${hardestCourse.code} is one of the biggest contributors to your score.`, action: alternative ? `Replace it with ${alternative.code} ${alternative.name}.` : `Move ${hardestCourse.code} to a future term and choose a lighter eligible course.`, expectedImpact: alternative ? `Estimated score reduction: ${Math.max(hardestCourse.diffScore - alternative.diffScore - 5, 6)} points.` : 'Estimated score reduction: 8 to 12 points.', impactDelta: alternative ? Math.max(hardestCourse.diffScore - alternative.diffScore - 5, 6) : 10 });
+      recommendations.push({ id: createId('rec', `${studentId}-${hardestCourse.code}`), title: `Swap ${hardestCourse.code} for a lighter eligible course`, reason: `${hardestCourse.code} is a major workload driver in the placeholder AI review.`, action: alternative ? `Replace it with ${alternative.code} ${alternative.name}.` : `Move ${hardestCourse.code} to a future term and choose a lighter eligible course.`, expectedImpact: alternative ? `Estimated AI score reduction: ${Math.max(hardestCourse.diffScore - alternative.diffScore - 5, 6)} points.` : 'Estimated AI score reduction: 8 to 12 points.', impactDelta: alternative ? Math.max(hardestCourse.diffScore - alternative.diffScore - 5, 6) : 10 });
     }
     const lighterEligibleCourses = allCourses.filter((course) => course.isPlannable && !selectedCodes.has(course.code)).filter((course) => isEligibleAlternative(course, completedCourseCodes, [...selectedCodes, course.code], completedCredits, allCourses)).sort((left, right) => left.diffScore - right.diffScore).slice(0, 3);
-    if (lighterEligibleCourses.length > 0) recommendations.push({ id: createId('rec', `${studentId}-lighter`), title: 'Consider lower-difficulty eligible options', reason: 'You already qualify for some easier alternatives.', action: `Examples: ${lighterEligibleCourses.map((course) => `${course.code} ${course.name}`).join(', ')}.`, expectedImpact: 'Expected impact: lower cumulative workload.', impactDelta: 7 });
+    if (lighterEligibleCourses.length > 0) recommendations.push({ id: createId('rec', `${studentId}-lighter`), title: 'Consider lower-difficulty eligible options', reason: 'The placeholder AI review found easier alternatives you already qualify for.', action: `Examples: ${lighterEligibleCourses.map((course) => `${course.code} ${course.name}`).join(', ')}.`, expectedImpact: 'Expected impact: lower cumulative workload.', impactDelta: 7 });
   }
-  if (totalCredits > 15) recommendations.push({ id: createId('rec', `${studentId}-credits`), title: 'Reduce total credits', reason: 'Heavy credit load adds pressure across all courses.', action: 'Move one 3-credit course to the next term if possible.', expectedImpact: `Estimated score reduction: ${Math.round(creditPenalty * 0.7)} points.`, impactDelta: Math.round(creditPenalty * 0.7) });
-  if (theoryCourses > practicalCourses + hybridCourses) recommendations.push({ id: createId('rec', `${studentId}-balance`), title: 'Rebalance course types', reason: 'The current draft is theory-heavy.', action: 'Swap one theory-heavy course for a practical or hybrid option if available.', expectedImpact: 'Expected impact: smoother weekly workload.', impactDelta: 6 });
-  if (recommendations.length === 0) recommendations.push({ id: createId('rec', `${studentId}-keep`), title: 'Schedule is manageable', reason: 'The current plan is balanced across difficulty, credits, and course types.', action: 'Keep the draft and review prerequisites before saving.', expectedImpact: 'No immediate balancing action is required.', impactDelta: 0 });
-  return { id: createId('eval', `${studentId}-${evaluatedAt}`), studentId, totalScore, riskLabel, totalCredits, evaluatedAt, modelVersion, explanation, factors, recommendations, topCourses: buildTopCourseStrings(selectedCourses) };
+  if (totalCredits > 15) recommendations.push({ id: createId('rec', `${studentId}-credits`), title: 'Reduce total credits', reason: 'The placeholder AI review sees the total load as a pressure multiplier.', action: 'Move one 3-credit course to the next term if possible.', expectedImpact: `Estimated AI score reduction: ${Math.round(creditPenalty * 0.7)} points.`, impactDelta: Math.round(creditPenalty * 0.7) });
+  if (theoryCourses > practicalCourses + hybridCourses) recommendations.push({ id: createId('rec', `${studentId}-balance`), title: 'Rebalance course types', reason: 'The placeholder AI review sees the current draft as theory-heavy.', action: 'Swap one theory-heavy course for a practical or hybrid option if available.', expectedImpact: 'Expected impact: smoother weekly workload.', impactDelta: 6 });
+  if (recommendations.length === 0) recommendations.push({ id: createId('rec', `${studentId}-keep`), title: 'Schedule is manageable', reason: 'The placeholder AI review reads the current plan as balanced across workload, credits, and course mix.', action: 'Keep the draft and review prerequisites before saving.', expectedImpact: 'No immediate balancing action is required.', impactDelta: 0 });
+  return { id: createId('eval', `${studentId}-${evaluatedAt}`), studentId, totalScore, riskLabel, totalCredits, evaluatedAt, modelVersion: PLANNER_AI_PLACEHOLDER_MODEL_VERSION, explanation, factors, recommendations, topCourses: buildTopCourseStrings(selectedCourses) };
+}
+
+export function evaluateSchedule(studentId: string, selectedCourses: Course[], allCourses: Course[], modelVersion: string, completedCourseCodes: string[] = [], completedCredits = 0, evaluatedAt = new Date().toISOString()): ScheduleEvaluation | null {
+  // TODO: Replace this placeholder builder with a real API request that sends
+  // studentId, selected courses, term context, and transcript context to the
+  // trained planner model, then maps the response into ScheduleEvaluation.
+  return buildMockPlannerAiEvaluation(
+    studentId,
+    selectedCourses,
+    allCourses,
+    modelVersion,
+    completedCourseCodes,
+    completedCredits,
+    evaluatedAt
+  );
 }
 
 export function buildSeedDrafts(_courses: Course[]) {

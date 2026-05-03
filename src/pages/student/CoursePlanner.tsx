@@ -16,7 +16,6 @@ function typeTag(type: Course['type']) {
 export default function CoursePlanner() {
   const { user } = useAuth();
   const {
-    analyzeSchedule,
     clearSelection,
     courses,
     currentEvaluations,
@@ -31,6 +30,7 @@ export default function CoursePlanner() {
     isAppDataReady,
     loadScheduleDraft,
     plannerSelections,
+    requestPlannerAnalysis,
     saveScheduleDraft,
     setPlannerTermCode,
     toggleCourseSelection,
@@ -88,7 +88,7 @@ export default function CoursePlanner() {
     }
 
     setPlannerError(null);
-    analyzeSchedule(studentId);
+    requestPlannerAnalysis(studentId);
     setHasAnalyzed(true);
     setShouldScrollToResults(true);
   };
@@ -225,7 +225,7 @@ export default function CoursePlanner() {
           <div className="mb-4 flex items-center justify-between"><h3 className="text-sm font-bold text-[#0f1e3c]">My Selection ({selectedCourses.length})</h3><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${totalCredits > termCreditLimit ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{totalCredits} / {termCreditLimit} cr</span></div>
           {selectedCourses.length === 0 ? <p className="py-6 text-center text-xs text-gray-400">Click eligible courses to add them here.</p> : <div className="mb-4 max-h-[24rem] space-y-2 overflow-y-auto pr-1">{selectedCourses.map((course) => (<div key={course.code} className="flex items-start justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2"><div className="min-w-0"><span className="font-mono text-xs font-bold text-[#0f1e3c]">{course.code}</span><span className="ml-2 break-words text-xs text-gray-500">{course.name}</span></div><button onClick={() => handleToggle(course.code)} className="shrink-0 rounded-md p-1 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>))}</div>}
           <div className="space-y-2">
-            <button onClick={handleAnalyze} disabled={selectedCourses.length === 0} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"><Sparkles className="h-4 w-4" />Analyze My Schedule</button>
+            <button onClick={handleAnalyze} disabled={selectedCourses.length === 0} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"><Sparkles className="h-4 w-4" />Run AI Planner Review</button>
             <div className="flex gap-2"><input type="text" value={draftName} onChange={(event) => setDraftName(event.target.value)} placeholder="Draft name" className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30" /><button onClick={handleSaveDraft} disabled={selectedCourses.length === 0} className="inline-flex items-center gap-1 rounded-lg border border-[#2563eb]/20 bg-[#2563eb]/5 px-3 py-2 text-xs font-semibold text-[#2563eb] transition-colors hover:bg-[#2563eb]/10 disabled:cursor-not-allowed disabled:opacity-40"><Save className="h-3.5 w-3.5" />Save</button></div>
             {draftFeedback && (
               <div className={`rounded-lg px-3 py-2 text-xs ${draftFeedback.tone === 'error' ? 'border border-red-200 bg-red-50 text-red-700' : draftFeedback.tone === 'success' ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-blue-200 bg-blue-50 text-blue-700'}`}>
@@ -358,13 +358,16 @@ export default function CoursePlanner() {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#2563eb]">
-                    <Sparkles className="h-3 w-3" /> Analysis Complete
+                    <Sparkles className="h-3 w-3" /> AI Placeholder Response
                   </div>
                   <h2 className="mt-1 font-display text-2xl font-bold text-[#0f1e3c] sm:text-3xl">
-                    Schedule Difficulty
+                    AI Schedule Review
                   </h2>
                   <p className="mt-1 text-xs text-gray-500 sm:text-sm">
                     {formatTermLabel(plannerTermCode)} &middot; {selectedCourses.length} course{selectedCourses.length !== 1 ? 's' : ''} &middot; {totalCredits} credit{totalCredits !== 1 ? 's' : ''}
+                  </p>
+                  <p className="mt-2 max-w-xl text-xs leading-relaxed text-gray-500">
+                    This response is coming from a mocked AI payload for now and will be replaced with live API analysis later.
                   </p>
                   <div
                     className="mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold"
@@ -375,7 +378,7 @@ export default function CoursePlanner() {
                     }}
                   >
                     <Gauge className="h-3.5 w-3.5" />
-                    {overallDiff.label} difficulty
+                    {overallDiff.label} workload
                   </div>
                 </div>
               </div>
@@ -480,7 +483,7 @@ export default function CoursePlanner() {
                 <h3 className="text-sm font-bold text-[#0f1e3c]">Notes &amp; Rationale</h3>
               </div>
               {analysisResult.explanation.length === 0 ? (
-                <p className="text-xs text-gray-500">No additional notes for this schedule.</p>
+                <p className="text-xs text-gray-500">No additional AI rationale is available for this schedule yet.</p>
               ) : (
                 <ul className="space-y-3">
                   {analysisResult.explanation.map((line, idx) => (
@@ -509,7 +512,7 @@ export default function CoursePlanner() {
               {analysisResult.recommendations.length === 0 ? (
                 <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                  <span>Your schedule looks well-balanced &mdash; no adjustments needed.</span>
+                  <span>The placeholder AI review sees this schedule as balanced with no immediate changes needed.</span>
                 </div>
               ) : (
                 <div className="space-y-3">
