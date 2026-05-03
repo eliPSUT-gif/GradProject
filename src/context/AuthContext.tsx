@@ -22,6 +22,7 @@ import {
   hasSupabaseConfig,
   isLocalDemoModeEnabled,
   onSupabaseAuthStateChange,
+  supabaseDelete,
   supabasePatch,
   supabaseSelect,
   supabaseSignInWithPassword,
@@ -86,6 +87,7 @@ interface AuthContextType {
   resetUserPassword: (userId: string, nextPassword: string) => Promise<PasswordChangeResult>;
   upsertUser: (input: UserFormInput) => PasswordChangeResult;
   updateUserStatus: (userId: string, status: ManagedUser['status']) => void;
+  deleteUser: (userId: string) => void;
 }
 
 const USERS_KEY = 'smart-advisor-users-v2';
@@ -110,6 +112,7 @@ const AuthContext = createContext<AuthContextType>({
   resetUserPassword: async () => ({ success: false, error: 'Auth provider not ready.' }),
   upsertUser: () => ({ success: false, error: 'Auth provider not ready.' }),
   updateUserStatus: () => {},
+  deleteUser: () => {},
 });
 
 function mergeManagedUsers(...sources: ManagedUser[][]) {
@@ -865,6 +868,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id]);
 
+  const deleteUser = useCallback((userId: string) => {
+    setUsers((current) => current.filter((account) => account.id !== userId));
+
+    if (hasSupabaseConfig()) {
+      void supabaseDelete('app_users', `university_id=eq.${encodeURIComponent(userId)}`).catch((error) => {
+        console.error('Unable to delete Supabase user.', error);
+      });
+    }
+
+    if (user?.id === userId) {
+      setUser(null);
+      setRememberSession(false);
+    }
+  }, [user?.id]);
+
   const resetUserPassword = useCallback(
     async (userId: string, nextPassword: string): Promise<PasswordChangeResult> => {
       const validationError = getPasswordValidationError(nextPassword);
@@ -913,8 +931,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetUserPassword,
       upsertUser,
       updateUserStatus,
+      deleteUser,
     }),
-    [changePassword, isAuthReady, login, logout, resetUserPassword, updateUserStatus, upsertUser, user, users]
+    [changePassword, deleteUser, isAuthReady, login, logout, resetUserPassword, updateUserStatus, upsertUser, user, users]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

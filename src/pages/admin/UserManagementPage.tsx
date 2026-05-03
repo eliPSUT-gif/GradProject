@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { KeyRound, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { KeyRound, Save, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import PasswordInput from '../../components/PasswordInput';
 import { useAppData } from '../../context/AppDataContext';
 import { useAuth, type UserFormInput } from '../../context/AuthContext';
@@ -15,16 +15,17 @@ const EMPTY_FORM: UserFormInput = {
 };
 
 export default function UserManagementPage() {
-  const { resetUserPassword, updateUserStatus, upsertUser, users } = useAuth();
+  const { deleteUser, resetUserPassword, updateUserStatus, upsertUser, users } = useAuth();
   const { courses, createStudentAccount } = useAppData();
   const [form, setForm] = useState<UserFormInput>(EMPTY_FORM);
-  const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
+  const [editPasswords, setEditPasswords] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [enrollmentYear, setEnrollmentYear] = useState(new Date().getFullYear());
   const [admissionTerm, setAdmissionTerm] = useState<AdmissionTerm>('fall');
   const [department, setDepartment] = useState('Computer Science');
   const [advisorId, setAdvisorId] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const departments = useMemo(() => {
     const knownDepartments = [...new Set(courses.map((course) => course.department))].sort();
@@ -42,7 +43,12 @@ export default function UserManagementPage() {
     setError(null);
 
     const existingUser = users.find((account) => account.id === form.id);
-    if (isStudentForm && !existingUser) {
+    if (existingUser) {
+      setError('A user with this ID already exists.');
+      return;
+    }
+
+    if (isStudentForm) {
       const result = await createStudentAccount({
         id: form.id,
         name: form.name,
@@ -68,21 +74,34 @@ export default function UserManagementPage() {
       return;
     }
 
-    setMessage(`User ${form.id} saved successfully.`);
+    setMessage(`User ${form.id} created successfully.`);
     setForm(EMPTY_FORM);
   };
 
-  const handleResetPassword = async (userId: string) => {
+  const handleSavePassword = async (userId: string) => {
     setMessage(null);
     setError(null);
-    const nextPassword = resetPasswords[userId] ?? EMPTY_FORM.password;
+    const nextPassword = editPasswords[userId];
+    if (!nextPassword) return;
+
     const result = await resetUserPassword(userId, nextPassword);
     if (!result.success) {
-      setError(result.error ?? 'Unable to reset password.');
+      setError(result.error ?? 'Unable to update password.');
       return;
     }
 
-    setMessage(`Temporary password reset for ${userId}.`);
+    setEditPasswords((current) => {
+      const next = { ...current };
+      delete next[userId];
+      return next;
+    });
+    setMessage(`Password updated for ${userId}.`);
+  };
+
+  const handleConfirmDelete = (userId: string) => {
+    deleteUser(userId);
+    setDeleteConfirmId(null);
+    setMessage(`User ${userId} has been deleted.`);
   };
 
   return (
@@ -90,7 +109,7 @@ export default function UserManagementPage() {
       <form onSubmit={handleSubmit} className="rounded-xl border border-gray-200 bg-white p-6">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
           <UserPlus className="h-5 w-5 text-[#2563eb]" />
-          Add or Edit User
+          Add New User
         </h2>
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
           <div className="flex items-start gap-2">
@@ -216,7 +235,7 @@ export default function UserManagementPage() {
         {message && <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
 
         <button type="submit" className="mt-5 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8]">
-          Save user
+          Create user
         </button>
       </form>
 
@@ -232,7 +251,7 @@ export default function UserManagementPage() {
                 <th className="pb-2 pr-4">Name</th>
                 <th className="pb-2 pr-4">Role</th>
                 <th className="pb-2 pr-4">Status</th>
-                <th className="pb-2 pr-4">Temporary Password</th>
+                <th className="pb-2 pr-4">Password</th>
                 <th className="pb-2">Action</th>
               </tr>
             </thead>
@@ -250,29 +269,27 @@ export default function UserManagementPage() {
                     </span>
                   </td>
                   <td className="py-2.5 pr-4">
-                    <PasswordInput
-                      buttonLabel="temporary password"
-                      value={resetPasswords[account.id] ?? EMPTY_FORM.password}
-                      onChange={(event) => setResetPasswords((current) => ({ ...current, [account.id]: event.target.value }))}
-                      wrapperClassName="w-48"
-                      className="w-full rounded-lg border border-gray-200 py-1.5 pl-3 text-xs focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-                    />
+                    <div className="flex items-center gap-2">
+                      <PasswordInput
+                        buttonLabel="password"
+                        value={editPasswords[account.id] ?? account.password}
+                        onChange={(event) => setEditPasswords((current) => ({ ...current, [account.id]: event.target.value }))}
+                        wrapperClassName="w-48"
+                        className="w-full rounded-lg border border-gray-200 py-1.5 pl-3 text-xs focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+                      />
+                      {editPasswords[account.id] !== undefined && editPasswords[account.id] !== account.password && (
+                        <button
+                          onClick={() => void handleSavePassword(account.id)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-[#2563eb] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#1d4ed8]"
+                        >
+                          <Save className="h-3.5 w-3.5" />
+                          Save
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2.5">
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => setForm({
-                          id: account.id,
-                          name: account.name,
-                          role: account.role,
-                          subtitle: account.subtitle,
-                          password: account.password,
-                          status: account.status,
-                        })}
-                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100"
-                      >
-                        Edit
-                      </button>
                       <button
                         onClick={() => updateUserStatus(account.id, account.status === 'active' ? 'inactive' : 'active')}
                         className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100"
@@ -280,11 +297,11 @@ export default function UserManagementPage() {
                         {account.status === 'active' ? 'Disable' : 'Enable'}
                       </button>
                       <button
-                        onClick={() => void handleResetPassword(account.id)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100"
+                        onClick={() => setDeleteConfirmId(account.id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
                       >
-                        <KeyRound className="h-3.5 w-3.5" />
-                        Reset
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
                       </button>
                     </div>
                   </td>
@@ -294,6 +311,31 @@ export default function UserManagementPage() {
           </table>
         </div>
       </div>
+
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-[#0f1e3c]">Delete User</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Are you sure you want to delete <span className="font-semibold">{users.find((u) => u.id === deleteConfirmId)?.name ?? deleteConfirmId}</span>? This action cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleConfirmDelete(deleteConfirmId)}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
