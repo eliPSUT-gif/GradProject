@@ -29,7 +29,6 @@ import {
   supabaseSignInWithPassword,
   supabaseSignOut,
   supabaseUpdateCurrentUserPassword,
-  supabaseUpsert,
 } from '../lib/supabase';
 
 interface AuthSession {
@@ -86,7 +85,7 @@ interface AuthContextType {
   isAuthReady: boolean;
   changePassword: (userId: string, currentPassword: string, nextPassword: string) => Promise<PasswordChangeResult>;
   resetUserPassword: (userId: string, nextPassword: string) => Promise<PasswordChangeResult>;
-  upsertUser: (input: UserFormInput) => PasswordChangeResult;
+  upsertUser: (input: UserFormInput) => Promise<PasswordChangeResult>;
   updateUserStatus: (userId: string, status: ManagedUser['status']) => void;
   deleteUser: (userId: string) => void;
 }
@@ -111,7 +110,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthReady: false,
   changePassword: async () => ({ success: false, error: 'Auth provider not ready.' }),
   resetUserPassword: async () => ({ success: false, error: 'Auth provider not ready.' }),
-  upsertUser: () => ({ success: false, error: 'Auth provider not ready.' }),
+  upsertUser: async () => ({ success: false, error: 'Auth provider not ready.' }),
   updateUserStatus: () => {},
   deleteUser: () => {},
 });
@@ -169,6 +168,10 @@ function buildManagedEmail(userId: string, role: Role) {
 function isMissingAdminEnvironmentError(error: unknown) {
   return error instanceof Error
     && error.message.toLowerCase().includes('supabase admin environment is not configured');
+}
+
+function formatMissingAdminEnvironmentError(action: 'create accounts' | 'reset passwords') {
+  return `Supabase service-role access is not configured, so admins cannot ${action} for login yet. Add SUPABASE_SERVICE_ROLE_KEY to Vercel, redeploy, and try again.`;
 }
 
 function isMissingRpcSchemaCacheError(error: unknown) {
@@ -802,7 +805,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [users]
   );
 
-  const upsertUser = useCallback((input: UserFormInput): PasswordChangeResult => {
+  const upsertUser = useCallback(async (input: UserFormInput): Promise<PasswordChangeResult> => {
     const validationError = getPasswordValidationError(input.password);
     if (validationError) {
       return { success: false, error: validationError };
@@ -810,18 +813,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const existingUser = users.find((account) => account.id === input.id);
     const nextEmail = input.email ?? existingUser?.email ?? buildManagedEmail(input.id, input.role);
+    const nextUser = normalizeManagedUser({
+      ...input,
+      initials: getInitials(input.name),
+      lastLogin: existingUser?.lastLogin ?? 'Never',
+      email: nextEmail,
+      appUserId: existingUser?.appUserId,
+      authUserId: existingUser?.authUserId ?? null,
+      lastSeenAt: existingUser?.lastSeenAt ?? null,
+    });
+
+    if (hasSupabaseConfig()) {
+      try {
+        await callAdminAuthEndpoint('/api/admin-create-user', {
+          universityId: input.id,
+          email: nextEmail,
+          password: input.password,
+          role: input.role,
+          fullName: input.name,
+          subtitle: input.subtitle,
+          status: input.status,
+        });
+
+        await syncUsersFromSupabase();
+        return { success: true };
+      } catch (error) {
+        if (isMissingAdminEnvironmentError(error)) {
+          return { success: false, error: formatMissingAdminEnvironmentError('create accounts') };
+        }
+
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unable to create Supabase auth user.',
+        };
+      }
+    }
 
     setUsers((current) => {
-      const nextUser = normalizeManagedUser({
-        ...input,
-        initials: getInitials(input.name),
-        lastLogin: existingUser?.lastLogin ?? 'Never',
-        email: nextEmail,
-        appUserId: existingUser?.appUserId,
-        authUserId: existingUser?.authUserId ?? null,
-        lastSeenAt: existingUser?.lastSeenAt ?? null,
-      });
-
       const exists = current.some((account) => account.id === input.id);
       const nextUsers = exists
         ? current.map((account) => (account.id === input.id ? nextUser : account))
@@ -834,38 +862,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return nextUsers;
     });
 
-    if (hasSupabaseConfig()) {
-      void callAdminAuthEndpoint('/api/admin-create-user', {
-        universityId: input.id,
-        email: nextEmail,
-        password: input.password,
-        role: input.role,
-        fullName: input.name,
-        subtitle: input.subtitle,
-        status: input.status,
-      }).catch((error) => {
-        console.error('Unable to create Supabase auth user through admin endpoint.', error);
-      });
-
-      void supabaseUpsert(
-        'app_users',
-        {
-          university_id: input.id,
-          role: input.role,
-          full_name: input.name,
-          initials: getInitials(input.name),
-          subtitle: input.subtitle,
-          status: input.status,
-          email: nextEmail,
-        },
-        'university_id'
-      ).catch((error) => {
-        console.error('Unable to upsert Supabase user.', error);
-      });
-    }
-
     return { success: true };
-  }, [user?.id, users]);
+  }, [syncUsersFromSupabase, user?.id, users]);
 
   const updateUserStatus = useCallback((userId: string, status: ManagedUser['status']) => {
     setUsers((current) =>

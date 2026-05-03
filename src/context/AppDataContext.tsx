@@ -1726,7 +1726,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       password: input.temporaryPassword,
       status: 'active',
     };
-    const userResult = upsertUser(userInput);
+    const userResult = await upsertUser(userInput);
     if (!userResult.success) {
       return userResult;
     }
@@ -1742,14 +1742,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       admissionYear: input.enrollmentYear,
       admissionTerm: input.admissionTerm,
     } satisfies StudentProfile;
-
-    setState((current) => ({
-      ...current,
-      studentProfiles: [
-        nextProfile,
-        ...current.studentProfiles.filter((profile) => profile.id !== input.id),
-      ],
-    }));
 
     if (hasSupabaseConfig()) {
       try {
@@ -1775,21 +1767,35 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const advisorAppUserId = users.find((account) => account.id === input.advisorId)?.appUserId ?? null;
         const departmentId = departmentRows[0]?.id;
 
-        if (studentAppUserId && departmentId) {
-          await supabaseUpsert(
-            'student_profiles',
-            {
-              user_id: studentAppUserId,
-              department_id: departmentId,
-              advisor_id: advisorAppUserId,
-              gpa: 0,
-              completed_credits: 0,
-              admission_year: input.enrollmentYear,
-              admission_term: input.admissionTerm,
-            },
-            'user_id'
-          );
+        if (!studentAppUserId) {
+          return {
+            success: false,
+            error: 'The Auth user was created, but app user persistence could not be confirmed. Refresh Admin Users before trying again.',
+            studentId: input.id,
+          };
         }
+
+        if (!departmentId) {
+          return {
+            success: false,
+            error: `Department "${input.department}" was not found in Supabase, so the student profile was not created.`,
+            studentId: input.id,
+          };
+        }
+
+        await supabaseUpsert(
+          'student_profiles',
+          {
+            user_id: studentAppUserId,
+            department_id: departmentId,
+            advisor_id: advisorAppUserId,
+            gpa: 0,
+            completed_credits: 0,
+            admission_year: input.enrollmentYear,
+            admission_term: input.admissionTerm,
+          },
+          'user_id'
+        );
       } catch (error) {
         return {
           success: false,
@@ -1798,6 +1804,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         };
       }
     }
+
+    setState((current) => ({
+      ...current,
+      studentProfiles: [
+        nextProfile,
+        ...current.studentProfiles.filter((profile) => profile.id !== input.id),
+      ],
+    }));
 
     return { success: true, studentId: input.id };
   }, [upsertUser, users]);

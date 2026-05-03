@@ -78,7 +78,7 @@ export default function UserManagementPage() {
       return;
     }
 
-    const result = upsertUser(form);
+    const result = await upsertUser(form);
     if (!result.success) {
       setError(result.error ?? 'Unable to save user.');
       return;
