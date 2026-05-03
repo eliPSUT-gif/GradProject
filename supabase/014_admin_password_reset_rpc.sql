@@ -2,6 +2,8 @@ begin;
 
 create extension if not exists pgcrypto with schema extensions;
 
+drop function if exists public.admin_reset_user_password(text, text);
+
 create or replace function public.admin_reset_user_password(
   p_university_id text,
   p_password text
@@ -9,7 +11,7 @@ create or replace function public.admin_reset_user_password(
 returns void
 language plpgsql
 security definer
-set search_path = public, auth
+set search_path = public, auth, extensions
 as $$
 declare
   v_admin_user_id uuid;
@@ -71,7 +73,7 @@ begin
   end if;
 
   update auth.users
-  set encrypted_password = extensions.crypt(p_password, extensions.gen_salt('bf')),
+  set encrypted_password = crypt(p_password, gen_salt('bf'::text)),
       email_confirmed_at = coalesce(email_confirmed_at, timezone('utc', now())),
       confirmation_sent_at = null,
       recovery_sent_at = null,

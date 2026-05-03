@@ -176,6 +176,11 @@ function isMissingRpcSchemaCacheError(error: unknown) {
     && (error.message.includes('PGRST202') || error.message.includes('schema cache'));
 }
 
+function isOutdatedPasswordResetRpcError(error: unknown) {
+  return error instanceof Error
+    && error.message.includes('gen_salt');
+}
+
 async function callAdminAuthEndpoint(path: string, payload: unknown) {
   const {
     data: { session },
@@ -929,6 +934,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return {
                 success: false,
                 error: 'The password reset database function is not active yet. Run supabase/014_admin_password_reset_rpc.sql in Supabase, then refresh this page and try again.',
+              };
+            }
+
+            if (isOutdatedPasswordResetRpcError(fallbackError)) {
+              return {
+                success: false,
+                error: 'Supabase is still using an outdated password reset function. Rerun the latest supabase/014_admin_password_reset_rpc.sql file, then refresh and try again.',
               };
             }
 
