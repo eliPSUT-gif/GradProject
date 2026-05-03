@@ -51,6 +51,7 @@ import { useAuth, type UserFormInput } from './AuthContext';
 
 type PlannerActionResult = { success: boolean; error?: string };
 type PasswordInquiryRole = Extract<Role, 'student' | 'advisor'>;
+const PASSWORD_INQUIRY_MESSAGE_PREFIX = '[PASSWORD_RESET_INQUIRY]';
 
 interface CourseFormInput {
   code: string;
@@ -157,12 +158,12 @@ function normalizePasswordResetInquiryRpcResult(
   return payload;
 }
 
-function normalizeEmbeddedRequester(row: PasswordResetInquiryRow) {
-  if (Array.isArray(row.requester)) {
-    return row.requester[0] ?? null;
+function normalizeEmbeddedMessageSender(row: PasswordResetInquiryMessageRow) {
+  if (Array.isArray(row.sender)) {
+    return row.sender[0] ?? null;
   }
 
-  return row.requester ?? null;
+  return row.sender ?? null;
 }
 
 interface AppDataContextType {
@@ -345,20 +346,21 @@ interface StudentTermMetricRow {
   gpa: number | null;
 }
 
-interface PasswordResetInquiryRow {
+interface PasswordResetInquiryMessageRow {
   id: string;
-  requester_id: string;
-  requester?: {
+  sender_id: string;
+  body: string;
+  sent_at: string;
+  read_at: string | null;
+  sender?: {
     university_id: string | null;
     full_name: string | null;
+    role: Role | null;
   } | {
     university_id: string | null;
     full_name: string | null;
+    role: Role | null;
   }[] | null;
-  requester_role: PasswordInquiryRole;
-  status: PasswordResetInquiry['status'];
-  created_at: string;
-  resolved_at: string | null;
 }
 
 interface AcademicTermRow {
@@ -861,7 +863,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     draftCourseRows,
     evaluationRows,
     termMetricRows,
-    passwordInquiryRows,
+    passwordInquiryMessageRows,
   ] = await Promise.all([
     supabaseSelect<AcademicTermRow[]>('academic_terms', 'select=term_code,academic_year,term_name,term_type,max_credits'),
     supabaseSelect<DepartmentRow[]>('departments', 'select=id,name'),
@@ -886,9 +888,9 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'select=id,schedule_id,student_id,total_score,risk_label,total_credits,model_version,explanation,factors,recommendations,top_courses,evaluated_at&order=evaluated_at.desc'
     ),
     supabaseSelect<StudentTermMetricRow[]>('student_term_metrics_v', 'select=student_id,term_code,term_type,course_count,completed_credits,gpa&order=term_code.desc'),
-    supabaseSelect<PasswordResetInquiryRow[]>(
-      'password_reset_inquiries',
-      'select=id,requester_id,requester_role,status,created_at,resolved_at,requester:app_users!password_reset_inquiries_requester_id_fkey(university_id,full_name)&order=created_at.desc'
+    supabaseSelect<PasswordResetInquiryMessageRow[]>(
+      'messages',
+      'select=id,sender_id,body,sent_at,read_at,sender:app_users!messages_sender_id_fkey(university_id,full_name,role)&order=sent_at.desc'
     ),
   ]);
 
@@ -1167,12 +1169,17 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     } satisfies StudentTermMetric];
   }).sort((left, right) => compareTermCodesNewestFirst(left.termCode, right.termCode));
 
-  const passwordResetInquiries = passwordInquiryRows.flatMap((row) => {
-    const embeddedRequester = normalizeEmbeddedRequester(row);
-    const cachedRequester = appUsersByAppId.get(row.requester_id);
+  const passwordResetInquiries = passwordInquiryMessageRows.flatMap((row) => {
+    if (!row.body.startsWith(PASSWORD_INQUIRY_MESSAGE_PREFIX)) {
+      return [];
+    }
+
+    const embeddedRequester = normalizeEmbeddedMessageSender(row);
+    const cachedRequester = appUsersByAppId.get(row.sender_id);
     const requesterId = embeddedRequester?.university_id ?? cachedRequester?.id;
     const requesterName = embeddedRequester?.full_name ?? cachedRequester?.name;
-    if (!requesterId || !requesterName) {
+    const requesterRole = embeddedRequester?.role ?? cachedRequester?.role;
+    if (!requesterId || !requesterName || (requesterRole !== 'student' && requesterRole !== 'advisor')) {
       return [];
     }
 
@@ -1180,10 +1187,10 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       id: row.id,
       requesterId,
       requesterName,
-      requesterRole: row.requester_role,
-      status: row.status,
-      createdAt: row.created_at,
-      resolvedAt: row.resolved_at,
+      requesterRole,
+      status: row.read_at ? 'resolved' : 'open',
+      createdAt: row.sent_at,
+      resolvedAt: row.read_at,
     } satisfies PasswordResetInquiry];
   });
 
@@ -2081,9 +2088,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const resolvedAt = new Date().toISOString();
     if (hasSupabaseConfig()) {
       try {
-        await supabasePatch('password_reset_inquiries', `id=eq.${encodeURIComponent(inquiryId)}`, {
-          status: 'resolved',
-          resolved_at: resolvedAt,
+        await supabaseRpc('resolve_password_reset_inquiry_message', {
+          p_message_id: inquiryId,
         });
       } catch (error) {
         return {
