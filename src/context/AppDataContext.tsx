@@ -157,6 +157,14 @@ function normalizePasswordResetInquiryRpcResult(
   return payload;
 }
 
+function normalizeEmbeddedRequester(row: PasswordResetInquiryRow) {
+  if (Array.isArray(row.requester)) {
+    return row.requester[0] ?? null;
+  }
+
+  return row.requester ?? null;
+}
+
 interface AppDataContextType {
   analyzeSchedule: (studentId: string) => ScheduleEvaluation | null;
   clearSelection: (studentId: string) => void;
@@ -340,6 +348,13 @@ interface StudentTermMetricRow {
 interface PasswordResetInquiryRow {
   id: string;
   requester_id: string;
+  requester?: {
+    university_id: string | null;
+    full_name: string | null;
+  } | {
+    university_id: string | null;
+    full_name: string | null;
+  }[] | null;
   requester_role: PasswordInquiryRole;
   status: PasswordResetInquiry['status'];
   created_at: string;
@@ -871,7 +886,10 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'select=id,schedule_id,student_id,total_score,risk_label,total_credits,model_version,explanation,factors,recommendations,top_courses,evaluated_at&order=evaluated_at.desc'
     ),
     supabaseSelect<StudentTermMetricRow[]>('student_term_metrics_v', 'select=student_id,term_code,term_type,course_count,completed_credits,gpa&order=term_code.desc'),
-    supabaseSelect<PasswordResetInquiryRow[]>('password_reset_inquiries', 'select=id,requester_id,requester_role,status,created_at,resolved_at&order=created_at.desc'),
+    supabaseSelect<PasswordResetInquiryRow[]>(
+      'password_reset_inquiries',
+      'select=id,requester_id,requester_role,status,created_at,resolved_at,requester:app_users!password_reset_inquiries_requester_id_fkey(university_id,full_name)&order=created_at.desc'
+    ),
   ]);
 
   const departmentById = new Map(departments.map((department) => [department.id, department.name]));
@@ -1150,15 +1168,18 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
   }).sort((left, right) => compareTermCodesNewestFirst(left.termCode, right.termCode));
 
   const passwordResetInquiries = passwordInquiryRows.flatMap((row) => {
-    const requester = appUsersByAppId.get(row.requester_id);
-    if (!requester) {
+    const embeddedRequester = normalizeEmbeddedRequester(row);
+    const cachedRequester = appUsersByAppId.get(row.requester_id);
+    const requesterId = embeddedRequester?.university_id ?? cachedRequester?.id;
+    const requesterName = embeddedRequester?.full_name ?? cachedRequester?.name;
+    if (!requesterId || !requesterName) {
       return [];
     }
 
     return [{
       id: row.id,
-      requesterId: requester.id,
-      requesterName: requester.name,
+      requesterId,
+      requesterName,
       requesterRole: row.requester_role,
       status: row.status,
       createdAt: row.created_at,
