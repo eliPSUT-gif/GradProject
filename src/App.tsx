@@ -11,7 +11,6 @@ import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 import AdminStudentTranscriptPage from './pages/admin/AdminStudentTranscriptPage';
 import AdminStudentsPage from './pages/admin/AdminStudentsPage';
 import CourseManagement from './pages/admin/CourseManagement';
-import ModelStatusPage from './pages/admin/ModelStatusPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import AdvisorDashboard from './pages/advisor/AdvisorDashboard';
 import AdvisorMessagesPage from './pages/advisor/AdvisorMessagesPage';
@@ -84,7 +83,7 @@ export default function App() {
                 <Route path="admin/students/:studentId/transcript" element={<ProtectedRoute allowedRoles={['admin']}><AdminStudentTranscriptPage /></ProtectedRoute>} />
                 <Route path="admin/courses" element={<ProtectedRoute allowedRoles={['admin']}><CourseManagement /></ProtectedRoute>} />
                 <Route path="admin/users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagementPage /></ProtectedRoute>} />
-                <Route path="admin/model" element={<ProtectedRoute allowedRoles={['admin']}><ModelStatusPage /></ProtectedRoute>} />
+                <Route path="admin/model" element={<Navigate to="/app/admin/courses" replace />} />
                 <Route path="admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettingsPage /></ProtectedRoute>} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

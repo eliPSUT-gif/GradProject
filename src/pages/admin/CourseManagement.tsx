@@ -1,27 +1,32 @@
-import { useDeferredValue, useRef, useState, useTransition } from 'react';
+import { useDeferredValue, useState } from 'react';
 import {
   FileText,
-  RefreshCw,
+  Save,
   Search,
-  Upload,
 } from 'lucide-react';
 import { getDiffLabel } from '../../data/courses';
 import { useAppData } from '../../context/AppDataContext';
 
+type FeedbackState = {
+  tone: 'success' | 'error';
+  message: string;
+} | null;
+
+function getDraftValue(currentValue: string | undefined, fallback: number) {
+  return currentValue ?? String(fallback);
+}
+
 export default function CourseManagement() {
   const {
     courses,
-    importHistoricalData,
-    importJobs,
-    modelVersion,
-    recalculateScores,
+    updateCourseDifficulty,
   } = useAppData();
 
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
-  const [isPending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [difficultyDrafts, setDifficultyDrafts] = useState<Record<string, string>>({});
+  const [savingCourseCode, setSavingCourseCode] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackState>(null);
 
   const filtered = courses.filter((course) => {
     const query = deferredSearch.trim().toLowerCase();
@@ -33,23 +38,44 @@ export default function CourseManagement() {
     );
   });
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
+  const handleDifficultyChange = (courseCode: string, value: string) => {
+    setDifficultyDrafts((current) => ({
+      ...current,
+      [courseCode]: value,
+    }));
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
+  const handleSaveDifficulty = async (courseCode: string) => {
+    const course = courses.find((item) => item.code === courseCode);
+    if (!course) {
+      setFeedback({ tone: 'error', message: 'Course was not found.' });
       return;
     }
 
-    const text = await file.text();
-    const result = importHistoricalData(file.name, text);
-    setFeedback(`${result.job.importedRows} row(s) imported from ${file.name}. ${result.job.rejectedRows} rejected.`);
-    event.target.value = '';
-  };
+    const rawValue = getDraftValue(difficultyDrafts[courseCode], course.diffScore).trim();
+    const parsedValue = Number(rawValue);
+    if (!rawValue || !Number.isFinite(parsedValue) || parsedValue < 0 || parsedValue > 100) {
+      setFeedback({ tone: 'error', message: `Enter a valid difficulty from 0 to 100 for ${course.code}.` });
+      return;
+    }
 
-  const latestJob = importJobs[0] ?? null;
+    setSavingCourseCode(courseCode);
+    setFeedback(null);
+    const result = await updateCourseDifficulty(courseCode, parsedValue);
+    setSavingCourseCode(null);
+
+    if (!result.success) {
+      setFeedback({ tone: 'error', message: result.error ?? `Unable to save ${course.code}.` });
+      return;
+    }
+
+    setDifficultyDrafts((current) => {
+      const next = { ...current };
+      delete next[courseCode];
+      return next;
+    });
+    setFeedback({ tone: 'success', message: `${course.code} difficulty saved.` });
+  };
 
   return (
     <div className="space-y-6">
@@ -70,7 +96,14 @@ export default function CourseManagement() {
       </div>
 
       {feedback && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{feedback}</div>
+        <div className={`rounded-lg px-4 py-3 text-sm ${
+          feedback.tone === 'success'
+            ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+            : 'border border-red-200 bg-red-50 text-red-700'
+        }`}
+        >
+          {feedback.message}
+        </div>
       )}
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -80,27 +113,7 @@ export default function CourseManagement() {
               <FileText className="h-5 w-5 text-[#2563eb]" />
               Course Catalog
             </h2>
-            <p className="mt-1 text-xs text-gray-400">Latest import: {latestJob ? latestJob.fileName : 'N/A'}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#2563eb]">Model {modelVersion}</span>
-            <button
-              type="button"
-              onClick={() => startTransition(() => recalculateScores())}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8]"
-            >
-              <RefreshCw className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
-              Recalculate Scores
-            </button>
-            <button
-              type="button"
-              onClick={handleImportClick}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-            >
-              <Upload className="h-4 w-4" />
-              Import CSV or JSON
-            </button>
-            <input ref={fileInputRef} type="file" accept=".csv,.json" onChange={handleFileChange} className="hidden" />
+            <p className="mt-1 text-xs text-gray-400">Set and save course difficulty manually. Changes will flow through to student and advisor views.</p>
           </div>
         </div>
 
@@ -115,11 +128,20 @@ export default function CourseManagement() {
                 <th className="px-6 py-3 text-center">Pass Rate</th>
                 <th className="px-6 py-3 text-center">Avg Grade</th>
                 <th className="px-6 py-3 text-center">Difficulty</th>
+                <th className="px-6 py-3 text-center">Save</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((course) => {
-                const diff = getDiffLabel(course.diffScore);
+                const draftValue = getDraftValue(difficultyDrafts[course.code], course.diffScore);
+                const trimmedValue = draftValue.trim();
+                const parsedValue = trimmedValue ? Number(trimmedValue) : Number.NaN;
+                const isValid = trimmedValue !== '' && Number.isFinite(parsedValue) && parsedValue >= 0 && parsedValue <= 100;
+                const previewScore = isValid ? Math.round(parsedValue) : course.diffScore;
+                const previewDiff = getDiffLabel(previewScore);
+                const hasChanged = trimmedValue !== String(course.diffScore);
+                const isSaving = savingCourseCode === course.code;
+
                 return (
                   <tr key={course.code} className="border-b border-gray-50 last:border-0 transition-colors hover:bg-gray-50/50">
                     <td className="px-6 py-3 font-mono font-semibold text-[#0f1e3c]">{course.code}</td>
@@ -128,10 +150,43 @@ export default function CourseManagement() {
                     <td className="px-6 py-3 text-center text-gray-700">{course.credits}</td>
                     <td className="px-6 py-3 text-center text-gray-700">{course.passRate}%</td>
                     <td className="px-6 py-3 text-center text-gray-700">{course.avgGrade}</td>
+                    <td className="px-6 py-3">
+                      <div className="flex flex-col items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={draftValue}
+                          onChange={(event) => handleDifficultyChange(course.code, event.target.value)}
+                          className={`w-24 rounded-lg border px-3 py-2 text-center text-sm focus:outline-none focus:ring-2 ${
+                            hasChanged && !isValid
+                              ? 'border-red-300 focus:border-red-400 focus:ring-red-200'
+                              : 'border-gray-200 focus:border-[#2563eb] focus:ring-[#2563eb]/30'
+                          }`}
+                        />
+                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${previewDiff.cls}`}>
+                          {previewDiff.label} ({previewScore})
+                        </span>
+                        {hasChanged && !isValid && (
+                          <span className="text-[10px] font-medium text-red-600">Enter 0 to 100</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-3 text-center">
-                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${diff.cls}`}>
-                        {diff.label} ({course.diffScore})
-                      </span>
+                      {hasChanged ? (
+                        <button
+                          type="button"
+                          onClick={() => { void handleSaveDifficulty(course.code); }}
+                          disabled={!isValid || isSaving}
+                          className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Save className="h-3.5 w-3.5" />
+                          {isSaving ? 'Saving...' : 'Save'}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-400">Saved</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -139,7 +194,7 @@ export default function CourseManagement() {
 
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-400">
                     No courses match your search.
                   </td>
                 </tr>

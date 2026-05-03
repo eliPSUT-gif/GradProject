@@ -3,7 +3,6 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
   BookOpen,
-  Bot,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -79,7 +78,6 @@ const NAV: Record<Role, NavSection[]> = {
       title: 'Management',
       items: [
         { label: 'Users', to: '/app/admin/users', icon: Users },
-        { label: 'Model Status', to: '/app/admin/model', icon: Bot },
         { label: 'Settings', to: '/app/admin/settings', icon: Settings },
       ],
     },
@@ -96,7 +94,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/app/admin/students': 'Student Management',
   '/app/admin/courses': 'Course Management',
   '/app/admin/users': 'User Management',
-  '/app/admin/model': 'Model Status',
   '/app/admin/settings': 'Settings',
 };
 

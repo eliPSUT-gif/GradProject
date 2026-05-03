@@ -30,8 +30,6 @@ import {
   type AdmissionTerm,
   type Course,
   type HistoricalCourseStat,
-  type ImportError,
-  type ImportJob,
   type Role,
   type ScheduleDraft,
   type ScheduleEvaluation,
@@ -65,10 +63,6 @@ interface CourseFormInput {
   avgGrade: number;
   enrollmentCount: number;
   withdrawals: number;
-}
-
-interface ImportHistoricalDataResult {
-  job: ImportJob;
 }
 
 export interface StudentTranscriptRow {
@@ -162,8 +156,6 @@ interface AppDataContextType {
   getStudentAvailableTerms: (studentId: string) => { termCode: string; termType: TermType }[];
   getTermCreditLimit: (studentId: string) => number;
   historicalStats: HistoricalCourseStat[];
-  importHistoricalData: (fileName: string, raw: string) => ImportHistoricalDataResult;
-  importJobs: ImportJob[];
   isAppDataReady: boolean;
   deleteTranscriptEntry: (entryId: string) => Promise<PlannerActionResult>;
   loadScheduleDraft: (studentId: string, draftId: string) => void;
@@ -175,7 +167,6 @@ interface AppDataContextType {
   passwordResetInquiries: PasswordResetInquiry[];
   requestPlannerAnalysis: (studentId: string) => ScheduleEvaluation | null;
   recentEvaluations: ScheduleEvaluation[];
-  recalculateScores: () => void;
   saveScheduleDraft: (studentId: string, name: string) => ScheduleDraft | null;
   setPlannerTermCode: (studentId: string, termCode: string) => void;
   studentInsights: StudentInsight[];
@@ -184,6 +175,7 @@ interface AppDataContextType {
   transcriptRows: StudentTranscriptRow[];
   termMetrics: StudentTermMetric[];
   resolvePasswordResetInquiry: (inquiryId: string) => Promise<PlannerActionResult>;
+  updateCourseDifficulty: (courseCode: string, difficultyScore: number) => Promise<PlannerActionResult>;
   upsertTranscriptEntry: (input: TranscriptEntryInput) => Promise<PlannerActionResult>;
   upsertCourse: (input: CourseFormInput) => void;
 }
@@ -199,7 +191,6 @@ interface AppDataState {
   courses: Course[];
   currentEvaluations: Record<string, ScheduleEvaluation | null>;
   historicalStats: HistoricalCourseStat[];
-  importJobs: ImportJob[];
   modelLastCalculatedAt: string;
   modelVersion: string;
   plannerSelections: Record<string, string[]>;
@@ -316,18 +307,6 @@ interface ScheduleEvaluationRow {
   evaluated_at: string;
 }
 
-interface ImportJobRow {
-  id: string;
-  file_name: string;
-  format: ImportJob['format'];
-  imported_rows: number;
-  rejected_rows: number;
-  status: ImportJob['status'];
-  validation_messages: string[] | null;
-  errors: ImportError[] | null;
-  created_at: string;
-}
-
 interface StudentTermMetricRow {
   student_id: string;
   term_code: string;
@@ -381,20 +360,6 @@ const AppDataContext = createContext<AppDataContextType>({
   getStudentAvailableTerms: () => [],
   getTermCreditLimit: () => 18,
   historicalStats: [],
-  importHistoricalData: () => ({
-    job: {
-      id: '',
-      fileName: '',
-      format: 'json',
-      importedRows: 0,
-      rejectedRows: 0,
-      status: 'failed',
-      validationMessages: [],
-      errors: [],
-      createdAt: new Date().toISOString(),
-    },
-  }),
-  importJobs: [],
   isAppDataReady: false,
   loadScheduleDraft: () => {},
   modelCoverage: 0,
@@ -405,7 +370,6 @@ const AppDataContext = createContext<AppDataContextType>({
   passwordResetInquiries: [],
   requestPlannerAnalysis: () => null,
   recentEvaluations: [],
-  recalculateScores: () => {},
   saveScheduleDraft: () => null,
   setPlannerTermCode: () => {},
   studentInsights: [],
@@ -414,6 +378,7 @@ const AppDataContext = createContext<AppDataContextType>({
   transcriptRows: [],
   termMetrics: [],
   resolvePasswordResetInquiry: async () => ({ success: false, error: 'App data is not ready.' }),
+  updateCourseDifficulty: async () => ({ success: false, error: 'App data is not ready.' }),
   upsertTranscriptEntry: async () => ({ success: false, error: 'App data is not ready.' }),
   upsertCourse: () => {},
 });
@@ -795,7 +760,6 @@ function buildDemoState(): AppDataState {
     courses,
     currentEvaluations: {},
     historicalStats,
-    importJobs: [],
     modelLastCalculatedAt: MODEL_LAST_CALCULATED_AT,
     modelVersion: DEFAULT_MODEL_VERSION,
     plannerSelections: {},
@@ -815,7 +779,6 @@ function buildEmptyRemoteState(): AppDataState {
     courses: [],
     currentEvaluations: {},
     historicalStats: [],
-    importJobs: [],
     modelLastCalculatedAt: MODEL_LAST_CALCULATED_AT,
     modelVersion: DEFAULT_MODEL_VERSION,
     plannerSelections: {},
@@ -846,55 +809,6 @@ function getCourseCoverage(courses: Course[]) {
   return Math.round((covered / courses.length) * 100);
 }
 
-function mapImportJob(row: ImportJobRow): ImportJob {
-  return {
-    id: row.id,
-    fileName: row.file_name,
-    format: row.format,
-    importedRows: row.imported_rows,
-    rejectedRows: row.rejected_rows,
-    status: row.status,
-    validationMessages: row.validation_messages ?? [],
-    errors: row.errors ?? [],
-    createdAt: row.created_at,
-  };
-}
-
-function parseCsvStats(raw: string) {
-  const [headerLine, ...lines] = raw.trim().split(/\r?\n/).filter(Boolean);
-  const headers = headerLine?.split(',').map((value) => value.trim().toLowerCase()) ?? [];
-
-  return lines.map((line, index) => {
-    const cells = line.split(',').map((value) => value.trim());
-    const get = (name: string) => cells[headers.indexOf(name)] ?? '';
-
-    return {
-      rowNumber: index + 2,
-      courseCode: get('course_code') || get('code'),
-      termCode: get('term_code') || get('term'),
-      avgGrade: Number(get('avg_grade') || get('average_grade')),
-      passRate: Number(get('pass_rate')),
-      failRate: Number(get('fail_rate')),
-      enrollmentCount: Number(get('enrollment_count')),
-      withdrawals: Number(get('withdrawals')),
-    };
-  });
-}
-
-function normalizeImportRows(raw: string) {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return [];
-  }
-
-  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
-    const parsed = JSON.parse(trimmed);
-    return Array.isArray(parsed) ? parsed : [parsed];
-  }
-
-  return parseCsvStats(trimmed);
-}
-
 async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
   const [
     academicTermRows,
@@ -910,7 +824,6 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     draftRows,
     draftCourseRows,
     evaluationRows,
-    importJobRows,
     termMetricRows,
     passwordInquiryRows,
   ] = await Promise.all([
@@ -935,10 +848,6 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     supabaseSelect<ScheduleEvaluationRow[]>(
       'schedule_evaluations',
       'select=id,schedule_id,student_id,total_score,risk_label,total_credits,model_version,explanation,factors,recommendations,top_courses,evaluated_at&order=evaluated_at.desc'
-    ),
-    supabaseSelect<ImportJobRow[]>(
-      'import_jobs',
-      'select=id,file_name,format,imported_rows,rejected_rows,status,validation_messages,errors,created_at&order=created_at.desc'
     ),
     supabaseSelect<StudentTermMetricRow[]>('student_term_metrics_v', 'select=student_id,term_code,term_type,course_count,completed_credits,gpa&order=term_code.desc'),
     supabaseSelect<PasswordResetInquiryRow[]>('password_reset_inquiries', 'select=id,requester_id,requester_role,status,created_at,resolved_at&order=created_at.desc'),
@@ -1197,7 +1106,6 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
   ) as Record<string, ScheduleEvaluation | null>;
 
   const recentEvaluations = [...evaluationByScheduleId.values()].sort(sortEvaluationsNewestFirst);
-  const importJobs = importJobRows.map(mapImportJob);
   const modelVersionSetting = settings.find((setting) => setting.key === 'model_version');
   const modelVersion = typeof modelVersionSetting?.value_json === 'string'
     ? modelVersionSetting.value_json
@@ -1242,7 +1150,6 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     courses,
     currentEvaluations,
     historicalStats,
-    importJobs,
     modelLastCalculatedAt: latestCalculatedAt,
     modelVersion,
     plannerSelections,
@@ -2145,54 +2052,60 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return { success: true };
   }, [state.passwordResetInquiries]);
 
-  const recalculateScores = useCallback(() => {
-    setState((current) => {
-      const now = new Date().toISOString();
-      const recalculatedCourses = buildCourses(
-        current.historicalStats,
-        current.modelVersion,
-        now,
-        current.courses
-      );
+  const updateCourseDifficulty = useCallback(async (courseCode: string, difficultyScore: number): Promise<PlannerActionResult> => {
+    const normalizedCode = courseCode.trim().toUpperCase();
+    const roundedDifficulty = Math.round(difficultyScore);
 
-      const recalculatedDrafts = current.scheduleDrafts.flatMap((draft) => {
-        const profile = current.studentProfiles.find((item) => item.id === draft.studentId);
-        const selectedCourses = recalculatedCourses.filter((course) => draft.courseCodes.includes(course.code));
-        const evaluation = buildMockPlannerAiEvaluation(
-          draft.studentId,
-          selectedCourses,
-          recalculatedCourses,
-          current.modelVersion,
-          profile?.completedCourseCodes ?? [],
-          profile?.creditsCompleted ?? 0,
-          draft.savedAt
-        );
+    if (!normalizedCode) {
+      return { success: false, error: 'Course code is required.' };
+    }
 
-        if (!evaluation) {
-          return [];
-        }
+    if (!Number.isFinite(difficultyScore) || difficultyScore < 0 || difficultyScore > 100) {
+      return { success: false, error: 'Difficulty must be between 0 and 100.' };
+    }
 
-        return [{
-          ...draft,
-          evaluation: {
-            ...evaluation,
-            id: draft.evaluation.id,
-          },
-        }];
-      });
+    const existingCourse = state.courses.find((course) => course.code === normalizedCode);
+    if (!existingCourse) {
+      return { success: false, error: 'Course was not found.' };
+    }
 
-      return {
-        ...current,
-        courses: recalculatedCourses,
-        currentEvaluations: Object.fromEntries(
-          recalculatedDrafts.map((draft) => [draft.studentId, draft.evaluation])
-        ) as Record<string, ScheduleEvaluation | null>,
-        modelLastCalculatedAt: now,
-        recentEvaluations: recalculatedDrafts.map((draft) => draft.evaluation).sort(sortEvaluationsNewestFirst),
-        scheduleDrafts: recalculatedDrafts.sort(sortDraftsNewestFirst),
-      };
-    });
-  }, []);
+    const now = new Date().toISOString();
+    const nextLabel = getDiffLabel(roundedDifficulty).label;
+
+    if (hasSupabaseConfig()) {
+      try {
+        await supabasePatch('courses', `course_code=eq.${encodeURIComponent(normalizedCode)}`, {
+          difficulty_score: roundedDifficulty,
+          internet_difficulty: roundedDifficulty,
+          difficulty_basis: 'Admin override.',
+        });
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unable to save course difficulty.',
+        };
+      }
+    }
+
+    setState((current) => ({
+      ...current,
+      courses: current.courses.map((course) => (
+        course.code === normalizedCode
+          ? {
+              ...course,
+              diffScore: roundedDifficulty,
+              internetDifficulty: roundedDifficulty,
+              difficultyLabel: nextLabel,
+              difficultyBasis: 'Admin override.',
+              lastCalculatedAt: now,
+            }
+          : course
+      )),
+      modelLastCalculatedAt: now,
+    }));
+
+    return { success: true };
+  }, [state.courses]);
 
   const upsertCourse = useCallback((input: CourseFormInput) => {
     const now = new Date().toISOString();
@@ -2293,89 +2206,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const importHistoricalData = useCallback((fileName: string, raw: string) => {
-    const rows = normalizeImportRows(raw);
-    const now = new Date().toISOString();
-    const validationMessages: string[] = [];
-    const errors: ImportError[] = [];
-    const importedStats: HistoricalCourseStat[] = [];
-
-    rows.forEach((row, index) => {
-      const rowNumber = typeof row.rowNumber === 'number' ? row.rowNumber : index + 1;
-      const courseCode = String(row.courseCode ?? row.course_code ?? '').trim().toUpperCase();
-      const termCode = String(row.termCode ?? row.term_code ?? '').trim();
-      const avgGrade = Number(row.avgGrade ?? row.avg_grade);
-      const passRate = Number(row.passRate ?? row.pass_rate);
-      const failRate = Number(row.failRate ?? row.fail_rate);
-      const enrollmentCount = Number(row.enrollmentCount ?? row.enrollment_count);
-      const withdrawals = Number(row.withdrawals ?? 0);
-
-      if (!courseCode || !termCode || !Number.isFinite(avgGrade) || !Number.isFinite(passRate) || !Number.isFinite(failRate) || !Number.isFinite(enrollmentCount)) {
-        errors.push({ rowNumber, reason: 'Missing required course statistics fields.' });
-        return;
-      }
-
-      importedStats.push({
-        id: createId('stat'),
-        courseCode,
-        termId: termCode,
-        avgGrade,
-        passRate,
-        failRate,
-        enrollmentCount,
-        withdrawals,
-      });
-    });
-
-    validationMessages.push(
-      importedStats.length > 0
-        ? `Imported ${importedStats.length} historical row(s).`
-        : 'No valid historical rows were imported.'
-    );
-
-    const job: ImportJob = {
-      id: createId('job'),
-      fileName,
-      format: fileName.toLowerCase().endsWith('.csv') ? 'csv' : 'json',
-      importedRows: importedStats.length,
-      rejectedRows: errors.length,
-      status: errors.length > 0 ? (importedStats.length > 0 ? 'completed_with_errors' : 'failed') : 'completed',
-      validationMessages,
-      errors,
-      createdAt: now,
-    };
-
-    setState((current) => {
-      const nextHistoricalStats = [...importedStats, ...current.historicalStats];
-      return {
-        ...current,
-        courses: buildCourses(nextHistoricalStats, current.modelVersion, now, current.courses),
-        historicalStats: nextHistoricalStats,
-        importJobs: [job, ...current.importJobs],
-        modelLastCalculatedAt: now,
-      };
-    });
-
-    if (hasSupabaseConfig()) {
-      void supabaseInsert('import_jobs', {
-        id: job.id,
-        created_by: user?.appUserId ?? null,
-        file_name: job.fileName,
-        format: job.format,
-        imported_rows: job.importedRows,
-        rejected_rows: job.rejectedRows,
-        status: job.status,
-        validation_messages: job.validationMessages,
-        errors: job.errors,
-        created_at: job.createdAt,
-      }).catch((error) => {
-        console.error('Unable to persist import job to Supabase.', error);
-      });
-    }
-
-    return { job };
-  }, [user?.appUserId]);
-
   const value = useMemo(
     () => ({
       analyzeSchedule,
@@ -2398,8 +2228,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       getStudentAvailableTerms,
       getTermCreditLimit,
       historicalStats: state.historicalStats,
-      importHistoricalData,
-      importJobs: state.importJobs,
       isAppDataReady,
       loadScheduleDraft,
       modelCoverage: getCourseCoverage(state.courses),
@@ -2411,7 +2239,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       requestPlannerAnalysis,
       recentEvaluations: state.recentEvaluations,
       resolvePasswordResetInquiry,
-      recalculateScores,
       saveScheduleDraft,
       setPlannerTermCode,
       studentInsights,
@@ -2419,6 +2246,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       termMetrics: state.termMetrics,
       transcriptRows: state.transcriptRows,
       toggleCourseSelection,
+      updateCourseDifficulty,
       upsertTranscriptEntry,
       upsertCourse,
     }),
@@ -2440,10 +2268,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       getStudentTranscript,
       getStudentAvailableTerms,
       getTermCreditLimit,
-      importHistoricalData,
       isAppDataReady,
       loadScheduleDraft,
-      recalculateScores,
       requestPlannerAnalysis,
       resolvePasswordResetInquiry,
       saveScheduleDraft,
@@ -2451,7 +2277,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       state.courses,
       state.currentEvaluations,
       state.historicalStats,
-      state.importJobs,
       state.modelLastCalculatedAt,
       state.modelVersion,
       state.plannerSelections,
@@ -2463,6 +2288,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       studentInsights,
       submitPasswordResetInquiry,
       toggleCourseSelection,
+      updateCourseDifficulty,
       upsertTranscriptEntry,
       upsertCourse,
     ]
