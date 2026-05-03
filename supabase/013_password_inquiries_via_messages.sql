@@ -34,9 +34,9 @@ begin
   select *
   into v_requester
   from public.app_users
-  where university_id = trim(p_university_id)
-    and role = p_requester_role
-    and status = 'active'
+  where app_users.university_id = trim(p_university_id)
+    and app_users.role = p_requester_role
+    and app_users.status = 'active'
   limit 1;
 
   if not found then
@@ -46,9 +46,9 @@ begin
   select *
   into v_admin
   from public.app_users
-  where role = 'admin'
-    and status = 'active'
-  order by created_at asc
+  where app_users.role = 'admin'
+    and app_users.status = 'active'
+  order by app_users.created_at asc
   limit 1;
 
   if not found then
@@ -58,11 +58,11 @@ begin
   select *
   into v_message
   from public.messages
-  where sender_id = v_requester.id
-    and recipient_id = v_admin.id
-    and read_at is null
-    and body like v_prefix || '%'
-  order by sent_at desc
+  where messages.sender_id = v_requester.id
+    and messages.recipient_id = v_admin.id
+    and messages.read_at is null
+    and messages.body like v_prefix || '%'
+  order by messages.sent_at desc
   limit 1;
 
   if not found then
@@ -117,10 +117,10 @@ begin
   end if;
 
   update public.messages
-  set read_at = coalesce(read_at, v_now)
-  where id = p_message_id
-    and recipient_id = v_app_user_id
-    and body like v_prefix || '%';
+  set read_at = coalesce(messages.read_at, v_now)
+  where messages.id = p_message_id
+    and messages.recipient_id = v_app_user_id
+    and messages.body like v_prefix || '%';
 
   get diagnostics v_updated_count = row_count;
 
