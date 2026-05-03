@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { KeyRound, Save, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
+import { Save, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import PasswordInput from '../../components/PasswordInput';
 import { useAppData } from '../../context/AppDataContext';
 import { useAuth, type UserFormInput } from '../../context/AuthContext';
