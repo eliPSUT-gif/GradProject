@@ -43,6 +43,7 @@ import {
   supabaseDelete,
   supabaseInsert,
   supabasePatch,
+  supabaseRpc,
   supabaseSelect,
   supabaseUpsert,
 } from '../lib/supabase';
@@ -134,6 +135,16 @@ export interface PasswordResetInquiry {
   status: 'open' | 'resolved';
   createdAt: string;
   resolvedAt?: string | null;
+}
+
+interface PasswordResetInquiryRpcResult {
+  id: string;
+  requester_id: string;
+  requester_name: string;
+  requester_role: PasswordInquiryRole;
+  status: PasswordResetInquiry['status'];
+  created_at: string;
+  resolved_at: string | null;
 }
 
 interface AppDataContextType {
@@ -1968,21 +1979,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
     if (hasSupabaseConfig()) {
       try {
-        const response = await fetch('/api/password-reset-inquiry', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role, universityId: normalizedId }),
+        const inquiry = await supabaseRpc<PasswordResetInquiryRpcResult>('submit_password_reset_inquiry', {
+          p_university_id: normalizedId,
+          p_requester_role: role,
         });
-        const body = await response.json().catch(() => null) as { inquiry?: PasswordResetInquiry; error?: string } | null;
-        if (!response.ok || !body?.inquiry) {
-          return { success: false, error: body?.error ?? 'Unable to send this request.' };
+
+        if (!inquiry?.id) {
+          return { success: false, error: 'Unable to send this request.' };
         }
 
         setState((current) => ({
           ...current,
           passwordResetInquiries: [
-            body.inquiry!,
-            ...current.passwordResetInquiries.filter((inquiry) => inquiry.id !== body.inquiry!.id),
+            {
+              id: inquiry.id,
+              requesterId: inquiry.requester_id,
+              requesterName: inquiry.requester_name,
+              requesterRole: inquiry.requester_role,
+              status: inquiry.status,
+              createdAt: inquiry.created_at,
+              resolvedAt: inquiry.resolved_at,
+            },
+            ...current.passwordResetInquiries.filter((existingInquiry) => existingInquiry.id !== inquiry.id),
           ],
         }));
         return { success: true };
