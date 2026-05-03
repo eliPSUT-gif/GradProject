@@ -24,6 +24,7 @@ import {
   onSupabaseAuthStateChange,
   supabaseDelete,
   supabasePatch,
+  supabaseRpc,
   supabaseSelect,
   supabaseSignInWithPassword,
   supabaseSignOut,
@@ -163,6 +164,11 @@ function buildManagedEmail(userId: string, role: Role) {
 
   const domain = role === 'student' ? 'students.example.edu' : 'staff.example.edu';
   return `${userId.toLowerCase()}@${domain}`;
+}
+
+function isMissingAdminEnvironmentError(error: unknown) {
+  return error instanceof Error
+    && error.message.toLowerCase().includes('supabase admin environment is not configured');
 }
 
 async function callAdminAuthEndpoint(path: string, payload: unknown) {
@@ -901,10 +907,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             password: nextPassword,
           });
         } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unable to reset password.',
-          };
+          if (!isMissingAdminEnvironmentError(error)) {
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Unable to reset password.',
+            };
+          }
+
+          try {
+            await supabaseRpc('admin_reset_user_password', {
+              p_university_id: userId,
+              p_password: nextPassword,
+            });
+          } catch (fallbackError) {
+            return {
+              success: false,
+              error: fallbackError instanceof Error ? fallbackError.message : 'Unable to reset password.',
+            };
+          }
         }
       }
 
