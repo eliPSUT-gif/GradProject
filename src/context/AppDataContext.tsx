@@ -48,10 +48,10 @@ import {
   supabaseUpsert,
 } from '../lib/supabase';
 import { useAuth, type UserFormInput } from './AuthContext';
+import { PASSWORD_INQUIRY_MESSAGE_PREFIX } from '../constants/messaging';
 
 type PlannerActionResult = { success: boolean; error?: string };
 type PasswordInquiryRole = Extract<Role, 'student' | 'advisor'>;
-const PASSWORD_INQUIRY_MESSAGE_PREFIX = '[PASSWORD_RESET_INQUIRY]';
 
 interface CourseFormInput {
   code: string;

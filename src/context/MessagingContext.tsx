@@ -20,6 +20,7 @@ import {
   isLocalDemoModeEnabled,
   supabaseRpc,
 } from '../lib/supabase';
+import { PASSWORD_INQUIRY_MESSAGE_PREFIX } from '../constants/messaging';
 
 export interface AdvisorMessage {
   id: string;
@@ -29,7 +30,7 @@ export interface AdvisorMessage {
   body: string;
   sentAt: string;
   readAt: string | null;
-  kind: 'message' | 'assistance';
+  kind: 'message' | 'assistance' | 'password_inquiry';
   optimistic?: boolean;
 }
 
@@ -54,7 +55,7 @@ export interface AssistanceNotification {
 
 export interface AppNotification {
   id: string;
-  kind: 'message' | 'assistance';
+  kind: 'message' | 'assistance' | 'password_inquiry';
   senderId: string;
   recipientId: string;
   createdAt: string;
@@ -138,7 +139,15 @@ function createClientId() {
 }
 
 function getMessageKind(body: string) {
-  return body === ASSISTANCE_MESSAGE_BODY ? 'assistance' as const : 'message' as const;
+  if (body === ASSISTANCE_MESSAGE_BODY) {
+    return 'assistance' as const;
+  }
+
+  if (body.startsWith(PASSWORD_INQUIRY_MESSAGE_PREFIX)) {
+    return 'password_inquiry' as const;
+  }
+
+  return 'message' as const;
 }
 
 function getMessageMergeKey(message: AdvisorMessage) {
@@ -267,6 +276,28 @@ function upsertNotification(
     .slice(0, MAX_NOTIFICATIONS);
 }
 
+function buildNotificationFromMessage(message: AdvisorMessage) {
+  return {
+    id: `${message.kind}:${message.id}`,
+    kind: message.kind,
+    senderId: message.senderId,
+    recipientId: message.recipientId,
+    createdAt: message.sentAt,
+  } satisfies AppNotification;
+}
+
+function buildUnreadMessageNotifications(messages: AdvisorMessage[], userId: string) {
+  return messages
+    .filter((message) => message.recipientId === userId && !message.readAt)
+    .map(buildNotificationFromMessage)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, MAX_NOTIFICATIONS);
+}
+
+function mergeNotifications(...sources: AppNotification[][]) {
+  return sources.reduce((current, source) => source.reduce(upsertNotification, current), [] as AppNotification[]);
+}
+
 function resolveAssignedAdvisorId(
   studentId: string,
   relationships: StudentProfileRelation[],
@@ -373,6 +404,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const refreshQueuedRef = useRef(false);
   const refreshInFlightRef = useRef(false);
   const channelByTopicRef = useRef(new Map<string, RealtimeChannel>());
+  const knownUnreadNotificationIdsRef = useRef(new Set<string>());
   const mappedUsers = useMemo(
     () => users.filter((account) => account.appUserId),
     [users]
@@ -395,6 +427,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   );
 
   const currentAppUserId = user?.appUserId ?? appUserIdByUserId[user?.id ?? ''] ?? null;
+
+  useEffect(() => {
+    knownUnreadNotificationIdsRef.current = new Set();
+  }, [user?.id]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -422,6 +458,35 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
     setToastNotifications((current) => current.filter((notification) => notification.id !== notificationId));
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      setToastNotifications([]);
+      return;
+    }
+
+    const unreadNotifications = buildUnreadMessageNotifications(messages, user.id);
+    const unreadNotificationIds = new Set(unreadNotifications.map((notification) => notification.id));
+    const newToastNotifications = unreadNotifications.filter(
+      (notification) => !knownUnreadNotificationIdsRef.current.has(notification.id)
+    );
+
+    knownUnreadNotificationIdsRef.current = unreadNotificationIds;
+
+    setNotifications((current) =>
+      mergeNotifications(
+        current.filter((notification) =>
+          notification.recipientId !== user.id || unreadNotificationIds.has(notification.id)
+        ),
+        unreadNotifications
+      )
+    );
+
+    if (newToastNotifications.length > 0) {
+      setToastNotifications((current) => mergeNotifications(current, newToastNotifications));
+    }
+  }, [messages, user]);
 
   const markConversationRead = useCallback(async (otherUserId: string) => {
     if (!user) {
@@ -637,6 +702,48 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
         activeChannels.set(topic, channel);
       });
+
+      const inboxChannel = supabase.channel(`messages:recipient:${currentAppUserId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `recipient_id=eq.${currentAppUserId}`,
+          },
+          ({ new: insertedRow }) => {
+            const insertedMessage = mapRemoteMessage(insertedRow as RemoteMessageRow, userIdByAppUserId);
+            if (insertedMessage?.recipientId === user.id) {
+              const notification = buildNotificationFromMessage(insertedMessage);
+              startTransition(() => {
+                setNotifications((current) => upsertNotification(current, notification));
+                setToastNotifications((current) => upsertNotification(current, notification));
+              });
+            }
+
+            void queueMessagesRefresh();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'messages',
+            filter: `recipient_id=eq.${currentAppUserId}`,
+          },
+          () => {
+            void queueMessagesRefresh();
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error('Supabase inbox changes channel failed.', status);
+          }
+        });
+
+      activeChannels.set(`messages:recipient:${currentAppUserId}`, inboxChannel);
 
       channelByTopicRef.current = activeChannels;
       setIsMessagingReady(true);

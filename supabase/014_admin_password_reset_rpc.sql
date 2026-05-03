@@ -1,5 +1,7 @@
 begin;
 
+create extension if not exists pgcrypto with schema extensions;
+
 create or replace function public.admin_reset_user_password(
   p_university_id text,
   p_password text
@@ -69,7 +71,7 @@ begin
   end if;
 
   update auth.users
-  set encrypted_password = crypt(p_password, gen_salt('bf')),
+  set encrypted_password = extensions.crypt(p_password, extensions.gen_salt('bf')),
       email_confirmed_at = coalesce(email_confirmed_at, timezone('utc', now())),
       confirmation_sent_at = null,
       recovery_sent_at = null,

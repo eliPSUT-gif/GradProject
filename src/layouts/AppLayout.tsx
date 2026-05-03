@@ -34,7 +34,7 @@ interface NavSection {
 
 interface NotificationSummary {
   id: string;
-  kind: 'message' | 'assistance';
+  kind: 'message' | 'assistance' | 'password_inquiry';
   senderId: string;
   senderName: string;
   preview: string;
@@ -131,9 +131,11 @@ export default function AppLayout() {
       .map((notification) => ({
         ...notification,
         senderName: users.find((account) => account.id === notification.senderId)?.name ?? 'Someone',
-        preview: notification.kind === 'assistance'
-          ? `${users.find((account) => account.id === notification.senderId)?.name ?? 'A student'} has asked for assistance.`
-          : `${users.find((account) => account.id === notification.senderId)?.name ?? 'Someone'} sent you a message.`,
+        preview: notification.kind === 'password_inquiry'
+          ? `${users.find((account) => account.id === notification.senderId)?.name ?? 'A user'} requested password help.`
+          : notification.kind === 'assistance'
+            ? `${users.find((account) => account.id === notification.senderId)?.name ?? 'A student'} has asked for assistance.`
+            : `${users.find((account) => account.id === notification.senderId)?.name ?? 'Someone'} sent you a message.`,
         sentAt: notification.createdAt,
         readAt: null,
       }))
@@ -153,9 +155,11 @@ export default function AppLayout() {
       .map((notification) => ({
         ...notification,
         senderName: users.find((account) => account.id === notification.senderId)?.name ?? 'Someone',
-        preview: notification.kind === 'assistance'
-          ? `${users.find((account) => account.id === notification.senderId)?.name ?? 'A student'} has asked for assistance.`
-          : `${users.find((account) => account.id === notification.senderId)?.name ?? 'Someone'} sent you a message.`,
+        preview: notification.kind === 'password_inquiry'
+          ? `${users.find((account) => account.id === notification.senderId)?.name ?? 'A user'} requested password help.`
+          : notification.kind === 'assistance'
+            ? `${users.find((account) => account.id === notification.senderId)?.name ?? 'A student'} has asked for assistance.`
+            : `${users.find((account) => account.id === notification.senderId)?.name ?? 'Someone'} sent you a message.`,
         sentAt: notification.createdAt,
         readAt: null,
       }));
@@ -211,6 +215,13 @@ export default function AppLayout() {
   };
 
   const handleOpenNotification = (notification: NotificationSummary) => {
+    if (notification.kind === 'password_inquiry') {
+      dismissNotificationToast(notification.id);
+      setNotificationsOpen(false);
+      navigate('/app/admin');
+      return;
+    }
+
     dismissNotification(notification.id);
     if (notification.kind === 'assistance') {
       navigate('/app/advisor/messages', { state: { focusUserId: notification.senderId, scrollToBottom: true } });
@@ -229,7 +240,7 @@ export default function AppLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-bg">
       {visibleToastNotifications.length > 0 && (
-        <div className="pointer-events-none fixed bottom-4 right-4 z-[70] flex w-[min(24rem,calc(100vw-2rem))] flex-col-reverse gap-3">
+        <div className="pointer-events-none fixed right-4 top-4 z-[70] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3">
           {visibleToastNotifications.map((notification) => (
             <div
               key={notification.id}
@@ -246,7 +257,9 @@ export default function AppLayout() {
                       <p className="truncate text-sm font-semibold text-[#0f1e3c]">{notification.senderName}</p>
                     </div>
                     <p className="mt-1 text-sm text-gray-600">
-                      {notification.kind === 'assistance'
+                      {notification.kind === 'password_inquiry'
+                        ? `${notification.senderName} requested password help.`
+                        : notification.kind === 'assistance'
                         ? `${notification.senderName} has asked for assistance.`
                         : `You received a message from ${notification.senderName}.`}
                     </p>
@@ -409,7 +422,11 @@ export default function AppLayout() {
                             <p className="mt-1 line-clamp-2 text-xs text-gray-500">{summary.preview}</p>
                           </div>
                           <div className="shrink-0 text-right">
-                            {summary.kind === 'assistance' ? (
+                            {summary.kind === 'password_inquiry' ? (
+                              <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-bold text-white">
+                                Help
+                              </span>
+                            ) : summary.kind === 'assistance' ? (
                               <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">
                                 !
                               </span>

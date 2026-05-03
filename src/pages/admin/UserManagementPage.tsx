@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Save, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import PasswordInput from '../../components/PasswordInput';
 import { useAppData } from '../../context/AppDataContext';
@@ -21,6 +21,7 @@ export default function UserManagementPage() {
   const [editPasswords, setEditPasswords] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [passwordToast, setPasswordToast] = useState<string | null>(null);
   const [enrollmentYear, setEnrollmentYear] = useState(new Date().getFullYear());
   const [admissionTerm, setAdmissionTerm] = useState<AdmissionTerm>('fall');
   const [department, setDepartment] = useState('Computer Science');
@@ -36,6 +37,15 @@ export default function UserManagementPage() {
     [users]
   );
   const isStudentForm = form.role === 'student';
+
+  useEffect(() => {
+    if (!passwordToast) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setPasswordToast(null), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [passwordToast]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -95,7 +105,7 @@ export default function UserManagementPage() {
       delete next[userId];
       return next;
     });
-    setMessage(`Password updated for ${userId}.`);
+    setPasswordToast('Password updated successfully.');
   };
 
   const handleConfirmDelete = (userId: string) => {
@@ -106,6 +116,11 @@ export default function UserManagementPage() {
 
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[2fr_3fr]">
+      {passwordToast && (
+        <div className="fixed bottom-4 right-4 z-[80] rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-700 shadow-xl shadow-emerald-900/10">
+          {passwordToast}
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="rounded-xl border border-gray-200 bg-white p-6">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">
           <UserPlus className="h-5 w-5 text-[#2563eb]" />
