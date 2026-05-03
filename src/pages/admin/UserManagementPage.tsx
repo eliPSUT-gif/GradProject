@@ -277,15 +277,14 @@ export default function UserManagementPage() {
                         wrapperClassName="w-48"
                         className="w-full rounded-lg border border-gray-200 py-1.5 pl-3 text-xs focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
                       />
-                      {editPasswords[account.id] !== undefined && editPasswords[account.id] !== account.password && (
-                        <button
-                          onClick={() => void handleSavePassword(account.id)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-[#2563eb] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#1d4ed8]"
-                        >
-                          <Save className="h-3.5 w-3.5" />
-                          Save
-                        </button>
-                      )}
+                      <button
+                        disabled={!editPasswords[account.id] || editPasswords[account.id] === account.password}
+                        onClick={() => void handleSavePassword(account.id)}
+                        className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${editPasswords[account.id] && editPasswords[account.id] !== account.password ? 'bg-[#2563eb] text-white hover:bg-[#1d4ed8]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        Save
+                      </button>
                     </div>
                   </td>
                   <td className="py-2.5">
