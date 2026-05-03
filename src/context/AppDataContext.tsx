@@ -32,6 +32,7 @@ import {
   type HistoricalCourseStat,
   type ImportError,
   type ImportJob,
+  type Role,
   type ScheduleDraft,
   type ScheduleEvaluation,
   type SelectionStatus,
@@ -50,6 +51,7 @@ import {
 import { useAuth, type UserFormInput } from './AuthContext';
 
 type PlannerActionResult = { success: boolean; error?: string };
+type PasswordInquiryRole = Extract<Role, 'student' | 'advisor'>;
 
 interface CourseFormInput {
   code: string;
@@ -130,6 +132,16 @@ export interface StudentAccountInput {
   temporaryPassword: string;
 }
 
+export interface PasswordResetInquiry {
+  id: string;
+  requesterId: string;
+  requesterName: string;
+  requesterRole: PasswordInquiryRole;
+  status: 'open' | 'resolved';
+  createdAt: string;
+  resolvedAt?: string | null;
+}
+
 interface AppDataContextType {
   analyzeSchedule: (studentId: string) => ScheduleEvaluation | null;
   clearSelection: (studentId: string) => void;
@@ -160,15 +172,18 @@ interface AppDataContextType {
   modelVersion: string;
   plannerSelections: Record<string, string[]>;
   plannerTermCodes: Record<string, string>;
+  passwordResetInquiries: PasswordResetInquiry[];
   requestPlannerAnalysis: (studentId: string) => ScheduleEvaluation | null;
   recentEvaluations: ScheduleEvaluation[];
   recalculateScores: () => void;
   saveScheduleDraft: (studentId: string, name: string) => ScheduleDraft | null;
   setPlannerTermCode: (studentId: string, termCode: string) => void;
   studentInsights: StudentInsight[];
+  submitPasswordResetInquiry: (role: PasswordInquiryRole, universityId: string) => Promise<PlannerActionResult>;
   toggleCourseSelection: (studentId: string, courseCode: string) => PlannerActionResult;
   transcriptRows: StudentTranscriptRow[];
   termMetrics: StudentTermMetric[];
+  resolvePasswordResetInquiry: (inquiryId: string) => Promise<PlannerActionResult>;
   upsertTranscriptEntry: (input: TranscriptEntryInput) => Promise<PlannerActionResult>;
   upsertCourse: (input: CourseFormInput) => void;
 }
@@ -189,6 +204,7 @@ interface AppDataState {
   modelVersion: string;
   plannerSelections: Record<string, string[]>;
   plannerTermCodes: Record<string, string>;
+  passwordResetInquiries: PasswordResetInquiry[];
   recentEvaluations: ScheduleEvaluation[];
   scheduleDrafts: ScheduleDraft[];
   studentProfiles: StudentProfile[];
@@ -321,6 +337,15 @@ interface StudentTermMetricRow {
   gpa: number | null;
 }
 
+interface PasswordResetInquiryRow {
+  id: string;
+  requester_id: string;
+  requester_role: PasswordInquiryRole;
+  status: PasswordResetInquiry['status'];
+  created_at: string;
+  resolved_at: string | null;
+}
+
 interface AcademicTermRow {
   term_code: string;
   academic_year: number;
@@ -377,15 +402,18 @@ const AppDataContext = createContext<AppDataContextType>({
   modelVersion: DEFAULT_MODEL_VERSION,
   plannerSelections: {},
   plannerTermCodes: {},
+  passwordResetInquiries: [],
   requestPlannerAnalysis: () => null,
   recentEvaluations: [],
   recalculateScores: () => {},
   saveScheduleDraft: () => null,
   setPlannerTermCode: () => {},
   studentInsights: [],
+  submitPasswordResetInquiry: async () => ({ success: false, error: 'App data is not ready.' }),
   toggleCourseSelection: () => ({ success: false, error: 'App data is not ready.' }),
   transcriptRows: [],
   termMetrics: [],
+  resolvePasswordResetInquiry: async () => ({ success: false, error: 'App data is not ready.' }),
   upsertTranscriptEntry: async () => ({ success: false, error: 'App data is not ready.' }),
   upsertCourse: () => {},
 });
@@ -772,6 +800,7 @@ function buildDemoState(): AppDataState {
     modelVersion: DEFAULT_MODEL_VERSION,
     plannerSelections: {},
     plannerTermCodes: {},
+    passwordResetInquiries: [],
     recentEvaluations: [],
     scheduleDrafts: [],
     studentProfiles,
@@ -791,6 +820,7 @@ function buildEmptyRemoteState(): AppDataState {
     modelVersion: DEFAULT_MODEL_VERSION,
     plannerSelections: {},
     plannerTermCodes: {},
+    passwordResetInquiries: [],
     recentEvaluations: [],
     scheduleDrafts: [],
     studentProfiles: [],
@@ -882,6 +912,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     evaluationRows,
     importJobRows,
     termMetricRows,
+    passwordInquiryRows,
   ] = await Promise.all([
     supabaseSelect<AcademicTermRow[]>('academic_terms', 'select=term_code,academic_year,term_name,term_type,max_credits'),
     supabaseSelect<DepartmentRow[]>('departments', 'select=id,name'),
@@ -910,6 +941,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'select=id,file_name,format,imported_rows,rejected_rows,status,validation_messages,errors,created_at&order=created_at.desc'
     ),
     supabaseSelect<StudentTermMetricRow[]>('student_term_metrics_v', 'select=student_id,term_code,term_type,course_count,completed_credits,gpa&order=term_code.desc'),
+    supabaseSelect<PasswordResetInquiryRow[]>('password_reset_inquiries', 'select=id,requester_id,requester_role,status,created_at,resolved_at&order=created_at.desc'),
   ]);
 
   const departmentById = new Map(departments.map((department) => [department.id, department.name]));
@@ -1188,6 +1220,23 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     } satisfies StudentTermMetric];
   }).sort((left, right) => compareTermCodesNewestFirst(left.termCode, right.termCode));
 
+  const passwordResetInquiries = passwordInquiryRows.flatMap((row) => {
+    const requester = appUsersByAppId.get(row.requester_id);
+    if (!requester) {
+      return [];
+    }
+
+    return [{
+      id: row.id,
+      requesterId: requester.id,
+      requesterName: requester.name,
+      requesterRole: row.requester_role,
+      status: row.status,
+      createdAt: row.created_at,
+      resolvedAt: row.resolved_at,
+    } satisfies PasswordResetInquiry];
+  });
+
   return {
     academicTerms,
     courses,
@@ -1198,6 +1247,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     modelVersion,
     plannerSelections,
     plannerTermCodes,
+    passwordResetInquiries,
     recentEvaluations,
     scheduleDrafts,
     studentProfiles,
@@ -1999,6 +2049,102 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return { success: true };
   }, []);
 
+  const submitPasswordResetInquiry = useCallback(async (role: PasswordInquiryRole, universityId: string): Promise<PlannerActionResult> => {
+    const normalizedId = universityId.trim();
+    if (!normalizedId) {
+      return { success: false, error: 'Enter your student or advisor ID.' };
+    }
+
+    if (role !== 'student' && role !== 'advisor') {
+      return { success: false, error: 'Password inquiries are available for student and advisor accounts only.' };
+    }
+
+    if (hasSupabaseConfig()) {
+      try {
+        const response = await fetch('/api/password-reset-inquiry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role, universityId: normalizedId }),
+        });
+        const body = await response.json().catch(() => null) as { inquiry?: PasswordResetInquiry; error?: string } | null;
+        if (!response.ok || !body?.inquiry) {
+          return { success: false, error: body?.error ?? 'Unable to send this request.' };
+        }
+
+        setState((current) => ({
+          ...current,
+          passwordResetInquiries: [
+            body.inquiry!,
+            ...current.passwordResetInquiries.filter((inquiry) => inquiry.id !== body.inquiry!.id),
+          ],
+        }));
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unable to send this request.',
+        };
+      }
+    }
+
+    const requester = users.find((account) =>
+      account.id.toLowerCase() === normalizedId.toLowerCase()
+      && account.role === role
+    );
+    if (!requester) {
+      return { success: false, error: `No ${role} account was found for that ID.` };
+    }
+
+    const now = new Date().toISOString();
+    const inquiry = {
+      id: createId('password-inquiry'),
+      requesterId: requester.id,
+      requesterName: requester.name,
+      requesterRole: role,
+      status: 'open',
+      createdAt: now,
+      resolvedAt: null,
+    } satisfies PasswordResetInquiry;
+
+    setState((current) => ({
+      ...current,
+      passwordResetInquiries: [inquiry, ...current.passwordResetInquiries],
+    }));
+
+    return { success: true };
+  }, [users]);
+
+  const resolvePasswordResetInquiry = useCallback(async (inquiryId: string): Promise<PlannerActionResult> => {
+    const existingInquiry = state.passwordResetInquiries.find((inquiry) => inquiry.id === inquiryId);
+    if (!existingInquiry) {
+      return { success: false, error: 'Password inquiry was not found.' };
+    }
+
+    const resolvedAt = new Date().toISOString();
+    if (hasSupabaseConfig()) {
+      try {
+        await supabasePatch('password_reset_inquiries', `id=eq.${encodeURIComponent(inquiryId)}`, {
+          status: 'resolved',
+          resolved_at: resolvedAt,
+        });
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unable to resolve inquiry.',
+        };
+      }
+    }
+
+    setState((current) => ({
+      ...current,
+      passwordResetInquiries: current.passwordResetInquiries.map((inquiry) =>
+        inquiry.id === inquiryId ? { ...inquiry, status: 'resolved', resolvedAt } : inquiry
+      ),
+    }));
+
+    return { success: true };
+  }, [state.passwordResetInquiries]);
+
   const recalculateScores = useCallback(() => {
     setState((current) => {
       const now = new Date().toISOString();
@@ -2261,12 +2407,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       modelVersion: state.modelVersion,
       plannerSelections: state.plannerSelections,
       plannerTermCodes: state.plannerTermCodes,
+      passwordResetInquiries: state.passwordResetInquiries,
       requestPlannerAnalysis,
       recentEvaluations: state.recentEvaluations,
+      resolvePasswordResetInquiry,
       recalculateScores,
       saveScheduleDraft,
       setPlannerTermCode,
       studentInsights,
+      submitPasswordResetInquiry,
       termMetrics: state.termMetrics,
       transcriptRows: state.transcriptRows,
       toggleCourseSelection,
@@ -2296,6 +2445,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       loadScheduleDraft,
       recalculateScores,
       requestPlannerAnalysis,
+      resolvePasswordResetInquiry,
       saveScheduleDraft,
       setPlannerTermCode,
       state.courses,
@@ -2306,10 +2456,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       state.modelVersion,
       state.plannerSelections,
       state.plannerTermCodes,
+      state.passwordResetInquiries,
       state.recentEvaluations,
       state.termMetrics,
       state.transcriptRows,
       studentInsights,
+      submitPasswordResetInquiry,
       toggleCourseSelection,
       upsertTranscriptEntry,
       upsertCourse,

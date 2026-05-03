@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GraduationCap, Shield, Sparkles, Users } from 'lucide-react';
 import PasswordInput from '../components/PasswordInput';
+import { useAppData } from '../context/AppDataContext';
 import { getHomeRoute, useAuth } from '../context/AuthContext';
 import type { Role } from '../data/courses';
 import { executeRecaptcha, hasRecaptchaSiteKey, verifyRecaptchaToken } from '../lib/recaptcha';
@@ -18,6 +19,7 @@ const RECAPTCHA_ACTION = 'login';
 
 export default function LoginPage() {
   const { isAuthenticated, login, user } = useAuth();
+  const { submitPasswordResetInquiry } = useAppData();
   const navigate = useNavigate();
   const location = useLocation();
   const authError = (location.state as { authError?: string } | null)?.authError ?? null;
@@ -28,6 +30,11 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [forgotPasswordId, setForgotPasswordId] = useState('');
+  const [forgotPasswordMessage, setForgotPasswordMessage] = useState<string | null>(null);
+  const [forgotPasswordError, setForgotPasswordError] = useState<string | null>(null);
+  const [isSubmittingInquiry, setIsSubmittingInquiry] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -44,6 +51,11 @@ export default function LoginPage() {
   const handleRoleChange = (role: Role) => {
     setSelectedRole(role);
     setError(null);
+    setForgotPasswordError(null);
+    setForgotPasswordMessage(null);
+    if (role === 'admin') {
+      setIsForgotPasswordOpen(false);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -80,10 +92,39 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotPasswordSubmit = async (event: React.SyntheticEvent) => {
+    event.preventDefault();
+    setForgotPasswordError(null);
+    setForgotPasswordMessage(null);
+
+    if (selectedRole === 'admin') {
+      setForgotPasswordError('Admin password resets must be handled by another administrator.');
+      return;
+    }
+
+    if (backendConfigError) {
+      setForgotPasswordError(backendConfigError);
+      return;
+    }
+
+    setIsSubmittingInquiry(true);
+    const result = await submitPasswordResetInquiry(selectedRole, forgotPasswordId);
+    setIsSubmittingInquiry(false);
+
+    if (!result.success) {
+      setForgotPasswordError(result.error ?? 'Unable to send this request.');
+      return;
+    }
+
+    setForgotPasswordId('');
+    setForgotPasswordMessage('Your request was sent to the admin office.');
+  };
+
   const backendConfigError = !hasSupabaseConfig() && !isLocalDemoModeEnabled()
     ? `${getSupabaseConfigError()} Add the Supabase URL and anon key to the deployment environment and rebuild.`
     : null;
   const activeError = error ?? authError ?? backendConfigError;
+  const canRequestPasswordHelp = selectedRole === 'student' || selectedRole === 'advisor';
 
   return (
     <div className="flex min-h-screen">
@@ -164,9 +205,25 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-navy">
-                  Password
-                </label>
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <label htmlFor="password" className="block text-sm font-medium text-navy">
+                    Password
+                  </label>
+                  {canRequestPasswordHelp && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsForgotPasswordOpen((current) => !current);
+                        setForgotPasswordError(null);
+                        setForgotPasswordMessage(null);
+                        setForgotPasswordId(userId);
+                      }}
+                      className="text-xs font-semibold text-blue hover:text-blue-lt"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
                 <PasswordInput
                   id="password"
                   required
@@ -177,6 +234,34 @@ export default function LoginPage() {
                   className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-ink transition placeholder:text-slate/50 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/30"
                 />
               </div>
+
+              {canRequestPasswordHelp && isForgotPasswordOpen && (
+                <div className="rounded-xl border border-blue/15 bg-blue/5 p-4">
+                  <div className="mb-3">
+                    <p className="text-sm font-semibold text-navy">Request admin password help</p>
+                    <p className="mt-1 text-xs text-slate">Enter your {selectedRole} ID and the admin office will receive the inquiry.</p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      type="text"
+                      value={forgotPasswordId}
+                      onChange={(event) => setForgotPasswordId(event.target.value)}
+                      placeholder={`Enter your ${selectedRole} ID`}
+                      className="min-w-0 flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink transition placeholder:text-slate/50 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/30"
+                    />
+                    <button
+                      type="button"
+                      onClick={(event) => { void handleForgotPasswordSubmit(event); }}
+                      disabled={isSubmittingInquiry}
+                      className="rounded-lg bg-blue px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-lt disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {isSubmittingInquiry ? 'Sending...' : 'Send'}
+                    </button>
+                  </div>
+                  {forgotPasswordError && <p className="mt-2 text-xs font-medium text-red-600">{forgotPasswordError}</p>}
+                  {forgotPasswordMessage && <p className="mt-2 text-xs font-medium text-emerald-600">{forgotPasswordMessage}</p>}
+                </div>
+              )}
 
               <label className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-slate">
                 <input
