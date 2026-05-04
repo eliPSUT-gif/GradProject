@@ -199,10 +199,16 @@ async function callAdminAuthEndpoint(path: string, payload: unknown) {
     body: JSON.stringify(payload),
   });
 
-  const body = await response.json().catch(() => null) as { error?: string; warning?: string } | null;
+  const responseText = await response.text();
+  let body: { error?: string; warning?: string } | null = null;
+  try {
+    body = responseText ? JSON.parse(responseText) as { error?: string; warning?: string } : null;
+  } catch {
+    body = null;
+  }
 
   if (!response.ok) {
-    throw new Error(body?.error ?? `Admin auth request failed with ${response.status}`);
+    throw new Error(body?.error ?? (responseText.trim() || `Admin auth request failed with ${response.status}`));
   }
 
   return body;

@@ -60,24 +60,24 @@ export default async function handler(request: VercelRequest, response: VercelRe
     return;
   }
 
-  const payload = typeof request.body === 'string'
-    ? JSON.parse(request.body) as { universityId?: string; password?: string }
-    : request.body;
-  const universityId = String(payload?.universityId ?? '').trim();
-  const password = String(payload?.password ?? '');
-
-  if (!universityId || !password) {
-    response.status(400).json({ success: false, error: 'Missing user ID or temporary password.' });
-    return;
-  }
-
-  const passwordError = getPasswordValidationError(password);
-  if (passwordError) {
-    response.status(400).json({ success: false, error: passwordError });
-    return;
-  }
-
   try {
+    const payload = typeof request.body === 'string'
+      ? JSON.parse(request.body) as { universityId?: string; password?: string }
+      : request.body;
+    const universityId = String(payload?.universityId ?? '').trim();
+    const password = String(payload?.password ?? '');
+
+    if (!universityId || !password) {
+      response.status(400).json({ success: false, error: 'Missing user ID or temporary password.' });
+      return;
+    }
+
+    const passwordError = getPasswordValidationError(password);
+    if (passwordError) {
+      response.status(400).json({ success: false, error: passwordError });
+      return;
+    }
+
     const supabase = getSupabaseAdminClient();
     await requireAdmin(request, supabase);
 
@@ -116,6 +116,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     response.status(200).json({ success: true, warning });
   } catch (error) {
+    console.error('Admin reset password failed.', error);
     response.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unable to reset password.',
