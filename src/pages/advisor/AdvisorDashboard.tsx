@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import {
   getDiffLabel,
+  getRiskStatus,
   getStatusLabel,
   getStatusStyle,
 } from '../../data/courses';
@@ -20,13 +21,26 @@ import { useAppData } from '../../context/AppDataContext';
 export default function AdvisorDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { isAppDataReady, studentInsights } = useAppData();
+  const { isAppDataReady, plannerReviewSnapshots, studentInsights } = useAppData();
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
 
   const advisees = useMemo(
-    () => studentInsights.filter((student) => student.advisorId === user?.id),
-    [studentInsights, user?.id]
+    () =>
+      studentInsights
+        .filter((student) => student.advisorId === user?.id)
+        .map((student) => {
+          const latestReview = plannerReviewSnapshots[student.id] ?? student.latestEvaluation;
+          const difficulty = latestReview?.totalScore ?? student.difficulty;
+
+          return {
+            ...student,
+            difficulty,
+            latestEvaluation: latestReview,
+            status: getRiskStatus(difficulty, student.gpa),
+          };
+        }),
+    [plannerReviewSnapshots, studentInsights, user?.id]
   );
 
   const filteredStudents = useMemo(() => {
@@ -242,4 +256,3 @@ export default function AdvisorDashboard() {
     </div>
   );
 }
-
