@@ -15,12 +15,16 @@ Create a local `.env.local` from `.env.example` and set:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_MODEL` (optional, defaults to `openrouter/free`)
+- `RESEND_API_KEY`
+- `PASSWORD_EMAIL_FROM`
 
 `VITE_RECAPTCHA_SITE_KEY` is safe for the browser. `RECAPTCHA_SECRET_KEY` must only be configured on the server, such as in Vercel project environment variables.
 
 `SUPABASE_SERVICE_ROLE_KEY` must only be configured on the server, such as in Vercel project environment variables. It is required for production-safe admin account creation and is the preferred path for admin password resets.
 
 `OPENROUTER_API_KEY` must only be configured on the server, such as in Vercel project environment variables. `OPENROUTER_MODEL` can stay server-side too so you can switch between `openrouter/free` and a pinned `:free` model without editing client code.
+
+`RESEND_API_KEY` and `PASSWORD_EMAIL_FROM` must only be configured on the server. They are used by admin user creation and generated password reset emails, which are sent to `elias.hreish0@gmail.com`.
 
 ## reCAPTCHA v3 Login Protection
 

@@ -3,6 +3,61 @@ import { createClient } from '@supabase/supabase-js';
 
 type Role = 'student' | 'advisor' | 'admin';
 
+const PASSWORD_EMAIL_RECIPIENT = 'elias.hreish0@gmail.com';
+const MIN_PASSWORD_LENGTH = 10;
+
+function getPasswordValidationError(password: string) {
+  if (password.trim().length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`;
+  if (!/[A-Z]/.test(password)) return 'Password must include at least one uppercase letter.';
+  if (!/[a-z]/.test(password)) return 'Password must include at least one lowercase letter.';
+  if (!/\d/.test(password)) return 'Password must include at least one number.';
+  if (!/[^A-Za-z0-9]/.test(password)) return 'Password must include at least one special character.';
+  return null;
+}
+
+async function sendGeneratedPasswordEmail(input: {
+  fullName: string;
+  universityId: string;
+  role: Role;
+  password: string;
+  action: 'created' | 'reset';
+}) {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.PASSWORD_EMAIL_FROM?.trim();
+
+  if (!apiKey || !from) {
+    throw new Error('Resend email environment is not configured.');
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: PASSWORD_EMAIL_RECIPIENT,
+      subject: `SmartAdvisor ${input.action === 'created' ? 'new account' : 'password reset'}: ${input.universityId}`,
+      text: [
+        `SmartAdvisor account ${input.action === 'created' ? 'created' : 'password reset'}.`,
+        '',
+        `Name: ${input.fullName}`,
+        `User ID: ${input.universityId}`,
+        `Role: ${input.role}`,
+        `Temporary password: ${input.password}`,
+        '',
+        'Use this password to log in. The user can change it from their settings after login.',
+      ].join('\n'),
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(errorText || `Resend request failed with ${response.status}`);
+  }
+}
+
 function getSupabaseAdminClient() {
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -72,6 +127,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
     return;
   }
 
+  const passwordError = getPasswordValidationError(password);
+  if (passwordError) {
+    response.status(400).json({ success: false, error: passwordError });
+    return;
+  }
+
   try {
     const supabase = getSupabaseAdminClient();
     await requireAdmin(request, supabase);
@@ -130,7 +191,21 @@ export default async function handler(request: VercelRequest, response: VercelRe
       throw appUserError;
     }
 
-    response.status(200).json({ success: true, authUserId });
+    let warning: string | undefined;
+    try {
+      await sendGeneratedPasswordEmail({
+        fullName,
+        universityId,
+        role,
+        password,
+        action: 'created',
+      });
+    } catch (emailError) {
+      console.error('Unable to send generated password email.', emailError);
+      warning = 'Account was created and password was saved, but the password email could not be sent.';
+    }
+
+    response.status(200).json({ success: true, authUserId, warning });
   } catch (error) {
     response.status(500).json({
       success: false,

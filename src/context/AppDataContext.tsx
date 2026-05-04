@@ -51,7 +51,7 @@ import { analyzePlannerSchedule } from '../lib/ai';
 import { useAuth, type UserFormInput } from './AuthContext';
 import { PASSWORD_INQUIRY_MESSAGE_PREFIX } from '../constants/messaging';
 
-type PlannerActionResult = { success: boolean; error?: string };
+type PlannerActionResult = { success: boolean; error?: string; warning?: string };
 type PasswordInquiryRole = Extract<Role, 'student' | 'advisor'>;
 
 interface CourseFormInput {
@@ -1994,7 +1994,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       ],
     }));
 
-    return { success: true, studentId: input.id };
+    return { success: true, studentId: input.id, warning: userResult.warning };
   }, [upsertUser, users]);
 
   const validateTranscriptInput = useCallback((input: TranscriptEntryInput, currentRows: StudentTranscriptRow[]) => {

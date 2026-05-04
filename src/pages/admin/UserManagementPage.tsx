@@ -1,24 +1,83 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Save, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
-import PasswordInput from '../../components/PasswordInput';
+import { KeyRound, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import { useAppData } from '../../context/AppDataContext';
 import { useAuth, type UserFormInput } from '../../context/AuthContext';
-import type { AdmissionTerm, Role } from '../../data/courses';
+import type { AdmissionTerm, ManagedUser, Role } from '../../data/courses';
 
 const EMPTY_FORM: UserFormInput = {
   id: '',
   name: '',
   role: 'student',
-  subtitle: 'Student | Computer Science',
-  password: 'ChangeMe@123',
+  subtitle: '',
+  password: '',
   status: 'active',
 };
+
+const LOWERCASE = 'abcdefghijkmnopqrstuvwxyz';
+const UPPERCASE = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const NUMBERS = '23456789';
+const SPECIALS = '!@#$%^&*';
+const PASSWORD_CHARS = `${LOWERCASE}${UPPERCASE}${NUMBERS}${SPECIALS}`;
+
+function getRandomIndex(max: number) {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return values[0] % max;
+}
+
+function shuffleCharacters(characters: string[]) {
+  const next = [...characters];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = getRandomIndex(index + 1);
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+  }
+  return next.join('');
+}
+
+function generateCompliantPassword() {
+  const characters = [
+    LOWERCASE[getRandomIndex(LOWERCASE.length)],
+    UPPERCASE[getRandomIndex(UPPERCASE.length)],
+    NUMBERS[getRandomIndex(NUMBERS.length)],
+    SPECIALS[getRandomIndex(SPECIALS.length)],
+  ];
+
+  while (characters.length < 14) {
+    characters.push(PASSWORD_CHARS[getRandomIndex(PASSWORD_CHARS.length)]);
+  }
+
+  return shuffleCharacters(characters);
+}
+
+function getNumericSuffix(id: string, prefix: string) {
+  const match = id.match(new RegExp(`^${prefix}-(\\d+)$`, 'i'));
+  return match ? Number(match[1]) : null;
+}
+
+function generateNextUserId(role: Role, users: ManagedUser[], now = new Date()) {
+  if (role === 'student') {
+    const year = String(now.getFullYear());
+    const maxSequence = users.reduce((max, user) => {
+      const match = user.id.match(new RegExp(`^${year}(\\d{4})$`));
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+    return `${year}${String(maxSequence + 1).padStart(4, '0')}`;
+  }
+
+  const prefix = role === 'advisor' ? 'ADV' : 'ADM';
+  const maxSuffix = users.reduce((max, user) => {
+    const suffix = getNumericSuffix(user.id, prefix);
+    return suffix === null ? max : Math.max(max, suffix);
+  }, 1000);
+
+  return `${prefix}-${maxSuffix + 1}`;
+}
 
 export default function UserManagementPage() {
   const { deleteUser, resetUserPassword, updateUserStatus, upsertUser, users } = useAuth();
   const { courses, createStudentAccount } = useAppData();
   const [form, setForm] = useState<UserFormInput>(EMPTY_FORM);
-  const [editPasswords, setEditPasswords] = useState<Record<string, string>>({});
+  const [resettingUserIds, setResettingUserIds] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [passwordToast, setPasswordToast] = useState<string | null>(null);
@@ -37,6 +96,10 @@ export default function UserManagementPage() {
     [users]
   );
   const isStudentForm = form.role === 'student';
+  const generatedUserId = useMemo(
+    () => generateNextUserId(form.role, users),
+    [form.role, users]
+  );
 
   useEffect(() => {
     if (!passwordToast) {
@@ -52,60 +115,70 @@ export default function UserManagementPage() {
     setMessage(null);
     setError(null);
 
-    const existingUser = users.find((account) => account.id === form.id);
+    const generatedPassword = generateCompliantPassword();
+    const nextUserId = generatedUserId;
+    const existingUser = users.find((account) => account.id === nextUserId);
     if (existingUser) {
-      setError('A user with this ID already exists.');
+      setError('A user with this generated ID already exists. Refresh the page and try again.');
       return;
     }
 
     if (isStudentForm) {
       const result = await createStudentAccount({
-        id: form.id,
+        id: nextUserId,
         name: form.name,
         enrollmentYear,
         admissionTerm,
         department,
         advisorId,
-        temporaryPassword: form.password,
+        temporaryPassword: generatedPassword,
       });
       if (!result.success) {
         setError(result.error ?? 'Unable to create student.');
         return;
       }
 
-      setMessage(`Student ${result.studentId ?? form.id} created successfully.`);
+      setMessage(
+        result.warning
+          ? `Student ${result.studentId ?? nextUserId} created. ${result.warning}`
+          : `Student ${result.studentId ?? nextUserId} created successfully and password email sent.`
+      );
       setForm(EMPTY_FORM);
       return;
     }
 
-    const result = await upsertUser(form);
+    const result = await upsertUser({
+      ...form,
+      id: nextUserId,
+      password: generatedPassword,
+    });
     if (!result.success) {
       setError(result.error ?? 'Unable to save user.');
       return;
     }
 
-    setMessage(`User ${form.id} created successfully.`);
+    setMessage(
+      result.warning
+        ? `User ${nextUserId} created. ${result.warning}`
+        : `User ${nextUserId} created successfully and password email sent.`
+    );
     setForm(EMPTY_FORM);
   };
 
-  const handleSavePassword = async (userId: string) => {
+  const handleGeneratePasswordReset = async (userId: string) => {
     setMessage(null);
     setError(null);
-    const nextPassword = editPasswords[userId];
-    if (!nextPassword) return;
+    setResettingUserIds((current) => ({ ...current, [userId]: true }));
+    const nextPassword = generateCompliantPassword();
 
     const result = await resetUserPassword(userId, nextPassword);
+    setResettingUserIds((current) => ({ ...current, [userId]: false }));
     if (!result.success) {
       setError(result.error ?? 'Unable to update password.');
       return;
     }
 
-    setEditPasswords((current) => {
-      const next = { ...current };
-      delete next[userId];
-      return next;
-    });
-    setPasswordToast('Password updated successfully.');
+    setPasswordToast(result.warning ? `Password updated. ${result.warning}` : 'Password updated and email sent.');
   };
 
   const handleConfirmDelete = (userId: string) => {
@@ -129,18 +202,15 @@ export default function UserManagementPage() {
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
           <div className="flex items-start gap-2">
             <ShieldCheck className="mt-0.5 h-4 w-4 text-blue-600" />
-            <p>Passwords must be at least 10 characters and include uppercase, lowercase, a number, and a special character.</p>
+            <p>IDs and passwords are generated automatically. Generated passwords follow the required uppercase, lowercase, number, and special character rules.</p>
           </div>
         </div>
         <div className="space-y-4 text-sm text-gray-700">
           <label className="block">
-            User ID
-            <input
-              required
-              value={form.id}
-              onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))}
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-            />
+            Generated user ID
+            <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-[#0f1e3c]">
+              {generatedUserId}
+            </div>
           </label>
           <label className="block">
             Full name
@@ -160,7 +230,6 @@ export default function UserManagementPage() {
                 setForm((current) => ({
                   ...current,
                   role,
-                  subtitle: role === 'student' ? `Student | ${department}` : current.subtitle,
                 }));
               }}
               className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
@@ -176,16 +245,6 @@ export default function UserManagementPage() {
               value={form.subtitle}
               onChange={(event) => setForm((current) => ({ ...current, subtitle: event.target.value }))}
               className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-            />
-          </label>
-          <label className="block">
-            Temporary password
-            <PasswordInput
-              buttonLabel="temporary password"
-              value={form.password}
-              onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-              wrapperClassName="mt-1"
-              className="w-full rounded-lg border border-gray-200 py-2 pl-3 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
             />
           </label>
           {isStudentForm && (
@@ -217,11 +276,7 @@ export default function UserManagementPage() {
                 Department
                 <select
                   value={department}
-                  onChange={(event) => {
-                    const nextDepartment = event.target.value;
-                    setDepartment(nextDepartment);
-                    setForm((current) => ({ ...current, subtitle: `Student | ${nextDepartment}` }));
-                  }}
+                  onChange={(event) => setDepartment(event.target.value)}
                   className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
                 >
                   {departments.map((item) => (
@@ -285,20 +340,13 @@ export default function UserManagementPage() {
                   </td>
                   <td className="py-2.5 pr-4">
                     <div className="flex items-center gap-2">
-                      <PasswordInput
-                        buttonLabel="password"
-                        value={editPasswords[account.id] ?? account.password}
-                        onChange={(event) => setEditPasswords((current) => ({ ...current, [account.id]: event.target.value }))}
-                        wrapperClassName="w-48"
-                        className="w-full rounded-lg border border-gray-200 py-1.5 pl-3 text-xs focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-                      />
                       <button
-                        disabled={!editPasswords[account.id] || editPasswords[account.id] === account.password}
-                        onClick={() => void handleSavePassword(account.id)}
-                        className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${editPasswords[account.id] && editPasswords[account.id] !== account.password ? 'bg-[#2563eb] text-white hover:bg-[#1d4ed8]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                        disabled={Boolean(resettingUserIds[account.id])}
+                        onClick={() => void handleGeneratePasswordReset(account.id)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-[#2563eb] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <Save className="h-3.5 w-3.5" />
-                        Save
+                        <KeyRound className="h-3.5 w-3.5" />
+                        {resettingUserIds[account.id] ? 'Resetting...' : 'Generate reset'}
                       </button>
                     </div>
                   </td>

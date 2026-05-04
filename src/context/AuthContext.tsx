@@ -50,6 +50,7 @@ interface LoginResult {
 interface PasswordChangeResult {
   success: boolean;
   error?: string;
+  warning?: string;
 }
 
 interface UserFormInput {
@@ -198,10 +199,13 @@ async function callAdminAuthEndpoint(path: string, payload: unknown) {
     body: JSON.stringify(payload),
   });
 
+  const body = await response.json().catch(() => null) as { error?: string; warning?: string } | null;
+
   if (!response.ok) {
-    const body = await response.json().catch(() => null) as { error?: string } | null;
     throw new Error(body?.error ?? `Admin auth request failed with ${response.status}`);
   }
+
+  return body;
 }
 
 function normalizeManagedUser(account: ManagedUser) {
@@ -825,7 +829,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (hasSupabaseConfig()) {
       try {
-        await callAdminAuthEndpoint('/api/admin-create-user', {
+        const endpointResult = await callAdminAuthEndpoint('/api/admin-create-user', {
           universityId: input.id,
           email: nextEmail,
           password: input.password,
@@ -836,7 +840,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         await syncUsersFromSupabase();
-        return { success: true };
+        return { success: true, warning: endpointResult?.warning };
       } catch (error) {
         if (isMissingAdminEnvironmentError(error)) {
           return { success: false, error: formatMissingAdminEnvironmentError('create accounts') };
@@ -908,12 +912,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'User account was not found.' };
       }
 
+      let warning: string | undefined;
       if (hasSupabaseConfig()) {
         try {
-          await callAdminAuthEndpoint('/api/admin-reset-password', {
+          const endpointResult = await callAdminAuthEndpoint('/api/admin-reset-password', {
             universityId: userId,
             password: nextPassword,
           });
+          setUsers((current) =>
+            current.map((account) =>
+              account.id === userId ? { ...account, password: nextPassword } : account
+            )
+          );
+
+          return { success: true, warning: endpointResult?.warning };
         } catch (error) {
           if (!isMissingAdminEnvironmentError(error)) {
             return {
@@ -927,6 +939,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               p_university_id: userId,
               p_password: nextPassword,
             });
+            warning = 'Password was saved through the database fallback, but the password email could not be sent because the admin email endpoint is not configured.';
           } catch (fallbackError) {
             if (isMissingRpcSchemaCacheError(fallbackError)) {
               return {
@@ -956,7 +969,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
       );
 
-      return { success: true };
+      return { success: true, warning };
     },
     [users]
   );
