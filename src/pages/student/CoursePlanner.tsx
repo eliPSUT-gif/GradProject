@@ -1,10 +1,17 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, BookOpen, CheckCircle2, Eye, Gauge, Lightbulb, Lock, Save, Search, Sparkles, Trash2, TrendingUp, X } from 'lucide-react';
-import { formatTermLabel, getDiffLabel, type Course } from '../../data/courses';
+import { formatTermLabel, getDiffLabel, type Course, type ScheduleEvaluation } from '../../data/courses';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
 
 const TYPE_FILTERS = ['All', 'Theoretical', 'Practical', 'Hybrid', 'Project'] as const;
+
+interface DisplayedReview {
+  evaluation: ScheduleEvaluation;
+  courses: Course[];
+  termCode: string;
+  totalCredits: number;
+}
 
 function typeTag(type: Course['type']) {
   if (type === 'theoretical') return 'bg-violet-100 text-violet-700';
@@ -52,12 +59,14 @@ export default function CoursePlanner() {
   const [shouldScrollToResults, setShouldScrollToResults] = useState(false);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [displayedReview, setDisplayedReview] = useState<DisplayedReview | null>(null);
   const resultsRef = useRef<HTMLElement>(null);
   const deferredSearch = useDeferredValue(search);
+  const totalCredits = selectedCourses.reduce((sum, course) => sum + course.credits, 0);
 
   useEffect(() => {
     if (!shouldScrollToResults) return;
-    if (!hasAnalyzed || !analysisResult || !resultsRef.current) return;
+    if (!hasAnalyzed || !displayedReview || !resultsRef.current) return;
     // Use rAF to let the browser finish committing the new section to the DOM,
     // then scroll. We deliberately do NOT return a cleanup, because resetting
     // shouldScrollToResults below re-runs the effect and would otherwise cancel
@@ -67,7 +76,23 @@ export default function CoursePlanner() {
       node.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     setShouldScrollToResults(false);
-  }, [shouldScrollToResults, hasAnalyzed, analysisResult]);
+  }, [shouldScrollToResults, hasAnalyzed, displayedReview]);
+
+  useEffect(() => {
+    if (!analysisResult || displayedReview) return;
+    setDisplayedReview({
+      evaluation: analysisResult,
+      courses: selectedCourses,
+      termCode: plannerTermCode,
+      totalCredits,
+    });
+    setHasAnalyzed(true);
+  }, [analysisResult, displayedReview, plannerTermCode, selectedCourses, totalCredits]);
+
+  useEffect(() => {
+    setDisplayedReview(null);
+    setHasAnalyzed(false);
+  }, [studentId]);
 
   const filtered = useMemo(() => {
     return courses.filter((course) => {
@@ -80,8 +105,6 @@ export default function CoursePlanner() {
     });
   }, [courses, deferredSearch, typeFilter]);
 
-  const totalCredits = selectedCourses.reduce((sum, course) => sum + course.credits, 0);
-
   const handleAnalyze = async () => {
     if (totalCredits > termCreditLimit) {
       setPlannerError(`You cannot analyze more than ${termCreditLimit} credit hours for ${formatTermLabel(plannerTermCode)}.`);
@@ -90,12 +113,21 @@ export default function CoursePlanner() {
 
     setPlannerError(null);
     setIsAnalyzing(true);
+    const reviewedCourses = selectedCourses;
+    const reviewedTermCode = plannerTermCode;
+    const reviewedCredits = totalCredits;
     try {
       const evaluation = await requestPlannerAnalysis(studentId);
       if (!evaluation) {
         setPlannerError('Select at least one course before running the AI planner review.');
         return;
       }
+      setDisplayedReview({
+        evaluation,
+        courses: reviewedCourses,
+        termCode: reviewedTermCode,
+        totalCredits: reviewedCredits,
+      });
       setHasAnalyzed(true);
       setShouldScrollToResults(true);
     } catch (error) {
@@ -106,7 +138,21 @@ export default function CoursePlanner() {
   };
 
   const handleViewDraft = (draftId: string) => {
+    const draft = savedDrafts.find((item) => item.id === draftId);
     loadScheduleDraft(studentId, draftId);
+    if (draft) {
+      const draftCourses = draft.courseCodes
+        .map((code) => courses.find((course) => course.code === code))
+        .filter((course): course is Course => Boolean(course));
+
+      setDisplayedReview({
+        evaluation: draft.evaluation,
+        courses: draftCourses,
+        termCode: draft.termCode,
+        totalCredits: draft.evaluation.totalCredits,
+      });
+      setHasAnalyzed(true);
+    }
     setPlannerError(null);
     setDraftFeedback(null);
     setIsDraftsOpen(false);
@@ -116,7 +162,6 @@ export default function CoursePlanner() {
     clearSelection(studentId);
     setPlannerError(null);
     setDraftFeedback(null);
-    setHasAnalyzed(false);
   };
 
   const handleToggle = (code: string) => {
@@ -151,7 +196,11 @@ export default function CoursePlanner() {
     );
   }
 
-  const overallDiff = analysisResult ? getDiffLabel(analysisResult.totalScore) : null;
+  const reviewEvaluation = displayedReview?.evaluation ?? null;
+  const reviewedCourses = displayedReview?.courses ?? [];
+  const reviewedTotalCredits = displayedReview?.totalCredits ?? 0;
+  const reviewedTermCode = displayedReview?.termCode ?? plannerTermCode;
+  const overallDiff = reviewEvaluation ? getDiffLabel(reviewEvaluation.totalScore) : null;
   const scoreDash = 2 * Math.PI * 42;
 
   return (
@@ -326,7 +375,7 @@ export default function CoursePlanner() {
       </div>
     )}
 
-    {hasAnalyzed && analysisResult && overallDiff && (
+    {hasAnalyzed && reviewEvaluation && overallDiff && (
       <section
         ref={resultsRef}
         className="scroll-mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500"
@@ -355,14 +404,14 @@ export default function CoursePlanner() {
                       stroke={overallDiff.color}
                       fill="none"
                       strokeDasharray={scoreDash}
-                      strokeDashoffset={scoreDash * (1 - Math.min(analysisResult.totalScore, 100) / 100)}
+                      strokeDashoffset={scoreDash * (1 - Math.min(reviewEvaluation.totalScore, 100) / 100)}
                       strokeLinecap="round"
                       className="transition-all duration-1000 ease-out"
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="font-display text-4xl font-bold leading-none text-[#0f1e3c] sm:text-5xl">
-                      {analysisResult.totalScore}
+                      {reviewEvaluation.totalScore}
                     </span>
                     <span className="mt-1 text-[10px] uppercase tracking-[0.18em] text-gray-400">of 100</span>
                   </div>
@@ -375,7 +424,7 @@ export default function CoursePlanner() {
                     AI Schedule Review
                   </h2>
                   <p className="mt-1 text-xs text-gray-500 sm:text-sm">
-                    {formatTermLabel(plannerTermCode)} &middot; {selectedCourses.length} course{selectedCourses.length !== 1 ? 's' : ''} &middot; {totalCredits} credit{totalCredits !== 1 ? 's' : ''}
+                    {formatTermLabel(reviewedTermCode)} &middot; {reviewedCourses.length} course{reviewedCourses.length !== 1 ? 's' : ''} &middot; {reviewedTotalCredits} credit{reviewedTotalCredits !== 1 ? 's' : ''}
                   </p>
                   <p className="mt-2 max-w-xl text-xs leading-relaxed text-gray-500">
                     This review combines your planner score with live AI-generated rationale and recommendations.
@@ -406,7 +455,7 @@ export default function CoursePlanner() {
                 <h3 className="text-sm font-bold text-[#0f1e3c]">Course Breakdown</h3>
               </div>
               <div className="space-y-2.5">
-                {selectedCourses.map((course) => {
+                {reviewedCourses.map((course) => {
                   const d = getDiffLabel(course.diffScore);
                   return (
                     <div
@@ -455,14 +504,14 @@ export default function CoursePlanner() {
                 </div>
                 <h3 className="text-sm font-bold text-[#0f1e3c]">Recommendations</h3>
               </div>
-              {analysisResult.recommendations.length === 0 ? (
+              {reviewEvaluation.recommendations.length === 0 ? (
                 <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   <span>The latest AI review sees this schedule as balanced with no immediate changes needed.</span>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {analysisResult.recommendations.map((rec) => (
+                  {reviewEvaluation.recommendations.map((rec) => (
                     <div
                       key={rec.id}
                       className="rounded-lg border border-amber-200 bg-white p-3.5 shadow-sm transition-shadow hover:shadow-md"
@@ -485,6 +534,33 @@ export default function CoursePlanner() {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+
+            {/* Notes & Rationale */}
+            <div className="rounded-xl border border-gray-200 bg-white p-5 lg:col-span-2">
+              <div className="mb-4 flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 ring-1 ring-emerald-200">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                </div>
+                <h3 className="text-sm font-bold text-[#0f1e3c]">Notes &amp; Rationale</h3>
+              </div>
+              {reviewEvaluation.explanation.length === 0 ? (
+                <p className="text-xs text-gray-500">No additional AI rationale is available for this schedule yet.</p>
+              ) : (
+                <ul className="grid gap-3 md:grid-cols-2">
+                  {reviewEvaluation.explanation.map((line, idx) => (
+                    <li
+                      key={line}
+                      className="flex gap-2.5 rounded-lg bg-slate-50/60 px-3 py-2 text-xs leading-relaxed text-gray-700 ring-1 ring-gray-100"
+                    >
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
+                        {idx + 1}
+                      </span>
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>

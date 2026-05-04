@@ -283,15 +283,19 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          <div className="mt-6 w-full space-y-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+          <div className="mt-6 w-full rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Notes &amp; Rationale</p>
             {explanation.length > 0 ? (
-              explanation.map((line) => (
-                <div key={line} className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                  {line}
-                </div>
-              ))
+              <div className="space-y-2">
+                {explanation.map((line, index) => (
+                  <div key={`${index}-${line}`} className="flex gap-2 rounded-lg bg-white px-3 py-2 text-left shadow-sm">
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#2563eb]" />
+                    <span>{line}</span>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div className="rounded-lg bg-white px-3 py-2 shadow-sm">Analyze a schedule to see explainable risk factors.</div>
+              <div className="rounded-lg bg-white px-3 py-2 text-left shadow-sm">Run Analyze Schedule to generate notes and rationale.</div>
             )}
           </div>
         </div>
