@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { sendGeneratedPasswordEmail } from './_email';
+import { sendGeneratedPasswordEmail } from './_email.js';
 
 type Role = 'student' | 'advisor' | 'admin';
 
