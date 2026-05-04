@@ -379,6 +379,7 @@ const EMPTY_SELECTION_STATUS: SelectionStatus = {
   reasons: ['Course was not found in the catalog.'],
   wouldExceedCredits: false,
 };
+const AUTO_REVIEW_DRAFT_NAME = 'Latest AI Schedule Review';
 
 const AppDataContext = createContext<AppDataContextType>({
   analyzeSchedule: async () => null,
@@ -443,6 +444,10 @@ function sortDraftsNewestFirst(left: ScheduleDraft, right: ScheduleDraft) {
 
 function sortEvaluationsNewestFirst(left: ScheduleEvaluation, right: ScheduleEvaluation) {
   return right.evaluatedAt.localeCompare(left.evaluatedAt);
+}
+
+function isUserVisibleScheduleDraft(draft: ScheduleDraft) {
+  return draft.status === 'draft' && draft.name !== AUTO_REVIEW_DRAFT_NAME;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -1269,7 +1274,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [isAuthReady, user?.id, users]);
 
   const studentInsights = useMemo(
-    () => buildStudentInsights(state.studentProfiles, state.scheduleDrafts),
+    () => buildStudentInsights(state.studentProfiles, state.scheduleDrafts.filter(isUserVisibleScheduleDraft)),
     [state.scheduleDrafts, state.studentProfiles]
   );
 
@@ -1385,7 +1390,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const getStudentDrafts = useCallback(
     (studentId: string) =>
-      state.scheduleDrafts.filter((draft) => draft.studentId === studentId).sort(sortDraftsNewestFirst),
+      state.scheduleDrafts
+        .filter((draft) => draft.studentId === studentId && isUserVisibleScheduleDraft(draft))
+        .sort(sortDraftsNewestFirst),
     [state.scheduleDrafts]
   );
 
@@ -1570,11 +1577,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const nextDraft = {
         id: draftId,
         studentId,
-        name: 'Latest AI Schedule Review',
+        name: AUTO_REVIEW_DRAFT_NAME,
         courseCodes: selectedCourseCodes,
         savedAt: now,
         termCode: selectedTermCode,
-        status: 'draft',
+        status: 'archived',
         syncStatus: shouldPersistRemotely ? 'pending' : 'synced',
         syncError: null,
         evaluation: nextEvaluation,
@@ -1618,7 +1625,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               student_id: studentAppUserId,
               name: nextDraft.name,
               term_code: selectedTermCode,
-              status: 'draft',
+              status: 'archived',
               saved_at: now,
             });
 
