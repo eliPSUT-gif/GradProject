@@ -214,6 +214,14 @@ async function callAdminAuthEndpoint(path: string, payload: unknown) {
   return body;
 }
 
+async function sendGeneratedPasswordEmailFromFallback(payload: {
+  universityId: string;
+  password: string;
+  action: 'created' | 'reset';
+}) {
+  return callAdminAuthEndpoint('/api/admin-send-password-email', payload);
+}
+
 function normalizeManagedUser(account: ManagedUser) {
   if (!getPasswordValidationError(account.password)) {
     return account;
@@ -945,7 +953,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               p_university_id: userId,
               p_password: nextPassword,
             });
-            warning = 'Password was saved through the database fallback, but the password email could not be sent because the admin email endpoint is not configured.';
+            try {
+              await sendGeneratedPasswordEmailFromFallback({
+                universityId: userId,
+                password: nextPassword,
+                action: 'reset',
+              });
+            } catch (emailError) {
+              console.error('Unable to send generated password email from fallback.', emailError);
+              warning = 'Password was saved through the database fallback, but the password email could not be sent.';
+            }
           } catch (fallbackError) {
             if (isMissingRpcSchemaCacheError(fallbackError)) {
               return {
