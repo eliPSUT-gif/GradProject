@@ -7,7 +7,6 @@ import {
   BookOpen,
   Gauge,
   GraduationCap,
-  Lightbulb,
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
@@ -312,40 +311,6 @@ export default function StudentDashboard() {
           <div className="space-y-3">
             {currentEvaluation ? (
               <>
-                <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-blue-200">
-                      <Lightbulb className="h-4 w-4 text-[#2563eb]" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-[#0f1e3c]">Latest schedule review</p>
-                      <p className="mt-1 text-sm text-gray-600">
-                        These recommendations were generated the last time you ran Analyze Schedule in the planner.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#2563eb] ring-1 ring-blue-200">
-                      {currentEvaluation.riskLabel} workload
-                    </span>
-                    <span className="rounded-full bg-white px-3 py-1 font-semibold text-gray-500 ring-1 ring-gray-200">
-                      {currentEvaluation.modelVersion}
-                    </span>
-                  </div>
-                </div>
-                {explanation.length > 0 && (
-                  <div className="rounded-lg border border-gray-200 bg-white p-4">
-                    <p className="mb-3 text-sm font-semibold text-[#0f1e3c]">Why the schedule scored this way</p>
-                    <ul className="space-y-2">
-                      {explanation.map((line, index) => (
-                        <li key={`${index}-${line}`} className="flex gap-2 text-sm text-gray-700">
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#2563eb]" />
-                          <span>{line}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
                 {latestRecommendations.length > 0 ? (
                   <div className="space-y-3">
                     {latestRecommendations.map((recommendation) => (

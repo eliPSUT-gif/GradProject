@@ -342,8 +342,7 @@ export default function CoursePlanner() {
               style={{ backgroundColor: `${overallDiff.color}25` }}
             />
 
-            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center">
-              <div className="flex items-center gap-5 sm:gap-6">
+            <div className="relative flex items-center gap-5 sm:gap-6">
                 {/* Circular score gauge */}
                 <div className="relative h-32 w-32 shrink-0 sm:h-36 sm:w-36">
                   <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
@@ -393,49 +392,11 @@ export default function CoursePlanner() {
                     {overallDiff.label} workload
                   </div>
                 </div>
-              </div>
-
-              {/* Factor breakdown grid */}
-              <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:ml-6">
-                {analysisResult.factors.map((factor) => {
-                  const factorDiff = getDiffLabel(factor.score);
-                  return (
-                    <div
-                      key={factor.label}
-                      className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#2563eb]/40 hover:shadow-md"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                          {factor.label}
-                        </span>
-                        <span
-                          className="font-display text-xl font-bold"
-                          style={{ color: factorDiff.color }}
-                        >
-                          {factor.score}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                        <div
-                          className="h-full rounded-full transition-all duration-1000 ease-out"
-                          style={{
-                            width: `${Math.min(factor.score, 100)}%`,
-                            backgroundColor: factorDiff.color,
-                          }}
-                        />
-                      </div>
-                      <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
-                        {factor.detail}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           </div>
 
           {/* Body */}
-          <div className="grid gap-4 p-4 sm:gap-5 sm:p-6 lg:grid-cols-3">
+          <div className="grid gap-4 p-4 sm:gap-5 sm:p-6 lg:grid-cols-2">
             {/* Course Breakdown */}
             <div className="rounded-xl border border-gray-200 bg-white p-5">
               <div className="mb-4 flex items-center gap-2">
@@ -484,33 +445,6 @@ export default function CoursePlanner() {
                   );
                 })}
               </div>
-            </div>
-
-            {/* Notes & Rationale */}
-            <div className="rounded-xl border border-gray-200 bg-white p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 ring-1 ring-emerald-200">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                </div>
-                <h3 className="text-sm font-bold text-[#0f1e3c]">Notes &amp; Rationale</h3>
-              </div>
-              {analysisResult.explanation.length === 0 ? (
-                <p className="text-xs text-gray-500">No additional AI rationale is available for this schedule yet.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {analysisResult.explanation.map((line, idx) => (
-                    <li
-                      key={line}
-                      className="flex gap-2.5 rounded-lg bg-slate-50/60 px-3 py-2 text-xs leading-relaxed text-gray-700 ring-1 ring-gray-100"
-                    >
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
-                        {idx + 1}
-                      </span>
-                      <span>{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
 
             {/* Recommendations */}
