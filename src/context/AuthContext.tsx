@@ -792,10 +792,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'User account was not found.' };
       }
 
-      if (matchedUser.password !== currentPassword) {
-        return { success: false, error: 'Current password is incorrect.' };
-      }
-
       const validationError = getPasswordValidationError(nextPassword);
       if (validationError) {
         return { success: false, error: validationError };
@@ -809,10 +805,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (hasSupabaseConfig()) {
+        if (!matchedUser.email) {
+          return { success: false, error: 'This account is missing an email address in public.app_users. Contact an administrator.' };
+        }
+
+        const currentPasswordResult = await supabaseSignInWithPassword(matchedUser.email, currentPassword);
+        if (currentPasswordResult.error) {
+          return { success: false, error: 'Current password is incorrect.' };
+        }
+
         const result = await supabaseUpdateCurrentUserPassword(nextPassword);
         if (result.error) {
           return { success: false, error: result.error.message };
         }
+      } else if (matchedUser.password !== currentPassword) {
+        return { success: false, error: 'Current password is incorrect.' };
       }
 
       setUsers((current) =>

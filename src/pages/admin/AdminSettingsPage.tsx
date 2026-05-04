@@ -1,4 +1,5 @@
 import { Lock, Settings2 } from 'lucide-react';
+import AccountSecurityPanel from '../../components/AccountSecurityPanel';
 
 export default function AdminSettingsPage() {
   return (
@@ -27,6 +28,8 @@ export default function AdminSettingsPage() {
           <li className="rounded-xl border border-gray-200 p-4">Admin-only actions remain isolated behind role checks.</li>
         </ul>
       </div>
+
+      <AccountSecurityPanel />
     </div>
   );
 }

@@ -14,10 +14,12 @@ import CourseManagement from './pages/admin/CourseManagement';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import AdvisorDashboard from './pages/advisor/AdvisorDashboard';
 import AdvisorMessagesPage from './pages/advisor/AdvisorMessagesPage';
+import AdvisorSettingsPage from './pages/advisor/AdvisorSettingsPage';
 import AdvisorStudentDetailPage from './pages/advisor/AdvisorStudentDetailPage';
 import CoursePlanner from './pages/student/CoursePlanner';
 import StudentDashboard from './pages/student/StudentDashboard';
 import StudentMessagesPage from './pages/student/StudentMessagesPage';
+import StudentSettingsPage from './pages/student/StudentSettingsPage';
 import type { Role } from './data/courses';
 
 function ProtectedRoute({
@@ -71,13 +73,13 @@ export default function App() {
                 <Route path="courses" element={<ProtectedRoute allowedRoles={['student']}><CoursePlanner /></ProtectedRoute>} />
                 <Route path="messages" element={<ProtectedRoute allowedRoles={['student']}><StudentMessagesPage /></ProtectedRoute>} />
                 <Route path="profile" element={<Navigate to="/app/dashboard" replace />} />
-                <Route path="settings" element={<Navigate to="/app/dashboard" replace />} />
+                <Route path="settings" element={<ProtectedRoute allowedRoles={['student']}><StudentSettingsPage /></ProtectedRoute>} />
                 <Route path="advisor" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorDashboard /></ProtectedRoute>} />
                 <Route path="advisor/student/:studentId" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorStudentDetailPage /></ProtectedRoute>} />
                 <Route path="advisor/messages" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorMessagesPage /></ProtectedRoute>} />
                 <Route path="advisor/courses" element={<Navigate to="/app/advisor" replace />} />
                 <Route path="advisor/reports" element={<Navigate to="/app/advisor" replace />} />
-                <Route path="advisor/settings" element={<Navigate to="/app/advisor" replace />} />
+                <Route path="advisor/settings" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorSettingsPage /></ProtectedRoute>} />
                 <Route path="admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
                 <Route path="admin/students" element={<ProtectedRoute allowedRoles={['admin']}><AdminStudentsPage /></ProtectedRoute>} />
                 <Route path="admin/students/:studentId/transcript" element={<ProtectedRoute allowedRoles={['admin']}><AdminStudentTranscriptPage /></ProtectedRoute>} />
