@@ -111,7 +111,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
       });
     } catch (emailError) {
       console.error('Unable to send generated password email.', emailError);
-      warning = 'Password was saved, but the password email could not be sent.';
+      const emailMessage = emailError instanceof Error ? emailError.message : 'Unknown email error.';
+      warning = `Password was saved, but the password email could not be sent: ${emailMessage}`;
     }
 
     response.status(200).json({ success: true, warning });
