@@ -1114,18 +1114,24 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     if (!studentId || !evaluation) {
       return [];
     }
+    const courseCodes = courseCodesByDraftId.get(row.id) ?? [];
+    const termCode = row.term_code ?? '2026-Spring';
 
     return [{
       id: row.id,
       studentId,
       name: row.name,
-      courseCodes: courseCodesByDraftId.get(row.id) ?? [],
-      termCode: row.term_code ?? '2026-Spring',
+      courseCodes,
+      termCode,
       status: row.status,
       syncStatus: 'synced',
       syncError: null,
       savedAt: row.saved_at,
-      evaluation,
+      evaluation: {
+        ...evaluation,
+        courseCodes,
+        termCode,
+      },
     } satisfies ScheduleDraft];
   }).sort(sortDraftsNewestFirst);
 
@@ -1549,8 +1555,41 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         console.error('Unable to generate live planner analysis, using fallback evaluation.', error);
       }
 
+      const now = new Date().toISOString();
+      const draftId = createId('draft');
+      const evaluationId = createId('eval');
+      nextEvaluation = {
+        ...nextEvaluation,
+        id: evaluationId,
+        evaluatedAt: now,
+        courseCodes: selectedCourseCodes,
+        termCode: selectedTermCode,
+      };
+      const studentAppUserId = users.find((account) => account.id === studentId)?.appUserId;
+      const shouldPersistRemotely = hasSupabaseConfig() && Boolean(studentAppUserId);
+      const nextDraft = {
+        id: draftId,
+        studentId,
+        name: 'Latest AI Schedule Review',
+        courseCodes: selectedCourseCodes,
+        savedAt: now,
+        termCode: selectedTermCode,
+        status: 'draft',
+        syncStatus: shouldPersistRemotely ? 'pending' : 'synced',
+        syncError: null,
+        evaluation: nextEvaluation,
+      } satisfies ScheduleDraft;
+
       setState((current) => ({
         ...current,
+        plannerSelections: {
+          ...current.plannerSelections,
+          [studentId]: selectedCourseCodes,
+        },
+        plannerTermCodes: {
+          ...current.plannerTermCodes,
+          [studentId]: selectedTermCode,
+        },
         currentEvaluations: {
           ...current.currentEvaluations,
           [studentId]: nextEvaluation,
@@ -1562,11 +1601,84 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         recentEvaluations: nextEvaluation
           ? [nextEvaluation, ...current.recentEvaluations.filter((item) => item.id !== nextEvaluation.id)].sort(sortEvaluationsNewestFirst)
           : current.recentEvaluations,
+        scheduleDrafts: [nextDraft, ...current.scheduleDrafts.filter((draft) => draft.id !== draftId)].sort(sortDraftsNewestFirst),
       }));
+
+      if (shouldPersistRemotely && studentAppUserId) {
+        void (async () => {
+          try {
+            const remoteCourseRows = await supabaseSelect<CourseRow[]>(
+              'courses',
+              `select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis&course_code=in.(${selectedCourseCodes.map(encodeURIComponent).join(',')})`
+            );
+            const courseIdByCode = new Map(remoteCourseRows.map((course) => [course.course_code, course.id]));
+
+            await supabaseInsert('schedule_drafts', {
+              id: draftId,
+              student_id: studentAppUserId,
+              name: nextDraft.name,
+              term_code: selectedTermCode,
+              status: 'draft',
+              saved_at: now,
+            });
+
+            const scheduleCourseRows = selectedCourseCodes
+              .map((code) => courseIdByCode.get(code))
+              .filter(Boolean)
+              .map((courseId) => ({
+                id: createId('draft-course'),
+                schedule_id: draftId,
+                course_id: courseId,
+              }));
+
+            if (scheduleCourseRows.length > 0) {
+              await supabaseInsert('schedule_draft_courses', scheduleCourseRows);
+            }
+
+            await supabaseInsert('schedule_evaluations', {
+              id: evaluationId,
+              schedule_id: draftId,
+              student_id: studentAppUserId,
+              total_score: nextEvaluation.totalScore,
+              risk_label: nextEvaluation.riskLabel,
+              total_credits: nextEvaluation.totalCredits,
+              model_version: nextEvaluation.modelVersion,
+              explanation: nextEvaluation.explanation,
+              factors: nextEvaluation.factors,
+              recommendations: nextEvaluation.recommendations,
+              top_courses: nextEvaluation.topCourses,
+              evaluated_at: now,
+            });
+
+            setState((current) => ({
+              ...current,
+              scheduleDrafts: current.scheduleDrafts.map((draft): ScheduleDraft =>
+                draft.id === draftId
+                  ? { ...draft, syncStatus: 'synced', syncError: null }
+                  : draft
+              ).sort(sortDraftsNewestFirst),
+            }));
+          } catch (error) {
+            console.error('Unable to persist planner analysis to Supabase.', error);
+            setState((current) => ({
+              ...current,
+              scheduleDrafts: current.scheduleDrafts.map((draft): ScheduleDraft =>
+                draft.id === draftId
+                  ? {
+                      ...draft,
+                      syncStatus: 'error',
+                      syncError: error instanceof Error ? error.message : 'Unable to persist this analysis to Supabase.',
+                    }
+                  : draft
+              ).sort(sortDraftsNewestFirst),
+            }));
+          }
+        })();
+      }
 
       return nextEvaluation;
     },
-    [getSelectedCourses, getStudentProfile, state.courses, state.modelVersion, state.plannerTermCodes]
+    [getSelectedCourses, getStudentProfile, state.courses, state.modelVersion, state.plannerTermCodes, users]
   );
 
   const analyzeSchedule = useCallback(
@@ -1612,8 +1724,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const saveScheduleDraft = useCallback(
     (studentId: string, name: string) => {
       const evaluation = state.currentEvaluations[studentId];
-      const courseCodes = state.plannerSelections[studentId] ?? [];
-      const termCode = state.plannerTermCodes[studentId] ?? getStudentAvailableTerms(studentId)[0]?.termCode ?? '2026-Spring';
+      const courseCodes = evaluation?.courseCodes ?? state.plannerSelections[studentId] ?? [];
+      const termCode = evaluation?.termCode ?? state.plannerTermCodes[studentId] ?? getStudentAvailableTerms(studentId)[0]?.termCode ?? '2026-Spring';
       if (!evaluation || courseCodes.length === 0) {
         return null;
       }
@@ -1625,6 +1737,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         ...evaluation,
         id: evaluationId,
         evaluatedAt: now,
+        courseCodes,
+        termCode,
       };
       const studentAppUserId = users.find((account) => account.id === studentId)?.appUserId;
       const shouldPersistRemotely = hasSupabaseConfig() && Boolean(studentAppUserId);
