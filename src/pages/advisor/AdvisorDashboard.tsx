@@ -4,7 +4,6 @@ import {
   AlertCircle,
   AlertTriangle,
   GraduationCap,
-  MessageSquare,
   Search,
   ShieldAlert,
   Users,
@@ -76,13 +75,6 @@ export default function AdvisorDashboard() {
       subtitle: 'CS Department',
       accent: '#0d9488',
     },
-    {
-      icon: MessageSquare,
-      label: 'Balanced Drafts',
-      value: String(advisees.filter((student) => student.latestEvaluation?.riskLabel === 'Balanced').length),
-      subtitle: 'Ready for review',
-      accent: '#16a34a',
-    },
   ];
 
   const alerts = advisees
@@ -108,7 +100,7 @@ export default function AdvisorDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         {kpis.map((item) => {
           const Icon = item.icon;
           return (
