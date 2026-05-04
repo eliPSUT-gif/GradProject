@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { formatTermLabel, getDiffLabel } from '../../data/courses';
+import { askStudentAdvisor } from '../../lib/ai';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
 import { useMessaging } from '../../context/MessagingContext';
@@ -60,9 +61,32 @@ export default function StudentDashboard() {
   const meterPct = score !== null ? clamp(score, 0, 100) : 50;
   const explanation = currentEvaluation?.explanation ?? [];
   const [assistanceFeedback, setAssistanceFeedback] = useState<string | null>(null);
+  const [aiQuestion, setAiQuestion] = useState('Review my planned semester and suggest workload or sequencing improvements.');
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null);
+  const [aiModel, setAiModel] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const selectedSemester = transcriptSemesters.find((semester) => semester.termCode === selectedSemesterTermCode)
     ?? transcriptSemesters[0]
     ?? null;
+  const aiContext = useMemo(
+    () => ({
+      studentName: profile?.name ?? 'Student',
+      termLabel: formatTermLabel(plannerTermCode),
+      currentGpa: profile?.gpa ?? null,
+      completedCredits: profile?.creditsCompleted ?? null,
+      selectedCourses: selectedCourses.map((course) => ({
+        code: course.code,
+        name: course.name,
+        credits: course.credits,
+        difficulty: course.diffScore,
+      })),
+      scheduleScore: currentEvaluation?.totalScore ?? null,
+      scheduleLabel: diffInfo?.label ?? null,
+      scheduleExplanation: explanation,
+    }),
+    [currentEvaluation?.totalScore, diffInfo?.label, explanation, plannerTermCode, profile?.creditsCompleted, profile?.gpa, profile?.name, selectedCourses]
+  );
 
   useEffect(() => {
     if (
@@ -129,6 +153,34 @@ export default function StudentDashboard() {
         ? 'Your advisor has been notified that you need assistance.'
         : result.error ?? 'Unable to notify your advisor right now.'
     );
+  };
+
+  const handleAskAi = async (nextQuestion?: string) => {
+    const question = (nextQuestion ?? aiQuestion).trim();
+
+    if (!question) {
+      setAiError('Enter a question for the AI advisor first.');
+      return;
+    }
+
+    setIsAiLoading(true);
+    setAiError(null);
+    setAiAnswer(null);
+    setAiModel(null);
+    setAiQuestion(question);
+
+    try {
+      const result = await askStudentAdvisor({
+        question,
+        context: aiContext,
+      });
+      setAiAnswer(result.text);
+      setAiModel(result.model);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'Unable to generate AI advice right now.');
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   return (
@@ -313,20 +365,73 @@ export default function StudentDashboard() {
                 <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-blue-200">
                   <Lightbulb className="h-4 w-4 text-[#2563eb]" />
                 </div>
-                <div>
-                  <p className="font-semibold text-[#0f1e3c]">AI recommendation engine coming soon</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-[#0f1e3c]">Ask the AI advisor</p>
                   <p className="mt-1 text-sm text-gray-600">
-                    This area will be connected to an AI API that analyzes your schedule and returns personalized recommendations.
+                    It uses your current GPA, selected courses, and planner analysis to give grounded suggestions.
                   </p>
                 </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {[
+                  'Review my workload for next semester.',
+                  'Suggest lighter alternatives if this term looks too heavy.',
+                  'Give me a study plan for my selected courses.',
+                ].map((prompt) => (
+                  <button
+                    key={prompt}
+                    onClick={() => { void handleAskAi(prompt); }}
+                    disabled={isAiLoading}
+                    className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#2563eb] transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 space-y-3">
+                <textarea
+                  value={aiQuestion}
+                  onChange={(event) => setAiQuestion(event.target.value)}
+                  rows={4}
+                  placeholder="Ask about workload, course balance, sequencing, or study strategy."
+                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm text-[#0f1e3c] shadow-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
+                />
+                <button
+                  onClick={() => { void handleAskAi(); }}
+                  disabled={isAiLoading}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Sparkles className={`h-4 w-4 ${isAiLoading ? 'animate-pulse' : ''}`} />
+                  {isAiLoading ? 'Generating advice...' : 'Generate AI Advice'}
+                </button>
               </div>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
               Advisor recommendations are now delivered through Messages.
             </div>
-            <div className="rounded-lg border border-dashed border-gray-300 p-3 text-sm text-gray-500">
-              Analyze a schedule in the Course Planner to prepare data for future AI suggestions.
-            </div>
+            {selectedCourses.length === 0 && (
+              <div className="rounded-lg border border-dashed border-gray-300 p-3 text-sm text-gray-500">
+                Build a draft in the Course Planner to give the AI more schedule context.
+              </div>
+            )}
+            {aiError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {aiError}
+              </div>
+            )}
+            {aiAnswer && (
+              <div className="rounded-xl border border-gray-200 bg-slate-50 p-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-[#0f1e3c]">Latest AI response</p>
+                  {aiModel && (
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-gray-500 ring-1 ring-gray-200">
+                      {aiModel}
+                    </span>
+                  )}
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-6 text-gray-700">{aiAnswer}</p>
+              </div>
+            )}
           </div>
         </div>
 
