@@ -15,17 +15,19 @@ function getPasswordValidationError(password: string) {
   return null;
 }
 
-function getSupabaseUserClient(request: VercelRequest) {
+function getSupabaseServerClient(request: VercelRequest) {
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY;
+  const authKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    ?? process.env.SUPABASE_ANON_KEY
+    ?? process.env.VITE_SUPABASE_ANON_KEY;
   const token = String(request.headers.authorization ?? '').replace(/^Bearer\s+/i, '').trim();
 
-  if (!supabaseUrl || !anonKey) {
+  if (!supabaseUrl || !authKey) {
     const missing = [
       !supabaseUrl ? 'SUPABASE_URL' : null,
-      !anonKey ? 'SUPABASE_ANON_KEY' : null,
+      !authKey ? 'SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY' : null,
     ].filter(Boolean).join(' and ');
-    throw new Error(`Supabase public environment is not configured. Add ${missing} to Vercel using the same values as VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then redeploy.`);
+    throw new Error(`Supabase server environment is not configured. Add ${missing} to Vercel, then redeploy.`);
   }
 
   if (!token) {
@@ -34,7 +36,7 @@ function getSupabaseUserClient(request: VercelRequest) {
 
   return {
     token,
-    supabase: createClient(supabaseUrl, anonKey, {
+    supabase: createClient(supabaseUrl, authKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -48,11 +50,11 @@ function getSupabaseUserClient(request: VercelRequest) {
   };
 }
 
-type SupabaseUserClient = ReturnType<typeof getSupabaseUserClient>['supabase'];
+type SupabaseServerClient = ReturnType<typeof getSupabaseServerClient>['supabase'];
 
 async function requireAdmin(
   token: string,
-  supabase: SupabaseUserClient
+  supabase: SupabaseServerClient
 ) {
   const { data: authData, error: authError } = await supabase.auth.getUser(token);
   if (authError || !authData.user) {
@@ -105,7 +107,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       return;
     }
 
-    const { token, supabase } = getSupabaseUserClient(request);
+    const { token, supabase } = getSupabaseServerClient(request);
     await requireAdmin(token, supabase);
 
     const { data: appUser, error: userError } = await supabase
