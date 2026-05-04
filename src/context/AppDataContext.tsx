@@ -47,6 +47,7 @@ import {
   supabaseSelect,
   supabaseUpsert,
 } from '../lib/supabase';
+import { analyzePlannerSchedule } from '../lib/ai';
 import { useAuth, type UserFormInput } from './AuthContext';
 import { PASSWORD_INQUIRY_MESSAGE_PREFIX } from '../constants/messaging';
 
@@ -167,7 +168,7 @@ function normalizeEmbeddedMessageSender(row: PasswordResetInquiryMessageRow) {
 }
 
 interface AppDataContextType {
-  analyzeSchedule: (studentId: string) => ScheduleEvaluation | null;
+  analyzeSchedule: (studentId: string) => Promise<ScheduleEvaluation | null>;
   clearSelection: (studentId: string) => void;
   assignAdvisor: (studentId: string, advisorId: string) => Promise<PlannerActionResult>;
   createStudentAccount: (input: StudentAccountInput) => Promise<PlannerActionResult & { studentId?: string }>;
@@ -195,7 +196,7 @@ interface AppDataContextType {
   plannerSelections: Record<string, string[]>;
   plannerTermCodes: Record<string, string>;
   passwordResetInquiries: PasswordResetInquiry[];
-  requestPlannerAnalysis: (studentId: string) => ScheduleEvaluation | null;
+  requestPlannerAnalysis: (studentId: string) => Promise<ScheduleEvaluation | null>;
   recentEvaluations: ScheduleEvaluation[];
   saveScheduleDraft: (studentId: string, name: string) => ScheduleDraft | null;
   setPlannerTermCode: (studentId: string, termCode: string) => void;
@@ -378,7 +379,7 @@ const EMPTY_SELECTION_STATUS: SelectionStatus = {
 };
 
 const AppDataContext = createContext<AppDataContextType>({
-  analyzeSchedule: () => null,
+  analyzeSchedule: async () => null,
   clearSelection: () => {},
   assignAdvisor: async () => ({ success: false, error: 'App data is not ready.' }),
   createStudentAccount: async () => ({ success: false, error: 'App data is not ready.' }),
@@ -406,7 +407,7 @@ const AppDataContext = createContext<AppDataContextType>({
   plannerSelections: {},
   plannerTermCodes: {},
   passwordResetInquiries: [],
-  requestPlannerAnalysis: () => null,
+  requestPlannerAnalysis: async () => null,
   recentEvaluations: [],
   saveScheduleDraft: () => null,
   setPlannerTermCode: () => {},
@@ -1486,13 +1487,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const requestPlannerAnalysis = useCallback(
-    (studentId: string) => {
+    async (studentId: string) => {
       const profile = getStudentProfile(studentId);
       const selectedCourses = getSelectedCourses(studentId);
-      // TODO: Replace this placeholder orchestration with an API request that
-      // sends studentId, planner term, selected courses, and transcript context,
-      // then maps the trained model response into ScheduleEvaluation.
-      const evaluation = buildMockPlannerAiEvaluation(
+      const fallbackEvaluation = buildMockPlannerAiEvaluation(
         studentId,
         selectedCourses,
         state.courses,
@@ -1501,24 +1499,67 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         profile?.creditsCompleted ?? 0
       );
 
+      if (!fallbackEvaluation) {
+        return null;
+      }
+
+      let nextEvaluation = fallbackEvaluation;
+
+      try {
+        const aiResult = await analyzePlannerSchedule({
+          studentName: profile?.name ?? 'Student',
+          termLabel: formatTermLabel(state.plannerTermCodes[studentId] ?? '2026-Spring'),
+          currentGpa: profile?.gpa ?? null,
+          completedCredits: profile?.creditsCompleted ?? null,
+          scheduleScore: fallbackEvaluation.totalScore,
+          scheduleLabel: fallbackEvaluation.riskLabel,
+          selectedCourses: selectedCourses.map((course) => ({
+            code: course.code,
+            name: course.name,
+            credits: course.credits,
+            difficulty: course.diffScore,
+            type: course.type,
+          })),
+          factors: fallbackEvaluation.factors,
+        });
+
+        nextEvaluation = {
+          ...fallbackEvaluation,
+          explanation: aiResult.explanation.length > 0 ? aiResult.explanation : fallbackEvaluation.explanation,
+          recommendations: aiResult.recommendations.length > 0
+            ? aiResult.recommendations.map((recommendation, index) => ({
+                id: `rec-ai-${studentId}-${index + 1}`,
+                title: recommendation.title,
+                reason: recommendation.reason,
+                action: recommendation.action,
+                expectedImpact: recommendation.expectedImpact,
+                impactDelta: fallbackEvaluation.recommendations[index]?.impactDelta ?? 0,
+              }))
+            : fallbackEvaluation.recommendations,
+          modelVersion: aiResult.model,
+        };
+      } catch (error) {
+        console.error('Unable to generate live planner analysis, using fallback evaluation.', error);
+      }
+
       setState((current) => ({
         ...current,
         currentEvaluations: {
           ...current.currentEvaluations,
-          [studentId]: evaluation,
+          [studentId]: nextEvaluation,
         },
-        recentEvaluations: evaluation
-          ? [evaluation, ...current.recentEvaluations.filter((item) => item.id !== evaluation.id)].sort(sortEvaluationsNewestFirst)
+        recentEvaluations: nextEvaluation
+          ? [nextEvaluation, ...current.recentEvaluations.filter((item) => item.id !== nextEvaluation.id)].sort(sortEvaluationsNewestFirst)
           : current.recentEvaluations,
       }));
 
-      return evaluation;
+      return nextEvaluation;
     },
-    [getSelectedCourses, getStudentProfile, state.courses, state.modelVersion]
+    [getSelectedCourses, getStudentProfile, state.courses, state.modelVersion, state.plannerTermCodes]
   );
 
   const analyzeSchedule = useCallback(
-    (studentId: string) => requestPlannerAnalysis(studentId),
+    async (studentId: string) => requestPlannerAnalysis(studentId),
     [requestPlannerAnalysis]
   );
 
