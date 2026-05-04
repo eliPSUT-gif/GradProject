@@ -76,11 +76,19 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   try {
     const payload = typeof request.body === 'string'
-      ? JSON.parse(request.body) as { universityId?: string; password?: string; action?: 'created' | 'reset' }
+      ? JSON.parse(request.body) as {
+          universityId?: string;
+          password?: string;
+          action?: 'created' | 'reset';
+          fullName?: string;
+          role?: Role;
+        }
       : request.body;
     const universityId = String(payload?.universityId ?? '').trim();
     const password = String(payload?.password ?? '');
     const action = payload?.action === 'created' ? 'created' : 'reset';
+    const fallbackFullName = String(payload?.fullName ?? '').trim();
+    const fallbackRole = payload?.role;
 
     if (!universityId || !password) {
       response.status(400).json({ success: false, error: 'Missing user ID or temporary password.' });
@@ -106,15 +114,15 @@ export default async function handler(request: VercelRequest, response: VercelRe
       throw userError;
     }
 
-    if (!appUser) {
+    if (!appUser && (!fallbackFullName || !fallbackRole)) {
       response.status(404).json({ success: false, error: 'User account was not found.' });
       return;
     }
 
     await sendGeneratedPasswordEmail({
-      fullName: appUser.full_name,
+      fullName: appUser?.full_name ?? fallbackFullName,
       universityId,
-      role: appUser.role as Role,
+      role: (appUser?.role ?? fallbackRole) as Role,
       password,
       action,
     });

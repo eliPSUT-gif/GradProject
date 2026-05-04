@@ -218,6 +218,8 @@ async function sendGeneratedPasswordEmailFromFallback(payload: {
   universityId: string;
   password: string;
   action: 'created' | 'reset';
+  fullName: string;
+  role: Role;
 }) {
   return callAdminAuthEndpoint('/api/admin-send-password-email', payload);
 }
@@ -926,6 +928,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'User account was not found.' };
       }
 
+      const targetUser = users.find((account) => account.id === userId);
       let warning: string | undefined;
       if (hasSupabaseConfig()) {
         try {
@@ -958,10 +961,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 universityId: userId,
                 password: nextPassword,
                 action: 'reset',
+                fullName: targetUser?.name ?? userId,
+                role: targetUser?.role ?? 'student',
               });
             } catch (emailError) {
               console.error('Unable to send generated password email from fallback.', emailError);
-              warning = 'Password was saved through the database fallback, but the password email could not be sent.';
+              const emailMessage = emailError instanceof Error ? emailError.message : 'Unknown email error.';
+              warning = `Password was saved through the database fallback, but the password email could not be sent: ${emailMessage}`;
             }
           } catch (fallbackError) {
             if (isMissingRpcSchemaCacheError(fallbackError)) {
