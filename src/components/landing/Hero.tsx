@@ -1,10 +1,9 @@
 import { ArrowRight, Sparkles, Brain, TrendingUp } from 'lucide-react';
 
 const COURSES = [
-  { name: 'Software Engineering', difficulty: 'Hard', color: 'text-red', barWidth: 'w-[85%]', barColor: 'bg-red' },
-  { name: 'Database Systems', difficulty: 'Medium', color: 'text-gold', barWidth: 'w-[60%]', barColor: 'bg-gold' },
-  { name: 'Operating Systems', difficulty: 'Hard', color: 'text-red', barWidth: 'w-[80%]', barColor: 'bg-red' },
-  { name: 'Web Development', difficulty: 'Easy', color: 'text-green', barWidth: 'w-[35%]', barColor: 'bg-green' },
+  { name: 'Digital Logic Design', difficulty: '66', color: 'text-gold', barWidth: 'w-[66%]', barColor: 'bg-gold' },
+  { name: 'Computer Organization', difficulty: '84', color: 'text-red', barWidth: 'w-[84%]', barColor: 'bg-red' },
+  { name: 'Computer Architecture', difficulty: '89', color: 'text-red', barWidth: 'w-[89%]', barColor: 'bg-red' },
 ] as const;
 
 export default function Hero() {
@@ -36,9 +35,8 @@ export default function Hero() {
           </h1>
 
           <p className="text-lg text-white/60 max-w-lg leading-relaxed">
-            AI-powered course difficulty forecasting and schedule evaluation.
-            Make data-driven decisions about your academic journey with
-            intelligent workload analysis.
+            Course difficulty scoring, schedule workload review, and advisor-facing planning tools
+            built around the actual registration flow used in this project.
           </p>
 
           <div className="flex flex-wrap gap-4">
@@ -81,21 +79,21 @@ export default function Hero() {
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <p className="text-xs font-medium text-white/50 uppercase tracking-wider">
-                    Semester Difficulty Forecast
+                    Planner Review Example
                   </p>
-                  <p className="text-sm font-semibold text-white/80 mt-1">Fall 2025 &mdash; 15 Credits</p>
+                  <p className="text-sm font-semibold text-white/80 mt-1">Summer 2026 &mdash; 9 Credits</p>
                 </div>
                 <div className="flex flex-col items-center">
-                  <span className="text-3xl font-display font-bold text-white">78%</span>
+                  <span className="text-3xl font-display font-bold text-white">70</span>
                   <span className="text-[10px] font-semibold text-red uppercase tracking-wide">
-                    High Risk
+                    Hard Workload
                   </span>
                 </div>
               </div>
 
               {/* Progress bar */}
               <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-6">
-                <div className="h-full w-[78%] bg-gradient-to-r from-gold to-red rounded-full animate-fill-bar" />
+                <div className="h-full w-[70%] bg-gradient-to-r from-gold to-red rounded-full animate-fill-bar" />
               </div>
 
               {/* Course list */}
@@ -120,9 +118,9 @@ export default function Hero() {
                 <div className="flex items-start gap-2.5">
                   <Sparkles className="w-4 h-4 text-blue-sky mt-0.5 shrink-0" />
                   <p className="text-xs text-blue-pale leading-relaxed">
-                    <span className="font-semibold">AI Recommendation:</span> Consider replacing
-                    Operating Systems with a lighter elective to reduce semester load to a
-                    manageable level.
+                    <span className="font-semibold">AI Recommendation:</span> The review can flag
+                    theory-heavy combinations and suggest swapping one course for a lighter or more
+                    practical option.
                   </p>
                 </div>
               </div>

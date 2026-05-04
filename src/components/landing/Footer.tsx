@@ -4,11 +4,10 @@ const TECH_STACK = [
   'React 19',
   'TypeScript',
   'Tailwind CSS v4',
-  'Node.js',
-  'Express',
-  'Python',
-  'MySQL',
-  'Redis',
+  'Supabase',
+  'Vercel Functions',
+  'OpenRouter',
+  'reCAPTCHA v3',
 ] as const;
 
 export default function Footer() {
@@ -28,8 +27,8 @@ export default function Footer() {
               </span>
             </div>
             <p className="text-sm text-white/40 leading-relaxed max-w-xs">
-              AI-powered academic advising platform. Making data-driven course scheduling
-              accessible to every student.
+              Academic planning app for students, advisors, and admins with schedule review,
+              messaging, transcript views, and draft persistence.
             </p>
           </div>
 
@@ -68,11 +67,10 @@ export default function Footer() {
           </p>
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" />
-            <span className="text-xs text-white/30">All systems operational</span>
+            <span className="text-xs text-white/30">Built for PSUT graduation project review</span>
           </div>
         </div>
       </div>
     </footer>
   );
 }
-

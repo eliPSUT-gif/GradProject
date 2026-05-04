@@ -8,10 +8,10 @@ interface Stat {
 }
 
 const STATS: Stat[] = [
-  { icon: Target, value: '90%', label: 'AI Model Accuracy' },
-  { icon: MousePointerClick, value: '4x', label: 'Clicks to Evaluate' },
+  { icon: Target, value: '4', label: 'Planner Score Factors' },
+  { icon: MousePointerClick, value: '1', label: 'Click to Review a Schedule' },
   { icon: Users, value: '3', label: 'User Roles' },
-  { icon: Shield, value: '99.9%', label: 'Uptime' },
+  { icon: Shield, value: '6', label: 'Server API Routes' },
 ];
 
 export default function StatsStrip() {

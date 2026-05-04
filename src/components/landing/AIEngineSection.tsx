@@ -16,47 +16,47 @@ interface WeightCard {
 const WEIGHTS: WeightCard[] = [
   {
     icon: TrendingDown,
-    label: 'Pass Rate',
-    weight: '30%',
-    variable: 'PR',
+    label: 'Course Average',
+    weight: '68%',
+    variable: 'AVG',
     color: 'text-teal',
     iconBg: 'bg-teal/10',
     borderColor: 'border-teal/20',
     barColor: 'bg-teal',
-    barWidth: 'w-[30%]',
+    barWidth: 'w-[68%]',
   },
   {
     icon: Award,
-    label: 'Average Grade',
-    weight: '25%',
-    variable: 'AG',
+    label: 'Hard Course Penalty',
+    weight: '+6.5',
+    variable: 'HP',
     color: 'text-gold',
     iconBg: 'bg-gold/10',
     borderColor: 'border-gold/20',
     barColor: 'bg-gold',
-    barWidth: 'w-[25%]',
+    barWidth: 'w-[42%]',
   },
   {
     icon: BookOpen,
-    label: 'Course Type',
-    weight: '25%',
-    variable: 'CT',
+    label: 'Course Mix Penalty',
+    weight: '+3',
+    variable: 'MP',
     color: 'text-purple-400',
     iconBg: 'bg-purple-400/10',
     borderColor: 'border-purple-400/20',
     barColor: 'bg-purple-400',
-    barWidth: 'w-[25%]',
+    barWidth: 'w-[28%]',
   },
   {
     icon: Clock,
-    label: 'Credit Hours',
-    weight: '20%',
-    variable: 'CH',
+    label: 'Credit Load Penalty',
+    weight: '+4.8',
+    variable: 'CP',
     color: 'text-orange-400',
     iconBg: 'bg-orange-400/10',
     borderColor: 'border-orange-400/20',
     barColor: 'bg-orange-400',
-    barWidth: 'w-[20%]',
+    barWidth: 'w-[30%]',
   },
 ];
 
@@ -74,11 +74,11 @@ export default function AIEngineSection() {
             AI Engine
           </span>
           <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight">
-            How We Score Difficulty
+            How The Planner Scores Workload
           </h2>
           <p className="mt-4 text-lg text-white/50 max-w-2xl mx-auto">
-            Our weighted algorithm combines four key factors to produce an accurate difficulty
-            score for every course.
+            The landing page now mirrors the actual planner review logic instead of the old
+            placeholder formula.
           </p>
         </div>
 
@@ -116,39 +116,46 @@ export default function AIEngineSection() {
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-lg sm:text-xl lg:text-2xl font-mono">
-              <span className="font-display font-bold text-white">D</span>
+              <span className="font-display font-bold text-white">S</span>
               <span className="text-white/30">=</span>
-              <span className="text-teal font-bold">0.30</span>
+              <span className="text-teal font-bold">0.68</span>
               <span className="text-white/30">&times;</span>
               <span className="px-2 py-1 bg-teal/10 border border-teal/20 rounded-lg text-teal font-bold">
-                PR
+                AVG
               </span>
               <span className="text-white/30">+</span>
-              <span className="text-gold font-bold">0.25</span>
+              <span className="text-gold font-bold">HP</span>
               <span className="text-white/30">&times;</span>
               <span className="px-2 py-1 bg-gold/10 border border-gold/20 rounded-lg text-gold font-bold">
-                AG
+                Hard
               </span>
               <span className="text-white/30">+</span>
-              <span className="text-purple-400 font-bold">0.25</span>
+              <span className="text-purple-400 font-bold">MP</span>
               <span className="text-white/30">&times;</span>
               <span className="px-2 py-1 bg-purple-400/10 border border-purple-400/20 rounded-lg text-purple-400 font-bold">
-                CT
+                Mix
               </span>
               <span className="text-white/30">+</span>
-              <span className="text-orange-400 font-bold">0.20</span>
+              <span className="text-orange-400 font-bold">CP</span>
               <span className="text-white/30">&times;</span>
               <span className="px-2 py-1 bg-orange-400/10 border border-orange-400/20 rounded-lg text-orange-400 font-bold">
-                CH
+                Credits
+              </span>
+              <span className="text-white/30">+</span>
+              <span className="text-blue-sky font-bold">PP</span>
+              <span className="text-white/30">&times;</span>
+              <span className="px-2 py-1 bg-blue-sky/10 border border-blue-sky/20 rounded-lg text-blue-sky font-bold">
+                Patterns
               </span>
             </div>
 
             <div className="mt-6 pt-6 border-t border-white/5 flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-white/40">
-              <span><strong className="text-teal">PR</strong> = Pass Rate</span>
-              <span><strong className="text-gold">AG</strong> = Avg Grade</span>
-              <span><strong className="text-purple-400">CT</strong> = Course Type</span>
-              <span><strong className="text-orange-400">CH</strong> = Credit Hours</span>
-              <span><strong className="text-white">D</strong> = Difficulty Score</span>
+              <span><strong className="text-teal">AVG</strong> = average course difficulty</span>
+              <span><strong className="text-gold">HP</strong> = hard-course count penalty</span>
+              <span><strong className="text-purple-400">MP</strong> = theory/project mix penalty</span>
+              <span><strong className="text-orange-400">CP</strong> = credit load penalty</span>
+              <span><strong className="text-blue-sky">PP</strong> = known difficult pairings</span>
+              <span><strong className="text-white">S</strong> = schedule workload score</span>
             </div>
           </div>
         </div>

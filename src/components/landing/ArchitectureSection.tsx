@@ -14,15 +14,15 @@ const LAYERS: Layer[] = [
     color: 'text-blue',
     labelBg: 'bg-blue/10',
     borderColor: 'border-blue/20',
-    chips: ['React 19', 'TypeScript', 'Tailwind CSS v4', 'React Router v7', 'Responsive UI'],
+    chips: ['React 19', 'TypeScript', 'Tailwind CSS v4', 'React Router v7', 'Vite'],
   },
   {
     number: '02',
-    title: 'Application',
+    title: 'Application Logic',
     color: 'text-green',
     labelBg: 'bg-green/10',
     borderColor: 'border-green/20',
-    chips: ['Node.js', 'Express.js', 'Python', 'REST API', 'JWT Auth', 'Business Logic'],
+    chips: ['Context State', 'Planner Evaluation', 'Role-based Flows', 'Draft Persistence', 'AI Review Orchestration'],
   },
   {
     number: '03',
@@ -30,7 +30,7 @@ const LAYERS: Layer[] = [
     color: 'text-gold',
     labelBg: 'bg-gold/10',
     borderColor: 'border-gold/20',
-    chips: ['MySQL', 'Redis Cache', 'Grade Records', 'User Data', 'Course Catalog'],
+    chips: ['Supabase', 'Transcript Records', 'Schedule Drafts', 'Course Catalog', 'User Profiles'],
   },
   {
     number: '04',
@@ -38,7 +38,7 @@ const LAYERS: Layer[] = [
     color: 'text-purple-400',
     labelBg: 'bg-purple-400/10',
     borderColor: 'border-purple-400/20',
-    chips: ['University SIS', 'LMS Integration', 'Email Service', 'Future APIs'],
+    chips: ['OpenRouter', 'reCAPTCHA v3', 'Vercel Functions', 'GitHub + Vercel Deployments'],
   },
 ];
 
@@ -55,8 +55,8 @@ export default function ArchitectureSection() {
             System Architecture
           </h2>
           <p className="mt-4 text-lg text-slate max-w-2xl mx-auto">
-            A layered architecture designed for scalability, maintainability, and clean separation
-            of concerns.
+            The current project is a Vite React app with Vercel server routes, Supabase-backed data,
+            and optional AI schedule review through OpenRouter.
           </p>
         </div>
 
@@ -99,7 +99,7 @@ export default function ArchitectureSection() {
             <div className="flex items-center gap-3 px-5 py-2.5 bg-white rounded-full border border-border shadow-sm">
               <div className="w-2 h-2 rounded-full bg-blue" />
               <span className="text-xs font-medium text-slate">
-                Data flows top-down &middot; Events bubble up
+                UI state, server routes, Supabase data, and AI review work together
               </span>
               <div className="w-2 h-2 rounded-full bg-green" />
             </div>

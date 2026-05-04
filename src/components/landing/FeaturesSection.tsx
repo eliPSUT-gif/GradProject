@@ -25,7 +25,7 @@ const FEATURES: Feature[] = [
     tag: 'FR-2',
     title: 'Historical Data Integration',
     description:
-      'Ingests years of anonymized grade records to build statistical models that power difficulty scoring.',
+      'Uses the seeded course catalog, transcript history, and stored drafts in Supabase-backed flows to support planning and reporting.',
     iconColor: 'text-teal',
     iconBg: 'bg-teal/10',
   },
@@ -34,7 +34,7 @@ const FEATURES: Feature[] = [
     tag: 'FR-3',
     title: 'Difficulty Score Calculation',
     description:
-      'Multi-factor algorithm weighing pass rates, average grades, course type, and credit hours into a single difficulty score.',
+      'Combines course difficulty, hard-course penalties, course-mix pressure, credit load, and known difficult pairings into a workload score.',
     iconColor: 'text-gold',
     iconBg: 'bg-gold/10',
   },
@@ -52,7 +52,7 @@ const FEATURES: Feature[] = [
     tag: 'FR-5',
     title: 'AI Recommendations Engine',
     description:
-      'Machine learning model suggests lighter alternatives when a schedule is flagged as high risk.',
+      'OpenRouter-backed schedule review generates notes, rationale, and recommendation cards from the selected draft.',
     iconColor: 'text-purple-400',
     iconBg: 'bg-purple-400/10',
   },
