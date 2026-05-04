@@ -1,5 +1,3 @@
-import nodemailer from 'nodemailer';
-
 type Role = 'student' | 'advisor' | 'admin';
 
 const DEFAULT_SMTP_HOST = 'mail.spacemail.com';
@@ -45,6 +43,8 @@ export async function sendGeneratedPasswordEmail(input: {
   password: string;
   action: 'created' | 'reset';
 }) {
+  const nodemailerModule = await import('nodemailer');
+  const nodemailer = nodemailerModule.default ?? nodemailerModule;
   const port = getSmtpPort();
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST?.trim() || DEFAULT_SMTP_HOST,
