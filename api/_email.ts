@@ -5,7 +5,7 @@ type Role = 'student' | 'advisor' | 'admin';
 const DEFAULT_SMTP_HOST = 'mail.spacemail.com';
 const DEFAULT_SMTP_PORT = 465;
 const DEFAULT_PASSWORD_EMAIL_FROM = 'SmartAdvisor <admin@psut.site>';
-const DEFAULT_PASSWORD_EMAIL_TO = 'eli20220677@psut.edu.jo';
+const DEFAULT_PASSWORD_EMAIL_TO = 'eli20220677@std.psut.edu.jo';
 
 function getRequiredEnv(name: string) {
   const value = process.env[name]?.trim();

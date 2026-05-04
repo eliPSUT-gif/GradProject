@@ -21,7 +21,7 @@ Create a local `.env.local` from `.env.example` and set:
 - `SMTP_USER`
 - `SMTP_PASSWORD`
 - `PASSWORD_EMAIL_FROM`
-- `PASSWORD_EMAIL_TO` (defaults to `eli20220677@psut.edu.jo`)
+- `PASSWORD_EMAIL_TO` (defaults to `eli20220677@std.psut.edu.jo`)
 
 `VITE_RECAPTCHA_SITE_KEY` is safe for the browser. `RECAPTCHA_SECRET_KEY` must only be configured on the server, such as in Vercel project environment variables.
 
