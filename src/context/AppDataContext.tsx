@@ -1450,10 +1450,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             ...current.plannerSelections,
             [studentId]: nextSelection,
           },
-          currentEvaluations: {
-            ...current.currentEvaluations,
-            [studentId]: null,
-          },
         };
       });
 
@@ -1479,10 +1475,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         ...current.plannerSelections,
         [studentId]: [],
       },
-      currentEvaluations: {
-        ...current.currentEvaluations,
-        [studentId]: null,
-      },
     }));
   }, []);
 
@@ -1490,6 +1482,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     async (studentId: string) => {
       const profile = getStudentProfile(studentId);
       const selectedCourses = getSelectedCourses(studentId);
+      const selectedCourseCodes = selectedCourses.map((course) => course.code);
+      const selectedTermCode = state.plannerTermCodes[studentId] ?? '2026-Spring';
       const fallbackEvaluation = buildMockPlannerAiEvaluation(
         studentId,
         selectedCourses,
@@ -1503,12 +1497,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      let nextEvaluation = fallbackEvaluation;
+      let nextEvaluation = {
+        ...fallbackEvaluation,
+        courseCodes: selectedCourseCodes,
+        termCode: selectedTermCode,
+      };
 
       try {
         const aiResult = await analyzePlannerSchedule({
           studentName: profile?.name ?? 'Student',
-          termLabel: formatTermLabel(state.plannerTermCodes[studentId] ?? '2026-Spring'),
+          termLabel: formatTermLabel(selectedTermCode),
           currentGpa: profile?.gpa ?? null,
           completedCredits: profile?.creditsCompleted ?? null,
           scheduleScore: fallbackEvaluation.totalScore,
@@ -1524,7 +1522,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         });
 
         nextEvaluation = {
-          ...fallbackEvaluation,
+          ...nextEvaluation,
           explanation: aiResult.explanation.length > 0 ? aiResult.explanation : fallbackEvaluation.explanation,
           recommendations: aiResult.recommendations.length > 0
             ? aiResult.recommendations.map((recommendation, index) => ({

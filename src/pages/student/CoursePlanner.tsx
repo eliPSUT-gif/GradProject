@@ -80,14 +80,21 @@ export default function CoursePlanner() {
 
   useEffect(() => {
     if (!analysisResult || displayedReview) return;
+    const reviewedCourseCodes = analysisResult.courseCodes ?? [];
+    const reviewCourses = reviewedCourseCodes.length > 0
+      ? reviewedCourseCodes
+          .map((code) => courses.find((course) => course.code === code))
+          .filter((course): course is Course => Boolean(course))
+      : selectedCourses;
+
     setDisplayedReview({
       evaluation: analysisResult,
-      courses: selectedCourses,
-      termCode: plannerTermCode,
-      totalCredits,
+      courses: reviewCourses,
+      termCode: analysisResult.termCode ?? plannerTermCode,
+      totalCredits: analysisResult.totalCredits,
     });
     setHasAnalyzed(true);
-  }, [analysisResult, displayedReview, plannerTermCode, selectedCourses, totalCredits]);
+  }, [analysisResult, courses, displayedReview, plannerTermCode, selectedCourses]);
 
   useEffect(() => {
     setDisplayedReview(null);
