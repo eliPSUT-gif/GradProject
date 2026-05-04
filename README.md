@@ -15,8 +15,13 @@ Create a local `.env.local` from `.env.example` and set:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_MODEL` (optional, defaults to `openrouter/free`)
-- `RESEND_API_KEY`
+- `SMTP_HOST` (defaults to `mail.spacemail.com`)
+- `SMTP_PORT` (defaults to `465`)
+- `SMTP_SECURE` (defaults to `true` for port `465`)
+- `SMTP_USER`
+- `SMTP_PASSWORD`
 - `PASSWORD_EMAIL_FROM`
+- `PASSWORD_EMAIL_TO` (defaults to `eli20220677@psut.edu.jo`)
 
 `VITE_RECAPTCHA_SITE_KEY` is safe for the browser. `RECAPTCHA_SECRET_KEY` must only be configured on the server, such as in Vercel project environment variables.
 
@@ -24,7 +29,7 @@ Create a local `.env.local` from `.env.example` and set:
 
 `OPENROUTER_API_KEY` must only be configured on the server, such as in Vercel project environment variables. `OPENROUTER_MODEL` can stay server-side too so you can switch between `openrouter/free` and a pinned `:free` model without editing client code.
 
-`RESEND_API_KEY` and `PASSWORD_EMAIL_FROM` must only be configured on the server. They are used by admin user creation and generated password reset emails, which are sent to `elias.hreish0@gmail.com`.
+The SMTP variables and `PASSWORD_EMAIL_FROM` / `PASSWORD_EMAIL_TO` must only be configured on the server. They are used by admin user creation and generated password reset emails. For SpaceMail, use `mail.spacemail.com`, port `465`, SSL enabled, and the mailbox credentials for `admin@psut.site`.
 
 ## reCAPTCHA v3 Login Protection
 

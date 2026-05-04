@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { sendGeneratedPasswordEmail } from './_email';
 
 type Role = 'student' | 'advisor' | 'admin';
 
-const PASSWORD_EMAIL_RECIPIENT = 'elias.hreish0@gmail.com';
 const MIN_PASSWORD_LENGTH = 10;
 
 function getPasswordValidationError(password: string) {
@@ -13,49 +13,6 @@ function getPasswordValidationError(password: string) {
   if (!/\d/.test(password)) return 'Password must include at least one number.';
   if (!/[^A-Za-z0-9]/.test(password)) return 'Password must include at least one special character.';
   return null;
-}
-
-async function sendGeneratedPasswordEmail(input: {
-  fullName: string;
-  universityId: string;
-  role: Role;
-  password: string;
-  action: 'created' | 'reset';
-}) {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  const from = process.env.PASSWORD_EMAIL_FROM?.trim();
-
-  if (!apiKey || !from) {
-    throw new Error('Resend email environment is not configured.');
-  }
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: PASSWORD_EMAIL_RECIPIENT,
-      subject: `SmartAdvisor ${input.action === 'created' ? 'new account' : 'password reset'}: ${input.universityId}`,
-      text: [
-        `SmartAdvisor account ${input.action === 'created' ? 'created' : 'password reset'}.`,
-        '',
-        `Name: ${input.fullName}`,
-        `User ID: ${input.universityId}`,
-        `Role: ${input.role}`,
-        `Temporary password: ${input.password}`,
-        '',
-        'Use this password to log in. The user can change it from their settings after login.',
-      ].join('\n'),
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(errorText || `Resend request failed with ${response.status}`);
-  }
 }
 
 function getSupabaseAdminClient() {
