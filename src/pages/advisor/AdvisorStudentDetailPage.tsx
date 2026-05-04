@@ -23,13 +23,13 @@ export default function AdvisorStudentDetailPage() {
   const { user } = useAuth();
   const {
     courses,
-    currentEvaluations,
     getSelectedCourses,
     getStudentDrafts,
     getStudentTranscriptSemesters,
     getStudentTermMetrics,
     getStudentTranscript,
     isAppDataReady,
+    plannerReviewSnapshots,
     studentInsights,
   } = useAppData();
 
@@ -39,7 +39,7 @@ export default function AdvisorStudentDetailPage() {
   const transcriptRows = getStudentTranscript(studentId);
   const transcriptSemesters = getStudentTranscriptSemesters(studentId);
   const termMetrics = getStudentTermMetrics(studentId);
-  const currentEvaluation = currentEvaluations[studentId] ?? null;
+  const currentEvaluation = plannerReviewSnapshots[studentId] ?? null;
   const [activeTab, setActiveTab] = useState<'overview' | 'transcript' | 'semester-transcript'>('overview');
   const [selectedSemesterTermCode, setSelectedSemesterTermCode] = useState('');
   const [isDraftsOpen, setIsDraftsOpen] = useState(false);

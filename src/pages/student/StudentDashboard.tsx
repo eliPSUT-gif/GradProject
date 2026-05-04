@@ -21,13 +21,13 @@ export default function StudentDashboard() {
   const { user } = useAuth();
   const { getAssignedAdvisorId, isMessagingReady, sendAssistanceRequest } = useMessaging();
   const {
-    currentEvaluations,
     getPlannerTermCode,
     getSelectedCourses,
     getStudentTranscriptSemesters,
     getStudentTermMetrics,
     getStudentTranscript,
     isAppDataReady,
+    plannerReviewSnapshots,
     studentInsights,
   } = useAppData();
 
@@ -38,7 +38,7 @@ export default function StudentDashboard() {
   const transcriptSemesters = getStudentTranscriptSemesters(studentId);
   const termMetrics = getStudentTermMetrics(studentId);
   const plannerTermCode = getPlannerTermCode(studentId);
-  const currentEvaluation = currentEvaluations[studentId] ?? null;
+  const currentEvaluation = plannerReviewSnapshots[studentId] ?? null;
   const profile = studentInsights.find((item) => item.id === studentId);
   const [activeTab, setActiveTab] = useState<'overview' | 'transcript' | 'semester-transcript'>('overview');
   const [selectedSemesterTermCode, setSelectedSemesterTermCode] = useState('');

@@ -193,6 +193,7 @@ interface AppDataContextType {
   modelCoverage: number;
   modelLastCalculatedAt: string;
   modelVersion: string;
+  plannerReviewSnapshots: Record<string, ScheduleEvaluation | null>;
   plannerSelections: Record<string, string[]>;
   plannerTermCodes: Record<string, string>;
   passwordResetInquiries: PasswordResetInquiry[];
@@ -224,6 +225,7 @@ interface AppDataState {
   historicalStats: HistoricalCourseStat[];
   modelLastCalculatedAt: string;
   modelVersion: string;
+  plannerReviewSnapshots: Record<string, ScheduleEvaluation | null>;
   plannerSelections: Record<string, string[]>;
   plannerTermCodes: Record<string, string>;
   passwordResetInquiries: PasswordResetInquiry[];
@@ -404,6 +406,7 @@ const AppDataContext = createContext<AppDataContextType>({
   modelCoverage: 0,
   modelLastCalculatedAt: MODEL_LAST_CALCULATED_AT,
   modelVersion: DEFAULT_MODEL_VERSION,
+  plannerReviewSnapshots: {},
   plannerSelections: {},
   plannerTermCodes: {},
   passwordResetInquiries: [],
@@ -801,6 +804,7 @@ function buildDemoState(): AppDataState {
     historicalStats,
     modelLastCalculatedAt: MODEL_LAST_CALCULATED_AT,
     modelVersion: DEFAULT_MODEL_VERSION,
+    plannerReviewSnapshots: {},
     plannerSelections: {},
     plannerTermCodes: {},
     passwordResetInquiries: [],
@@ -820,6 +824,7 @@ function buildEmptyRemoteState(): AppDataState {
     historicalStats: [],
     modelLastCalculatedAt: MODEL_LAST_CALCULATED_AT,
     modelVersion: DEFAULT_MODEL_VERSION,
+    plannerReviewSnapshots: {},
     plannerSelections: {},
     plannerTermCodes: {},
     passwordResetInquiries: [],
@@ -1146,6 +1151,9 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
   const currentEvaluations = Object.fromEntries(
     [...latestDraftByStudentId.entries()].map(([studentId, draft]) => [studentId, draft.evaluation])
   ) as Record<string, ScheduleEvaluation | null>;
+  const plannerReviewSnapshots = Object.fromEntries(
+    [...latestDraftByStudentId.entries()].map(([studentId, draft]) => [studentId, draft.evaluation])
+  ) as Record<string, ScheduleEvaluation | null>;
 
   const recentEvaluations = [...evaluationByScheduleId.values()].sort(sortEvaluationsNewestFirst);
   const modelVersionSetting = settings.find((setting) => setting.key === 'model_version');
@@ -1202,6 +1210,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     historicalStats,
     modelLastCalculatedAt: latestCalculatedAt,
     modelVersion,
+    plannerReviewSnapshots,
     plannerSelections,
     plannerTermCodes,
     passwordResetInquiries,
@@ -1546,6 +1555,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           ...current.currentEvaluations,
           [studentId]: nextEvaluation,
         },
+        plannerReviewSnapshots: {
+          ...current.plannerReviewSnapshots,
+          [studentId]: nextEvaluation,
+        },
         recentEvaluations: nextEvaluation
           ? [nextEvaluation, ...current.recentEvaluations.filter((item) => item.id !== nextEvaluation.id)].sort(sortEvaluationsNewestFirst)
           : current.recentEvaluations,
@@ -1585,6 +1598,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         },
         currentEvaluations: {
           ...current.currentEvaluations,
+          [studentId]: draft.evaluation,
+        },
+        plannerReviewSnapshots: {
+          ...current.plannerReviewSnapshots,
           [studentId]: draft.evaluation,
         },
       }));
@@ -1628,6 +1645,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         ...current,
         currentEvaluations: {
           ...current.currentEvaluations,
+          [studentId]: nextEvaluation,
+        },
+        plannerReviewSnapshots: {
+          ...current.plannerReviewSnapshots,
           [studentId]: nextEvaluation,
         },
         recentEvaluations: [nextEvaluation, ...current.recentEvaluations.filter((item) => item.id !== nextEvaluation.id)].sort(sortEvaluationsNewestFirst),
@@ -2343,6 +2364,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       modelCoverage: getCourseCoverage(state.courses),
       modelLastCalculatedAt: state.modelLastCalculatedAt,
       modelVersion: state.modelVersion,
+      plannerReviewSnapshots: state.plannerReviewSnapshots,
       plannerSelections: state.plannerSelections,
       plannerTermCodes: state.plannerTermCodes,
       passwordResetInquiries: state.passwordResetInquiries,
@@ -2389,6 +2411,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       state.historicalStats,
       state.modelLastCalculatedAt,
       state.modelVersion,
+      state.plannerReviewSnapshots,
       state.plannerSelections,
       state.plannerTermCodes,
       state.passwordResetInquiries,

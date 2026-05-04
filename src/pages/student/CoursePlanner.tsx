@@ -25,7 +25,6 @@ export default function CoursePlanner() {
   const {
     clearSelection,
     courses,
-    currentEvaluations,
     deleteScheduleDraft,
     getCoursePrerequisitesWithGrades,
     getCourseSelectionState,
@@ -36,6 +35,7 @@ export default function CoursePlanner() {
     getTermCreditLimit,
     isAppDataReady,
     loadScheduleDraft,
+    plannerReviewSnapshots,
     plannerSelections,
     requestPlannerAnalysis,
     saveScheduleDraft,
@@ -45,7 +45,7 @@ export default function CoursePlanner() {
   const studentId = user?.id ?? '';
   const selectedCourses = getSelectedCourses(studentId);
   const savedDrafts = getStudentDrafts(studentId);
-  const analysisResult = currentEvaluations[studentId] ?? null;
+  const persistedReview = plannerReviewSnapshots[studentId] ?? null;
   const selectedCodes = new Set(plannerSelections[studentId] ?? []);
   const plannerTermCode = getPlannerTermCode(studentId);
   const availableTerms = getStudentAvailableTerms(studentId);
@@ -57,12 +57,30 @@ export default function CoursePlanner() {
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [draftFeedback, setDraftFeedback] = useState<{ tone: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [shouldScrollToResults, setShouldScrollToResults] = useState(false);
-  const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [displayedReview, setDisplayedReview] = useState<DisplayedReview | null>(null);
   const resultsRef = useRef<HTMLElement>(null);
   const deferredSearch = useDeferredValue(search);
   const totalCredits = selectedCourses.reduce((sum, course) => sum + course.credits, 0);
+
+  const displayedReview = useMemo<DisplayedReview | null>(() => {
+    if (!persistedReview) {
+      return null;
+    }
+
+    const reviewedCourseCodes = persistedReview.courseCodes ?? [];
+    const reviewCourses = reviewedCourseCodes
+      .map((code) => courses.find((course) => course.code === code))
+      .filter((course): course is Course => Boolean(course));
+
+    return {
+      evaluation: persistedReview,
+      courses: reviewCourses,
+      termCode: persistedReview.termCode ?? plannerTermCode,
+      totalCredits: persistedReview.totalCredits,
+    };
+  }, [courses, persistedReview, plannerTermCode]);
+
+  const hasAnalyzed = Boolean(displayedReview);
 
   useEffect(() => {
     if (!shouldScrollToResults) return;
@@ -79,26 +97,7 @@ export default function CoursePlanner() {
   }, [shouldScrollToResults, hasAnalyzed, displayedReview]);
 
   useEffect(() => {
-    if (!analysisResult || displayedReview) return;
-    const reviewedCourseCodes = analysisResult.courseCodes ?? [];
-    const reviewCourses = reviewedCourseCodes.length > 0
-      ? reviewedCourseCodes
-          .map((code) => courses.find((course) => course.code === code))
-          .filter((course): course is Course => Boolean(course))
-      : selectedCourses;
-
-    setDisplayedReview({
-      evaluation: analysisResult,
-      courses: reviewCourses,
-      termCode: analysisResult.termCode ?? plannerTermCode,
-      totalCredits: analysisResult.totalCredits,
-    });
-    setHasAnalyzed(true);
-  }, [analysisResult, courses, displayedReview, plannerTermCode, selectedCourses]);
-
-  useEffect(() => {
-    setDisplayedReview(null);
-    setHasAnalyzed(false);
+    setShouldScrollToResults(false);
   }, [studentId]);
 
   const filtered = useMemo(() => {
@@ -129,13 +128,16 @@ export default function CoursePlanner() {
         setPlannerError('Select at least one course before running the AI planner review.');
         return;
       }
-      setDisplayedReview({
-        evaluation,
-        courses: reviewedCourses,
-        termCode: reviewedTermCode,
-        totalCredits: reviewedCredits,
-      });
-      setHasAnalyzed(true);
+      const matchesRequestedReview = reviewedTermCode === (evaluation.termCode ?? reviewedTermCode)
+        && reviewedCredits === evaluation.totalCredits
+        && reviewedCourses.every((course, index) => evaluation.courseCodes?.[index] === course.code);
+
+      if (!matchesRequestedReview) {
+        console.warn('Planner review metadata did not match the analyzed course snapshot.', {
+          requestedCourses: reviewedCourses.map((course) => course.code),
+          reviewedCourseCodes: evaluation.courseCodes,
+        });
+      }
       setShouldScrollToResults(true);
     } catch (error) {
       setPlannerError(error instanceof Error ? error.message : 'Unable to analyze this schedule right now.');
@@ -145,21 +147,7 @@ export default function CoursePlanner() {
   };
 
   const handleViewDraft = (draftId: string) => {
-    const draft = savedDrafts.find((item) => item.id === draftId);
     loadScheduleDraft(studentId, draftId);
-    if (draft) {
-      const draftCourses = draft.courseCodes
-        .map((code) => courses.find((course) => course.code === code))
-        .filter((course): course is Course => Boolean(course));
-
-      setDisplayedReview({
-        evaluation: draft.evaluation,
-        courses: draftCourses,
-        termCode: draft.termCode,
-        totalCredits: draft.evaluation.totalCredits,
-      });
-      setHasAnalyzed(true);
-    }
     setPlannerError(null);
     setDraftFeedback(null);
     setIsDraftsOpen(false);
