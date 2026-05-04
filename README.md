@@ -10,6 +10,8 @@ Create a local `.env.local` from `.env.example` and set:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `SUPABASE_URL` (same value as `VITE_SUPABASE_URL`, used by serverless API routes)
+- `SUPABASE_ANON_KEY` (same value as `VITE_SUPABASE_ANON_KEY`, used by serverless API routes)
 - `VITE_RECAPTCHA_SITE_KEY`
 - `RECAPTCHA_SECRET_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`

@@ -21,7 +21,11 @@ function getSupabaseUserClient(request: VercelRequest) {
   const token = String(request.headers.authorization ?? '').replace(/^Bearer\s+/i, '').trim();
 
   if (!supabaseUrl || !anonKey) {
-    throw new Error('Supabase public environment is not configured.');
+    const missing = [
+      !supabaseUrl ? 'SUPABASE_URL' : null,
+      !anonKey ? 'SUPABASE_ANON_KEY' : null,
+    ].filter(Boolean).join(' and ');
+    throw new Error(`Supabase public environment is not configured. Add ${missing} to Vercel using the same values as VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then redeploy.`);
   }
 
   if (!token) {
