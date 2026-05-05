@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { KeyRound, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
+import { KeyRound, Trash2, UserPlus, Users } from 'lucide-react';
 import { useAppData } from '../../context/AppDataContext';
 import { useAuth, type UserFormInput } from '../../context/AuthContext';
-import type { AdmissionTerm, ManagedUser, Role } from '../../data/courses';
+import type { ManagedUser, Role } from '../../data/courses';
 
 const EMPTY_FORM: UserFormInput = {
   id: '',
@@ -73,24 +73,23 @@ function generateNextUserId(role: Role, users: ManagedUser[], now = new Date()) 
   return `${prefix}-${maxSuffix + 1}`;
 }
 
+function getDefaultSubtitle(role: Role) {
+  if (role === 'student') return 'Student | Computer Science';
+  if (role === 'advisor') return 'Academic Advisor | CS Department';
+  return 'System Administrator';
+}
+
 export default function UserManagementPage() {
   const { deleteUser, resetUserPassword, updateUserStatus, upsertUser, users } = useAuth();
-  const { courses, createStudentAccount } = useAppData();
+  const { createStudentAccount } = useAppData();
   const [form, setForm] = useState<UserFormInput>(EMPTY_FORM);
   const [resettingUserIds, setResettingUserIds] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [passwordToast, setPasswordToast] = useState<string | null>(null);
-  const [enrollmentYear, setEnrollmentYear] = useState(new Date().getFullYear());
-  const [admissionTerm, setAdmissionTerm] = useState<AdmissionTerm>('fall');
-  const [department, setDepartment] = useState('Computer Science');
   const [advisorId, setAdvisorId] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const departments = useMemo(() => {
-    const knownDepartments = [...new Set(courses.map((course) => course.department))].sort();
-    return knownDepartments.length > 0 ? knownDepartments : ['Computer Science'];
-  }, [courses]);
   const advisors = useMemo(
     () => users.filter((account) => account.role === 'advisor' && account.status === 'active'),
     [users]
@@ -124,12 +123,17 @@ export default function UserManagementPage() {
     }
 
     if (isStudentForm) {
+      if (!advisorId) {
+        setError('Select an assigned advisor before creating a student.');
+        return;
+      }
+
       const result = await createStudentAccount({
         id: nextUserId,
         name: form.name,
-        enrollmentYear,
-        admissionTerm,
-        department,
+        enrollmentYear: new Date().getFullYear(),
+        admissionTerm: 'fall',
+        department: 'Computer Science',
         advisorId,
         temporaryPassword: generatedPassword,
       });
@@ -144,12 +148,14 @@ export default function UserManagementPage() {
           : `Student ${result.studentId ?? nextUserId} created successfully and password email sent.`
       );
       setForm(EMPTY_FORM);
+      setAdvisorId('');
       return;
     }
 
     const result = await upsertUser({
       ...form,
       id: nextUserId,
+      subtitle: getDefaultSubtitle(form.role),
       password: generatedPassword,
     });
     if (!result.success) {
@@ -163,6 +169,7 @@ export default function UserManagementPage() {
         : `User ${nextUserId} created successfully and password email sent.`
     );
     setForm(EMPTY_FORM);
+    setAdvisorId('');
   };
 
   const handleGeneratePasswordReset = async (userId: string) => {
@@ -199,12 +206,6 @@ export default function UserManagementPage() {
           <UserPlus className="h-5 w-5 text-[#2563eb]" />
           Add New User
         </h2>
-        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
-          <div className="flex items-start gap-2">
-            <ShieldCheck className="mt-0.5 h-4 w-4 text-blue-600" />
-            <p>IDs and passwords are generated automatically. Generated passwords follow the required uppercase, lowercase, number, and special character rules.</p>
-          </div>
-        </div>
         <div className="space-y-4 text-sm text-gray-700">
           <label className="block">
             Generated user ID
@@ -231,6 +232,9 @@ export default function UserManagementPage() {
                   ...current,
                   role,
                 }));
+                if (role !== 'student') {
+                  setAdvisorId('');
+                }
               }}
               className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
             >
@@ -239,65 +243,21 @@ export default function UserManagementPage() {
               <option value="admin">Admin</option>
             </select>
           </label>
-          <label className="block">
-            Subtitle
-            <input
-              value={form.subtitle}
-              onChange={(event) => setForm((current) => ({ ...current, subtitle: event.target.value }))}
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-            />
-          </label>
           {isStudentForm && (
-            <div className="grid grid-cols-1 gap-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4 md:grid-cols-2">
-              <label className="block">
-                Enrollment year
-                <input
-                  type="number"
-                  min="2000"
-                  max="2100"
-                  value={enrollmentYear}
-                  onChange={(event) => setEnrollmentYear(Number(event.target.value))}
-                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-                />
-              </label>
-              <label className="block">
-                Admission semester
-                <select
-                  value={admissionTerm}
-                  onChange={(event) => setAdmissionTerm(event.target.value as AdmissionTerm)}
-                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 capitalize focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-                >
-                  <option value="fall">Fall</option>
-                  <option value="spring">Spring</option>
-                  <option value="summer">Summer</option>
-                </select>
-              </label>
-              <label className="block">
-                Department
-                <select
-                  value={department}
-                  onChange={(event) => setDepartment(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-                >
-                  {departments.map((item) => (
-                    <option key={item} value={item}>{item}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                Assigned advisor
-                <select
-                  value={advisorId}
-                  onChange={(event) => setAdvisorId(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-                >
-                  <option value="">No advisor selected</option>
-                  {advisors.map((advisor) => (
-                    <option key={advisor.id} value={advisor.id}>{advisor.name}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            <label className="block">
+              Assigned advisor
+              <select
+                required
+                value={advisorId}
+                onChange={(event) => setAdvisorId(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+              >
+                <option value="" disabled>Select an advisor</option>
+                {advisors.map((advisor) => (
+                  <option key={advisor.id} value={advisor.id}>{advisor.name}</option>
+                ))}
+              </select>
+            </label>
           )}
         </div>
 
