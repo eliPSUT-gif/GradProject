@@ -35,6 +35,28 @@ function parseGradeValue(value: string) {
   return Number(trimmed);
 }
 
+function clampGradeInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const numericValue = Number(trimmed);
+  if (!Number.isFinite(numericValue)) {
+    return value;
+  }
+
+  if (numericValue < 35) {
+    return '35';
+  }
+
+  if (numericValue > 99) {
+    return '99';
+  }
+
+  return trimmed;
+}
+
 function getStatusFromGrade(finalGrade: number | null): TranscriptEntryInput['status'] {
   if (finalGrade === null) {
     return 'in_progress';
@@ -118,8 +140,8 @@ export default function AdminStudentTranscriptPage() {
   const validationErrors = transcriptRows.flatMap((row) => {
     const draft = getDraftForRow(row);
     const finalGrade = parseGradeValue(draft.finalGrade);
-    if (draft.finalGrade.trim() && (!Number.isFinite(finalGrade) || finalGrade === null || finalGrade < 0 || finalGrade > 100)) {
-      return [`${row.courseCode} needs a mark from 0 to 100, or a blank mark.`];
+    if (draft.finalGrade.trim() && (!Number.isFinite(finalGrade) || finalGrade === null || finalGrade < 35 || finalGrade > 99)) {
+      return [`${row.courseCode} needs a mark from 35 to 99, or a blank mark.`];
     }
 
     return [];
@@ -272,16 +294,26 @@ export default function AdminStudentTranscriptPage() {
                             <td className="px-4 py-3">
                               <input
                                 type="number"
-                                min="0"
-                                max="100"
+                                min="35"
+                                max="99"
                                 step="0.01"
                                 value={draft.finalGrade}
                                 onChange={(event) => setDraftRows((current) => ({
                                   ...current,
-                                  [key]: { ...draft, finalGrade: event.target.value },
+                                  [key]: { ...draft, finalGrade: clampGradeInput(event.target.value) },
                                 }))}
                                 className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
                               />
+                              <button
+                                type="button"
+                                onClick={() => setDraftRows((current) => ({
+                                  ...current,
+                                  [key]: { ...draft, finalGrade: '' },
+                                }))}
+                                className="mt-2 text-xs font-semibold text-gray-500 transition-colors hover:text-[#2563eb]"
+                              >
+                                Clear grade
+                              </button>
                             </td>
                             <td className="px-4 py-3 text-center">
                               <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${getStatusClass(parsedGrade)}`}>
