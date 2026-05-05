@@ -913,16 +913,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsers((current) => current.filter((account) => account.id !== userId));
 
     if (hasSupabaseConfig()) {
-      void supabaseDelete('app_users', `university_id=eq.${encodeURIComponent(userId)}`).catch((error) => {
-        console.error('Unable to delete Supabase user.', error);
-      });
+      void (async () => {
+        try {
+          await callAdminAuthEndpoint('/api/admin-delete-user', { universityId: userId });
+          await syncUsersFromSupabase();
+        } catch (error) {
+          console.error('Unable to delete Supabase auth user through admin endpoint.', error);
+          await supabaseDelete('app_users', `university_id=eq.${encodeURIComponent(userId)}`).catch((deleteError) => {
+            console.error('Unable to delete Supabase user.', deleteError);
+          });
+        }
+      })();
     }
 
     if (user?.id === userId) {
       setUser(null);
       setRememberSession(false);
     }
-  }, [user?.id]);
+  }, [syncUsersFromSupabase, user?.id]);
 
   const resetUserPassword = useCallback(
     async (userId: string, nextPassword: string): Promise<PasswordChangeResult> => {

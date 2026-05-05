@@ -54,6 +54,33 @@ async function requireAdmin(request: VercelRequest, supabase: ReturnType<typeof 
   }
 }
 
+async function findAuthUserIdByEmail(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  email: string
+) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const perPage = 1000;
+
+  for (let page = 1; page <= 10; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+    if (error) {
+      throw error;
+    }
+
+    const users = data.users as Array<{ id: string; email?: string | null }>;
+    const foundUser = users.find((item) => item.email?.toLowerCase() === normalizedEmail);
+    if (foundUser) {
+      return foundUser.id;
+    }
+
+    if (users.length < perPage) {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== 'POST') {
     response.status(405).json({ success: false, error: 'Method not allowed.' });
@@ -100,7 +127,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       .eq('university_id', universityId)
       .maybeSingle();
 
-    let authUserId = existingAppUser?.auth_user_id ?? null;
+    let authUserId = existingAppUser?.auth_user_id ?? await findAuthUserIdByEmail(supabase, email);
     if (authUserId) {
       const { error } = await supabase.auth.admin.updateUserById(authUserId, {
         email,
