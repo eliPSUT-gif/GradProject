@@ -39,6 +39,7 @@ import {
   type TermType,
 } from '../data/courses';
 import {
+  getSupabaseSession,
   hasSupabaseConfig,
   supabaseDelete,
   supabaseInsert,
@@ -53,6 +54,35 @@ import { PASSWORD_INQUIRY_MESSAGE_PREFIX } from '../constants/messaging';
 
 type PlannerActionResult = { success: boolean; error?: string; warning?: string };
 type PasswordInquiryRole = Extract<Role, 'student' | 'advisor'>;
+
+async function callAdminDataEndpoint<T = { warning?: string }>(path: string, payload: unknown) {
+  const {
+    data: { session },
+  } = await getSupabaseSession();
+
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session?.access_token ?? ''}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseText = await response.text();
+  let body: ({ error?: string } & T) | null = null;
+  try {
+    body = responseText ? JSON.parse(responseText) as ({ error?: string } & T) : null;
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(body?.error ?? (responseText.trim() || `Admin data request failed with ${response.status}`));
+  }
+
+  return body;
+}
 
 interface CourseFormInput {
   code: string;
@@ -2145,30 +2175,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     ]));
 
     if (hasSupabaseConfig()) {
-      const studentAppUserId = users.find((account) => account.id === normalizedInput.studentId)?.appUserId;
       try {
-        const courseRows = await supabaseSelect<CourseRow[]>(
-          'courses',
-          `select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis&course_code=eq.${encodeURIComponent(course.code)}&limit=1`
-        );
-        const courseId = courseRows[0]?.id;
-        if (studentAppUserId && courseId) {
-          const payload = {
-            id: entryId,
-            student_id: studentAppUserId,
-            term_code: normalizedInput.termCode,
-            course_id: courseId,
-            final_grade: normalizedInput.finalGrade,
-            status: normalizedStatus,
-            attempt_no: normalizedInput.attemptNo,
-          };
-
-          if (normalizedInput.id) {
-            await supabasePatch('student_transcript_entries', `id=eq.${encodeURIComponent(normalizedInput.id)}`, payload);
-          } else {
-            await supabaseInsert('student_transcript_entries', payload);
-          }
-        }
+        await callAdminDataEndpoint('/api/admin-upsert-transcript-entry', {
+          id: entryId,
+          studentId: normalizedInput.studentId,
+          termCode: normalizedInput.termCode,
+          courseCode: normalizedInput.courseCode,
+          finalGrade: normalizedInput.finalGrade,
+          status: normalizedStatus,
+          attemptNo: normalizedInput.attemptNo,
+        });
       } catch (error) {
         return {
           success: false,
