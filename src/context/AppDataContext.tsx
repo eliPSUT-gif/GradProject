@@ -2178,6 +2178,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       try {
         await callAdminDataEndpoint('/api/admin-upsert-transcript-entry', {
           id: entryId,
+          existingEntry: Boolean(normalizedInput.id),
           studentId: normalizedInput.studentId,
           termCode: normalizedInput.termCode,
           courseCode: normalizedInput.courseCode,

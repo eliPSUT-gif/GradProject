@@ -5,6 +5,7 @@ type TranscriptStatus = 'passed' | 'failed' | 'withdrawn' | 'in_progress';
 
 interface TranscriptEntryPayload {
   id?: string;
+  existingEntry?: boolean;
   studentId?: string;
   termCode?: string;
   courseCode?: string;
@@ -27,6 +28,18 @@ function getSupabaseAdminClient() {
       persistSession: false,
     },
   });
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+
+  return fallback;
 }
 
 async function requireAdmin(request: VercelRequest, supabase: ReturnType<typeof getSupabaseAdminClient>) {
@@ -87,6 +100,7 @@ function validatePayload(payload: TranscriptEntryPayload) {
   return {
     input: {
       id: payload.id ? String(payload.id) : undefined,
+      existingEntry: payload.existingEntry === true,
       studentId,
       termCode,
       courseCode,
@@ -158,7 +172,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       attempt_no: input.attemptNo,
     };
 
-    const query = input.id
+    const query = input.existingEntry && input.id
       ? supabase
           .from('student_transcript_entries')
           .update(transcriptPayload)
@@ -181,7 +195,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     console.error('Admin transcript upsert failed.', error);
     response.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unable to save transcript entry.',
+      error: getErrorMessage(error, 'Unable to save transcript entry.'),
     });
   }
 }
