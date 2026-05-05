@@ -2101,45 +2101,40 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return { success: true };
     }
 
-    setState((current) => syncDerivedTranscriptState(current, [...current.transcriptRows, ...rowsToCreate]));
-
     if (hasSupabaseConfig()) {
-      const studentAppUserId = users.find((account) => account.id === studentId)?.appUserId;
-      if (studentAppUserId) {
-        try {
-          const courseRows = await supabaseSelect<CourseRow[]>(
-            'courses',
-            `select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis&course_code=in.(${rowsToCreate.map((row) => encodeURIComponent(row.courseCode)).join(',')})`
-          );
-          const courseIdByCode = new Map(courseRows.map((course) => [course.course_code, course.id]));
-          await supabaseInsert(
-            'student_transcript_entries',
-            rowsToCreate.flatMap((row) => {
-              const courseId = courseIdByCode.get(row.courseCode);
-              return courseId
-                ? [{
-                    id: row.id,
-                    student_id: studentAppUserId,
-                    term_code: row.termCode,
-                    course_id: courseId,
-                    final_grade: null,
-                    status: 'in_progress',
-                    attempt_no: row.attemptNo,
-                  }]
-                : [];
-            })
-          );
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unable to create transcript sheet.',
-          };
+      try {
+        const savedRows: StudentTranscriptRow[] = [];
+        for (const row of rowsToCreate) {
+          const result = await callAdminDataEndpoint<{ id?: string }>('/api/admin-upsert-transcript-entry', {
+            id: row.id,
+            existingEntry: false,
+            studentId: row.studentId,
+            termCode: row.termCode,
+            courseCode: row.courseCode,
+            finalGrade: row.finalGrade,
+            status: row.status,
+            attemptNo: row.attemptNo,
+          });
+
+          savedRows.push({
+            ...row,
+            id: result?.id ?? row.id,
+          });
         }
+
+        setState((current) => syncDerivedTranscriptState(current, [...current.transcriptRows, ...savedRows]));
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unable to create transcript sheet.',
+        };
       }
+    } else {
+      setState((current) => syncDerivedTranscriptState(current, [...current.transcriptRows, ...rowsToCreate]));
     }
 
     return { success: true };
-  }, [getStudentDrafts, state.courses, state.transcriptRows, users]);
+  }, [getStudentDrafts, state.courses, state.transcriptRows]);
 
   const upsertTranscriptEntry = useCallback(async (input: TranscriptEntryInput): Promise<PlannerActionResult> => {
     const normalizedStatus = getTranscriptStatusForGrade(input.finalGrade, input.status);
@@ -2154,7 +2149,29 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return { success: false, error: 'Course was not found.' };
     }
 
-    const entryId = normalizedInput.id ?? createId('transcript');
+    let entryId = normalizedInput.id ?? createId('transcript');
+
+    if (hasSupabaseConfig()) {
+      try {
+        const result = await callAdminDataEndpoint<{ id?: string }>('/api/admin-upsert-transcript-entry', {
+          id: entryId,
+          existingEntry: Boolean(normalizedInput.id),
+          studentId: normalizedInput.studentId,
+          termCode: normalizedInput.termCode,
+          courseCode: normalizedInput.courseCode,
+          finalGrade: normalizedInput.finalGrade,
+          status: normalizedStatus,
+          attemptNo: normalizedInput.attemptNo,
+        });
+        entryId = result?.id ?? entryId;
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unable to save transcript entry.',
+        };
+      }
+    }
+
     const nextRow = {
       id: entryId,
       studentId: normalizedInput.studentId,
@@ -2174,28 +2191,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       nextRow,
     ]));
 
-    if (hasSupabaseConfig()) {
-      try {
-        await callAdminDataEndpoint('/api/admin-upsert-transcript-entry', {
-          id: entryId,
-          existingEntry: Boolean(normalizedInput.id),
-          studentId: normalizedInput.studentId,
-          termCode: normalizedInput.termCode,
-          courseCode: normalizedInput.courseCode,
-          finalGrade: normalizedInput.finalGrade,
-          status: normalizedStatus,
-          attemptNo: normalizedInput.attemptNo,
-        });
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unable to save transcript entry.',
-        };
-      }
-    }
-
     return { success: true };
-  }, [state.courses, state.transcriptRows, users, validateTranscriptInput]);
+  }, [state.courses, state.transcriptRows, validateTranscriptInput]);
 
   const deleteTranscriptEntry = useCallback(async (entryId: string): Promise<PlannerActionResult> => {
     setState((current) => syncDerivedTranscriptState(

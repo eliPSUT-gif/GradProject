@@ -59,7 +59,7 @@ export interface StudentInsight extends StudentProfile { difficulty: number; sta
 export interface SelectionStatus { eligible: boolean; reasons: string[]; wouldExceedCredits: boolean; }
 
 export const DEFAULT_MODEL_VERSION = 'internet-weighted-v2.0.0';
-export const PLANNER_AI_PLACEHOLDER_MODEL_VERSION = 'planner-ai-placeholder-v1';
+export const PLANNER_LOCAL_FALLBACK_MODEL_VERSION = 'planner-local-fallback-v1';
 export const MODEL_LAST_CALCULATED_AT = '2026-03-13T10:30:00.000Z';
 export const MAX_SEMESTER_CREDITS = 18;
 export const MAX_SUMMER_CREDITS = 9;
@@ -437,13 +437,10 @@ export function buildMockPlannerAiEvaluation(studentId: string, selectedCourses:
   if (totalCredits > 15) recommendations.push({ id: createId('rec', `${studentId}-credits`), title: 'Reduce total credits', reason: 'The total load is acting as a pressure multiplier.', action: 'Move one 3-credit course to the next term if possible.', expectedImpact: `Estimated AI score reduction: ${Math.round(creditPenalty * 0.7)} points.`, impactDelta: Math.round(creditPenalty * 0.7) });
   if (theoryCourses > practicalCourses + hybridCourses) recommendations.push({ id: createId('rec', `${studentId}-balance`), title: 'Rebalance course types', reason: 'The current draft is theory-heavy.', action: 'Swap one theory-heavy course for a practical or hybrid option if available.', expectedImpact: 'Expected impact: smoother weekly workload.', impactDelta: 6 });
   if (recommendations.length === 0) recommendations.push({ id: createId('rec', `${studentId}-keep`), title: 'Schedule is manageable', reason: 'This plan looks balanced across workload, credits, and course mix.', action: 'Keep the draft and review prerequisites before saving.', expectedImpact: 'No immediate balancing action is required.', impactDelta: 0 });
-  return { id: createId('eval', `${studentId}-${evaluatedAt}`), studentId, totalScore, riskLabel, totalCredits, evaluatedAt, modelVersion: PLANNER_AI_PLACEHOLDER_MODEL_VERSION, explanation, factors, recommendations, topCourses: buildTopCourseStrings(selectedCourses), courseCodes: selectedCourses.map((course) => course.code) };
+  return { id: createId('eval', `${studentId}-${evaluatedAt}`), studentId, totalScore, riskLabel, totalCredits, evaluatedAt, modelVersion: PLANNER_LOCAL_FALLBACK_MODEL_VERSION, explanation, factors, recommendations, topCourses: buildTopCourseStrings(selectedCourses), courseCodes: selectedCourses.map((course) => course.code) };
 }
 
 export function evaluateSchedule(studentId: string, selectedCourses: Course[], allCourses: Course[], modelVersion: string, completedCourseCodes: string[] = [], completedCredits = 0, evaluatedAt = new Date().toISOString()): ScheduleEvaluation | null {
-  // TODO: Replace this placeholder builder with a real API request that sends
-  // studentId, selected courses, term context, and transcript context to the
-  // trained planner model, then maps the response into ScheduleEvaluation.
   return buildMockPlannerAiEvaluation(
     studentId,
     selectedCourses,
