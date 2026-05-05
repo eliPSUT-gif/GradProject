@@ -1,21 +1,16 @@
 import { useDeferredValue, useMemo, useState } from 'react';
-import { GraduationCap, KeyRound, Search } from 'lucide-react';
+import { GraduationCap, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppData } from '../../context/AppDataContext';
 import { useAuth } from '../../context/AuthContext';
 
-const DEFAULT_STUDENT_PASSWORD = 'Student@123';
-
 export default function AdminStudentsPage() {
-  const { resetUserPassword, users } = useAuth();
+  const { users } = useAuth();
   const {
     isAppDataReady,
     studentInsights,
   } = useAppData();
   const [search, setSearch] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [resettingStudentId, setResettingStudentId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   const students = useMemo(
@@ -39,22 +34,6 @@ export default function AdminStudentsPage() {
     ));
   }, [deferredSearch, students]);
 
-  const handleResetPassword = async (studentId: string) => {
-    setMessage(null);
-    setError(null);
-    setResettingStudentId(studentId);
-
-    const result = await resetUserPassword(studentId, DEFAULT_STUDENT_PASSWORD);
-    if (!result.success) {
-      setError(result.error ?? 'Unable to reset password.');
-      setResettingStudentId(null);
-      return;
-    }
-
-    setMessage(`Temporary password reset for ${studentId}.`);
-    setResettingStudentId(null);
-  };
-
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -73,9 +52,6 @@ export default function AdminStudentsPage() {
           />
         </div>
       </div>
-
-      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-      {message && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
 
       {!isAppDataReady ? (
         <div className="rounded-lg border border-dashed border-gray-200 p-6 text-sm text-gray-500">
@@ -108,15 +84,6 @@ export default function AdminStudentsPage() {
                     <td className="py-2.5 pr-4 text-center text-gray-600">{insight?.creditsCompleted ?? '-'}</td>
                     <td className="py-2.5 text-right">
                       <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => { void handleResetPassword(student.id); }}
-                          disabled={resettingStudentId === student.id}
-                          className="inline-flex items-center justify-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <KeyRound className="h-3.5 w-3.5" />
-                          {resettingStudentId === student.id ? 'Resetting...' : 'Reset password'}
-                        </button>
                         <Link
                           to={`/app/admin/students/${student.id}/transcript`}
                           className="inline-flex items-center justify-center rounded-lg border border-[#2563eb]/20 bg-[#2563eb]/5 px-3 py-1.5 text-xs font-semibold text-[#2563eb] transition-colors hover:bg-[#2563eb]/10"
