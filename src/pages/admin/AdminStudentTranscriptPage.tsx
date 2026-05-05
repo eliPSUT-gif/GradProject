@@ -122,10 +122,6 @@ export default function AdminStudentTranscriptPage() {
       return [`${row.courseCode} needs a mark from 0 to 100, or a blank mark.`];
     }
 
-    if (!row.id) {
-      return [`${row.courseCode} cannot be saved because its transcript row is missing a database id.`];
-    }
-
     return [];
   });
 
@@ -135,7 +131,7 @@ export default function AdminStudentTranscriptPage() {
       return false;
     }
 
-    return draft.termCode !== row.termCode || parseGradeValue(draft.finalGrade) !== row.finalGrade;
+    return !row.id || draft.termCode !== row.termCode || parseGradeValue(draft.finalGrade) !== row.finalGrade;
   });
   const hasChanges = changedRows.length > 0;
 
