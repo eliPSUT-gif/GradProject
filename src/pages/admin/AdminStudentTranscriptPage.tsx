@@ -15,6 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 
 interface TranscriptDraftRow {
   finalGrade: string;
+  attemptNo: string;
   termCode: string;
 }
 
@@ -27,6 +28,19 @@ function formatGradeValue(value: number | null) {
 }
 
 function parseGradeValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return Number(trimmed);
+}
+
+function formatAttemptValue(value: number | null | undefined) {
+  return value && value > 0 ? String(value) : '';
+}
+
+function parseAttemptValue(value: string) {
   const trimmed = value.trim();
   if (!trimmed) {
     return null;
@@ -111,6 +125,7 @@ export default function AdminStudentTranscriptPage() {
     const key = getDraftKey(row);
     return draftRows[key] ?? {
       finalGrade: formatGradeValue(row.finalGrade),
+      attemptNo: formatAttemptValue(row.attemptNo),
       termCode: row.termCode || termOptions[0]?.termCode || '',
     };
   };
@@ -118,6 +133,7 @@ export default function AdminStudentTranscriptPage() {
   const validationErrors = transcriptRows.flatMap((row) => {
     const draft = getDraftForRow(row);
     const finalGrade = parseGradeValue(draft.finalGrade);
+    const attemptNo = parseAttemptValue(draft.attemptNo);
     if (draft.finalGrade.trim()) {
       if (!/^\d+$/.test(draft.finalGrade.trim())) {
         return [`${row.courseCode} needs a whole-number mark, or a blank mark.`];
@@ -125,6 +141,20 @@ export default function AdminStudentTranscriptPage() {
 
       if (!Number.isInteger(finalGrade) || finalGrade === null || finalGrade < 35 || finalGrade > 99) {
         return [`${row.courseCode} needs a whole-number mark from 35 to 99, or a blank mark.`];
+      }
+
+      if (!draft.attemptNo.trim()) {
+        return [`${row.courseCode} needs an attempt number from 1 to 10 when a mark is entered.`];
+      }
+    }
+
+    if (draft.attemptNo.trim()) {
+      if (!/^\d+$/.test(draft.attemptNo.trim())) {
+        return [`${row.courseCode} needs a whole-number attempt from 1 to 10, or a blank attempt.`];
+      }
+
+      if (!Number.isInteger(attemptNo) || attemptNo === null || attemptNo < 1 || attemptNo > 10) {
+        return [`${row.courseCode} needs a whole-number attempt from 1 to 10, or a blank attempt.`];
       }
     }
 
@@ -137,7 +167,10 @@ export default function AdminStudentTranscriptPage() {
       return false;
     }
 
-    return !row.id || draft.termCode !== row.termCode || parseGradeValue(draft.finalGrade) !== row.finalGrade;
+    return !row.id
+      || draft.termCode !== row.termCode
+      || parseGradeValue(draft.finalGrade) !== row.finalGrade
+      || parseAttemptValue(draft.attemptNo) !== row.attemptNo;
   });
   const hasChanges = changedRows.length > 0;
 
@@ -167,6 +200,7 @@ export default function AdminStudentTranscriptPage() {
     for (const row of changedRows) {
       const draft = draftRows[getDraftKey(row)];
       const finalGrade = parseGradeValue(draft.finalGrade);
+      const attemptNo = parseAttemptValue(draft.attemptNo);
       const result = await upsertTranscriptEntry({
         id: row.id,
         studentId: row.studentId,
@@ -174,7 +208,7 @@ export default function AdminStudentTranscriptPage() {
         courseCode: row.courseCode,
         finalGrade,
         status: getStatusFromGrade(finalGrade),
-        attemptNo: row.attemptNo,
+        attemptNo: attemptNo ?? Math.max(row.attemptNo, 1),
       });
 
       if (!result.success) {
@@ -260,7 +294,21 @@ export default function AdminStudentTranscriptPage() {
                             <td className="px-4 py-3 font-mono font-semibold text-[#0f1e3c]">{row.courseCode}</td>
                             <td className="min-w-56 px-4 py-3 text-gray-700">{row.courseName}</td>
                             <td className="px-4 py-3 text-center text-gray-600">{row.credits}</td>
-                            <td className="px-4 py-3 text-center text-gray-600">{row.attemptNo}</td>
+                            <td className="px-4 py-3 text-center">
+                              <input
+                                type="number"
+                                min="1"
+                                max="10"
+                                step="1"
+                                inputMode="numeric"
+                                value={draft.attemptNo}
+                                onChange={(event) => setDraftRows((current) => ({
+                                  ...current,
+                                  [key]: { ...draft, attemptNo: event.target.value },
+                                }))}
+                                className="w-20 rounded-lg border border-gray-200 px-3 py-2 text-center text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+                              />
+                            </td>
                             <td className="px-4 py-3">
                               <select
                                 value={draft.termCode}
