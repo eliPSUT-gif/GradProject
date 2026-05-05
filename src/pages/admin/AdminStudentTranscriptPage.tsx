@@ -35,28 +35,6 @@ function parseGradeValue(value: string) {
   return Number(trimmed);
 }
 
-function clampGradeInput(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return '';
-  }
-
-  const numericValue = Number(trimmed);
-  if (!Number.isFinite(numericValue)) {
-    return value;
-  }
-
-  if (numericValue < 35) {
-    return '35';
-  }
-
-  if (numericValue > 99) {
-    return '99';
-  }
-
-  return trimmed;
-}
-
 function getStatusFromGrade(finalGrade: number | null): TranscriptEntryInput['status'] {
   if (finalGrade === null) {
     return 'in_progress';
@@ -140,8 +118,14 @@ export default function AdminStudentTranscriptPage() {
   const validationErrors = transcriptRows.flatMap((row) => {
     const draft = getDraftForRow(row);
     const finalGrade = parseGradeValue(draft.finalGrade);
-    if (draft.finalGrade.trim() && (!Number.isFinite(finalGrade) || finalGrade === null || finalGrade < 35 || finalGrade > 99)) {
-      return [`${row.courseCode} needs a mark from 35 to 99, or a blank mark.`];
+    if (draft.finalGrade.trim()) {
+      if (!/^\d+$/.test(draft.finalGrade.trim())) {
+        return [`${row.courseCode} needs a whole-number mark, or a blank mark.`];
+      }
+
+      if (!Number.isInteger(finalGrade) || finalGrade === null || finalGrade < 35 || finalGrade > 99) {
+        return [`${row.courseCode} needs a whole-number mark from 35 to 99, or a blank mark.`];
+      }
     }
 
     return [];
@@ -296,11 +280,12 @@ export default function AdminStudentTranscriptPage() {
                                 type="number"
                                 min="35"
                                 max="99"
-                                step="0.01"
+                                step="1"
+                                inputMode="numeric"
                                 value={draft.finalGrade}
                                 onChange={(event) => setDraftRows((current) => ({
                                   ...current,
-                                  [key]: { ...draft, finalGrade: clampGradeInput(event.target.value) },
+                                  [key]: { ...draft, finalGrade: event.target.value },
                                 }))}
                                 className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
                               />
