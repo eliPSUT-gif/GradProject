@@ -241,7 +241,7 @@ begin
         scc.final_grade,
         case
           when scc.final_grade is null then 'in_progress'
-          when scc.final_grade >= 60 then 'passed'
+          when scc.final_grade >= 50 then 'passed'
           else 'failed'
         end,
         1,

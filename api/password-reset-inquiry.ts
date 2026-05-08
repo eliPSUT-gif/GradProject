@@ -3,6 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 
 type InquiryRole = 'student' | 'advisor';
 
+interface PasswordResetInquiryRpcResult {
+  id: string;
+  requester_id: string;
+  requester_name: string;
+  requester_role: InquiryRole;
+  status: 'open' | 'resolved';
+  created_at: string;
+  resolved_at: string | null;
+}
+
 function getSupabaseAdminClient() {
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -21,6 +31,10 @@ function getSupabaseAdminClient() {
 
 function isInquiryRole(role: unknown): role is InquiryRole {
   return role === 'student' || role === 'advisor';
+}
+
+function normalizeInquiryResult(result: PasswordResetInquiryRpcResult | PasswordResetInquiryRpcResult[] | null) {
+  return Array.isArray(result) ? result[0] : result;
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -42,60 +56,26 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   try {
     const supabase = getSupabaseAdminClient();
-    const { data: requester, error: requesterError } = await supabase
-      .from('app_users')
-      .select('id,university_id,role,full_name')
-      .eq('university_id', universityId)
-      .eq('role', role)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc('submit_password_reset_inquiry', {
+      p_university_id: universityId,
+      p_requester_role: role,
+    });
 
-    if (requesterError) {
-      throw requesterError;
+    if (error) {
+      throw error;
     }
 
-    if (!requester) {
-      response.status(404).json({ success: false, error: `No ${role} account was found for that ID.` });
-      return;
-    }
-
-    const { data: existingOpen, error: existingError } = await supabase
-      .from('password_reset_inquiries')
-      .select('id,requester_role,status,created_at,resolved_at')
-      .eq('requester_id', requester.id)
-      .eq('status', 'open')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (existingError) {
-      throw existingError;
-    }
-
-    let inquiry = existingOpen;
+    const inquiry = normalizeInquiryResult(data as PasswordResetInquiryRpcResult | PasswordResetInquiryRpcResult[] | null);
     if (!inquiry) {
-      const { data: createdInquiry, error: createError } = await supabase
-        .from('password_reset_inquiries')
-        .insert({
-          requester_id: requester.id,
-          requester_role: role,
-          status: 'open',
-        })
-        .select('id,requester_role,status,created_at,resolved_at')
-        .single();
-
-      if (createError || !createdInquiry) {
-        throw createError ?? new Error('Unable to create password inquiry.');
-      }
-
-      inquiry = createdInquiry;
+      throw new Error('Unable to create password inquiry.');
     }
 
     response.status(200).json({
       success: true,
       inquiry: {
         id: inquiry.id,
-        requesterId: requester.university_id,
-        requesterName: requester.full_name,
+        requesterId: inquiry.requester_id,
+        requesterName: inquiry.requester_name,
         requesterRole: inquiry.requester_role,
         status: inquiry.status,
         createdAt: inquiry.created_at,

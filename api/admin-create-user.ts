@@ -81,6 +81,55 @@ async function findAuthUserIdByEmail(
   return null;
 }
 
+async function ensureRoleProfile(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  appUserId: string,
+  role: Role
+) {
+  if (role === 'student') {
+    return;
+  }
+
+  if (role === 'admin') {
+    const { error } = await supabase
+      .from('admin_profiles')
+      .upsert({ user_id: appUserId }, { onConflict: 'user_id' });
+
+    if (error) {
+      throw error;
+    }
+
+    return;
+  }
+
+  const { data: department, error: departmentError } = await supabase
+    .from('departments')
+    .select('id')
+    .or('code.eq.CS,name.eq.Computer Science')
+    .limit(1)
+    .maybeSingle();
+
+  if (departmentError) {
+    throw departmentError;
+  }
+
+  if (!department?.id) {
+    throw new Error('Computer Science department was not found for advisor profile creation.');
+  }
+
+  const { error } = await supabase
+    .from('advisor_profiles')
+    .upsert({
+      user_id: appUserId,
+      department_id: department.id,
+      office_location: '',
+    }, { onConflict: 'user_id' });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== 'POST') {
     response.status(405).json({ success: false, error: 'Method not allowed.' });
@@ -158,7 +207,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       .map((part) => part[0]?.toUpperCase() ?? '')
       .join('');
 
-    const { error: appUserError } = await supabase
+    const { data: savedAppUser, error: appUserError } = await supabase
       .from('app_users')
       .upsert({
         university_id: universityId,
@@ -169,11 +218,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
         email,
         subtitle,
         status,
-      }, { onConflict: 'university_id' });
+      }, { onConflict: 'university_id' })
+      .select('id')
+      .single();
 
-    if (appUserError) {
+    if (appUserError || !savedAppUser?.id) {
+      if (!appUserError) {
+        throw new Error('App user was saved, but the saved profile ID could not be confirmed.');
+      }
       throw appUserError;
     }
+
+    await ensureRoleProfile(supabase, savedAppUser.id, role);
 
     let warning: string | undefined;
     try {

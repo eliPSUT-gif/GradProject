@@ -70,7 +70,7 @@ function getStatusForGrade(finalGrade: number | null, fallback: TranscriptStatus
     return 'in_progress';
   }
 
-  return finalGrade >= 60 ? 'passed' : 'failed';
+  return finalGrade >= 50 ? 'passed' : 'failed';
 }
 
 function validatePayload(payload: TranscriptEntryPayload) {

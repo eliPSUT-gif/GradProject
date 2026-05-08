@@ -823,7 +823,7 @@ function getTranscriptStatusForGrade(grade: number | null, fallback: TranscriptE
     return 'in_progress';
   }
 
-  return grade >= 60 ? 'passed' : 'failed';
+  return grade >= 50 ? 'passed' : 'failed';
 }
 
 function buildDemoState(): AppDataState {

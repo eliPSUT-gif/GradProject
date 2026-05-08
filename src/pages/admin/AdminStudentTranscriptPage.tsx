@@ -54,7 +54,7 @@ function getStatusFromGrade(finalGrade: number | null): TranscriptEntryInput['st
     return 'in_progress';
   }
 
-  return finalGrade >= 60 ? 'passed' : 'failed';
+  return finalGrade >= 50 ? 'passed' : 'failed';
 }
 
 function getStatusLabel(finalGrade: number | null) {
@@ -62,7 +62,7 @@ function getStatusLabel(finalGrade: number | null) {
     return 'In progress';
   }
 
-  return finalGrade >= 60 ? 'Passed' : 'Failed';
+  return finalGrade >= 50 ? 'Passed' : 'Failed';
 }
 
 function getStatusClass(finalGrade: number | null) {
@@ -70,7 +70,7 @@ function getStatusClass(finalGrade: number | null) {
     return 'bg-blue-50 text-blue-700';
   }
 
-  return finalGrade >= 60 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
+  return finalGrade >= 50 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
 }
 
 function getAdvisor(student: ManagedUser | undefined, users: ManagedUser[], rows: ReturnType<typeof useAppData>['studentInsights']) {
