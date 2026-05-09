@@ -81,12 +81,23 @@ returns text
 language sql
 immutable
 as $$
-  select case lower(split_part(coalesce(term_code, ''), '-', 2))
-    when 'fall' then 'fall'
-    when 'spring' then 'spring'
-    when 'summer' then 'summer'
+  select case
+    when lower(coalesce(term_code, '')) like '%summer%' then 'summer'
+    when lower(coalesce(term_code, '')) like '%spring%' then 'spring'
+    when lower(coalesce(term_code, '')) like '%fall%' then 'fall'
     else 'fall'
   end
+$$;
+
+create or replace function public.academic_year_from_term_code(term_code text)
+returns integer
+language sql
+immutable
+as $$
+  select coalesce(
+    substring(coalesce(term_code, '') from '([0-9]{4})')::integer,
+    extract(year from timezone('utc', now()))::integer
+  )
 $$;
 
 create or replace function public.infer_student_admission_year(student_user_id uuid)
@@ -150,7 +161,7 @@ end $$;
 insert into public.academic_terms (term_code, academic_year, term_name, term_type, max_credits)
 select distinct
   source.term_code,
-  coalesce(nullif(split_part(source.term_code, '-', 1), '')::integer, extract(year from timezone('utc', now()))::integer),
+  public.academic_year_from_term_code(source.term_code),
   public.term_name_from_code(source.term_code),
   public.term_type_from_term_name(public.term_name_from_code(source.term_code)),
   case
@@ -168,7 +179,7 @@ on conflict (term_code) do nothing;
 insert into public.academic_terms (term_code, academic_year, term_name, term_type, max_credits)
 select distinct
   source.term_code,
-  coalesce(nullif(split_part(source.term_code, '-', 1), '')::integer, extract(year from timezone('utc', now()))::integer),
+  public.academic_year_from_term_code(source.term_code),
   public.term_name_from_code(source.term_code),
   public.term_type_from_term_name(public.term_name_from_code(source.term_code)),
   case
