@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -64,20 +64,6 @@ export default function StudentDashboard() {
   const selectedSemester = transcriptSemesters.find((semester) => semester.termCode === selectedSemesterTermCode)
     ?? transcriptSemesters[0]
     ?? null;
-
-  useEffect(() => {
-    if (
-      transcriptSemesters.length > 0
-      && !transcriptSemesters.some((semester) => semester.termCode === selectedSemesterTermCode)
-    ) {
-      setSelectedSemesterTermCode(transcriptSemesters[0].termCode);
-      return;
-    }
-
-    if (transcriptSemesters.length === 0 && selectedSemesterTermCode) {
-      setSelectedSemesterTermCode('');
-    }
-  }, [selectedSemesterTermCode, transcriptSemesters]);
 
   const kpis = [
     {

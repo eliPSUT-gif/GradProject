@@ -84,20 +84,6 @@ async function callAdminDataEndpoint<T = { warning?: string }>(path: string, pay
   return body;
 }
 
-interface CourseFormInput {
-  code: string;
-  name: string;
-  department: string;
-  type: Course['type'];
-  credits: number;
-  prerequisites: string[];
-  passRate: number;
-  failRate: number;
-  avgGrade: number;
-  enrollmentCount: number;
-  withdrawals: number;
-}
-
 export interface StudentTranscriptRow {
   id?: string;
   studentId: string;
@@ -200,9 +186,7 @@ function normalizeEmbeddedMessageSender(row: PasswordResetInquiryMessageRow) {
 interface AppDataContextType {
   analyzeSchedule: (studentId: string) => Promise<ScheduleEvaluation | null>;
   clearSelection: (studentId: string) => void;
-  assignAdvisor: (studentId: string, advisorId: string) => Promise<PlannerActionResult>;
   createStudentAccount: (input: StudentAccountInput) => Promise<PlannerActionResult & { studentId?: string }>;
-  createTranscriptFromDraft: (studentId: string, termCode: string) => Promise<PlannerActionResult>;
   courses: Course[];
   currentEvaluations: Record<string, ScheduleEvaluation | null>;
   deleteScheduleDraft: (draftId: string) => void;
@@ -218,7 +202,6 @@ interface AppDataContextType {
   getTermCreditLimit: (studentId: string) => number;
   historicalStats: HistoricalCourseStat[];
   isAppDataReady: boolean;
-  deleteTranscriptEntry: (entryId: string) => Promise<PlannerActionResult>;
   loadScheduleDraft: (studentId: string, draftId: string) => void;
   modelCoverage: number;
   modelLastCalculatedAt: string;
@@ -239,7 +222,6 @@ interface AppDataContextType {
   resolvePasswordResetInquiry: (inquiryId: string) => Promise<PlannerActionResult>;
   updateCourseDifficulty: (courseCode: string, difficultyScore: number) => Promise<PlannerActionResult>;
   upsertTranscriptEntry: (input: TranscriptEntryInput) => Promise<PlannerActionResult>;
-  upsertCourse: (input: CourseFormInput) => void;
 }
 
 interface AppDataState {
@@ -414,12 +396,9 @@ const AUTO_REVIEW_DRAFT_NAME = 'Latest AI Schedule Review';
 const AppDataContext = createContext<AppDataContextType>({
   analyzeSchedule: async () => null,
   clearSelection: () => {},
-  assignAdvisor: async () => ({ success: false, error: 'App data is not ready.' }),
   createStudentAccount: async () => ({ success: false, error: 'App data is not ready.' }),
-  createTranscriptFromDraft: async () => ({ success: false, error: 'App data is not ready.' }),
   courses: [],
   currentEvaluations: {},
-  deleteTranscriptEntry: async () => ({ success: false, error: 'App data is not ready.' }),
   deleteScheduleDraft: () => {},
   getCourseSelectionState: () => EMPTY_SELECTION_STATUS,
   getCoursePrerequisitesWithGrades: () => [],
@@ -453,10 +432,9 @@ const AppDataContext = createContext<AppDataContextType>({
   resolvePasswordResetInquiry: async () => ({ success: false, error: 'App data is not ready.' }),
   updateCourseDifficulty: async () => ({ success: false, error: 'App data is not ready.' }),
   upsertTranscriptEntry: async () => ({ success: false, error: 'App data is not ready.' }),
-  upsertCourse: () => {},
 });
 
-function createId(_prefix: string) {
+function createId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
   }
@@ -1593,8 +1571,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
 
       const now = new Date().toISOString();
-      const draftId = createId('draft');
-      const evaluationId = createId('eval');
+      const draftId = createId();
+      const evaluationId = createId();
       nextEvaluation = {
         ...nextEvaluation,
         id: evaluationId,
@@ -1663,7 +1641,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               .map((code) => courseIdByCode.get(code))
               .filter(Boolean)
               .map((courseId) => ({
-                id: createId('draft-course'),
+                id: createId(),
                 schedule_id: draftId,
                 course_id: courseId,
               }));
@@ -1768,8 +1746,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
 
       const now = new Date().toISOString();
-      const draftId = createId('draft');
-      const evaluationId = createId('eval');
+      const draftId = createId();
+      const evaluationId = createId();
       const nextEvaluation = {
         ...evaluation,
         id: evaluationId,
@@ -1828,7 +1806,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               .map((code) => courseIdByCode.get(code))
               .filter(Boolean)
               .map((courseId) => ({
-                id: createId('draft-course'),
+                id: createId(),
                 schedule_id: draftId,
                 course_id: courseId,
               }));
@@ -1895,38 +1873,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       });
     }
   }, []);
-
-  const assignAdvisor = useCallback(async (studentId: string, advisorId: string): Promise<PlannerActionResult> => {
-    if (!users.some((account) => account.id === advisorId && account.role === 'advisor')) {
-      return { success: false, error: 'Advisor account was not found.' };
-    }
-
-    setState((current) => ({
-      ...current,
-      studentProfiles: current.studentProfiles.map((profile) =>
-        profile.id === studentId ? { ...profile, advisorId } : profile
-      ),
-    }));
-
-    if (hasSupabaseConfig()) {
-      const studentAppUserId = users.find((account) => account.id === studentId)?.appUserId;
-      const advisorAppUserId = users.find((account) => account.id === advisorId)?.appUserId;
-      if (studentAppUserId && advisorAppUserId) {
-        try {
-          await supabasePatch('student_profiles', `user_id=eq.${encodeURIComponent(studentAppUserId)}`, {
-            advisor_id: advisorAppUserId,
-          });
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unable to assign advisor.',
-          };
-        }
-      }
-    }
-
-    return { success: true };
-  }, [users]);
 
   const createStudentAccount = useCallback(async (input: StudentAccountInput): Promise<PlannerActionResult & { studentId?: string }> => {
     const userInput: UserFormInput = {
@@ -2066,76 +2012,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return null;
   }, [state.courses]);
 
-  const createTranscriptFromDraft = useCallback(async (studentId: string, termCode: string): Promise<PlannerActionResult> => {
-    const draft = getStudentDrafts(studentId).find((item) => item.termCode === termCode);
-    if (!draft) {
-      return { success: false, error: 'No saved course plan exists for this student and semester.' };
-    }
-
-    const draftCourses = state.courses.filter((course) => draft.courseCodes.includes(course.code));
-    const totalHours = draftCourses.reduce((sum, course) => sum + course.credits, 0);
-    const termLimit = getCreditLimitForTermCode(termCode);
-    if (totalHours > termLimit) {
-      return { success: false, error: `${formatTermLabel(termCode)} cannot exceed ${termLimit} hours.` };
-    }
-
-    const existingRows = state.transcriptRows.filter((row) => row.studentId === studentId && row.termCode === termCode);
-    const existingCourseCodes = new Set(existingRows.map((row) => row.courseCode));
-    const rowsToCreate = draftCourses
-      .filter((course) => !existingCourseCodes.has(course.code))
-      .map((course) => ({
-        id: createId('transcript'),
-        studentId,
-        termCode,
-        termLabel: formatTermLabel(termCode),
-        termType: /summer/i.test(termCode) ? 'summer' : 'regular',
-        courseCode: course.code,
-        courseName: course.name,
-        credits: course.credits,
-        finalGrade: null,
-        status: 'in_progress',
-        attemptNo: 1,
-      }) satisfies StudentTranscriptRow);
-
-    if (rowsToCreate.length === 0) {
-      return { success: true };
-    }
-
-    if (hasSupabaseConfig()) {
-      try {
-        const savedRows: StudentTranscriptRow[] = [];
-        for (const row of rowsToCreate) {
-          const result = await callAdminDataEndpoint<{ id?: string }>('/api/admin-upsert-transcript-entry', {
-            id: row.id,
-            existingEntry: false,
-            studentId: row.studentId,
-            termCode: row.termCode,
-            courseCode: row.courseCode,
-            finalGrade: row.finalGrade,
-            status: row.status,
-            attemptNo: row.attemptNo,
-          });
-
-          savedRows.push({
-            ...row,
-            id: result?.id ?? row.id,
-          });
-        }
-
-        setState((current) => syncDerivedTranscriptState(current, [...current.transcriptRows, ...savedRows]));
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unable to create transcript sheet.',
-        };
-      }
-    } else {
-      setState((current) => syncDerivedTranscriptState(current, [...current.transcriptRows, ...rowsToCreate]));
-    }
-
-    return { success: true };
-  }, [getStudentDrafts, state.courses, state.transcriptRows]);
-
   const upsertTranscriptEntry = useCallback(async (input: TranscriptEntryInput): Promise<PlannerActionResult> => {
     const normalizedStatus = getTranscriptStatusForGrade(input.finalGrade, input.status);
     const normalizedInput = { ...input, status: normalizedStatus } satisfies TranscriptEntryInput;
@@ -2149,7 +2025,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return { success: false, error: 'Course was not found.' };
     }
 
-    let entryId = normalizedInput.id ?? createId('transcript');
+    let entryId = normalizedInput.id ?? createId();
 
     if (hasSupabaseConfig()) {
       try {
@@ -2193,26 +2069,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
     return { success: true };
   }, [state.courses, state.transcriptRows, validateTranscriptInput]);
-
-  const deleteTranscriptEntry = useCallback(async (entryId: string): Promise<PlannerActionResult> => {
-    setState((current) => syncDerivedTranscriptState(
-      current,
-      current.transcriptRows.filter((row) => row.id !== entryId)
-    ));
-
-    if (hasSupabaseConfig()) {
-      try {
-        await supabaseDelete('student_transcript_entries', `id=eq.${encodeURIComponent(entryId)}`);
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unable to delete transcript entry.',
-        };
-      }
-    }
-
-    return { success: true };
-  }, []);
 
   const submitPasswordResetInquiry = useCallback(async (role: PasswordInquiryRole, universityId: string): Promise<PlannerActionResult> => {
     const normalizedId = universityId.trim();
@@ -2271,7 +2127,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
     const now = new Date().toISOString();
     const inquiry = {
-      id: createId('password-inquiry'),
+      id: createId(),
       requesterId: requester.id,
       requesterName: requester.name,
       requesterRole: role,
@@ -2373,115 +2229,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return { success: true };
   }, [state.courses]);
 
-  const upsertCourse = useCallback((input: CourseFormInput) => {
-    const now = new Date().toISOString();
-
-    setState((current) => {
-      const nextHistoricalStat: HistoricalCourseStat = {
-        id: createId('stat'),
-        courseCode: input.code,
-        termId: 'manual-entry',
-        avgGrade: input.avgGrade,
-        passRate: input.passRate,
-        failRate: input.failRate,
-        enrollmentCount: input.enrollmentCount,
-        withdrawals: input.withdrawals,
-      };
-
-      const nextHistoricalStats = [
-        nextHistoricalStat,
-        ...current.historicalStats.filter(
-          (stat) => !(stat.courseCode === input.code && stat.termId === 'manual-entry')
-        ),
-      ];
-
-      return {
-        ...current,
-        courses: buildCourses(nextHistoricalStats, current.modelVersion, now, [
-          ...current.courses.filter((course) => course.code !== input.code),
-          {
-            code: input.code,
-            name: input.name,
-            department: input.department,
-            type: input.type,
-            credits: input.credits,
-            prerequisites: input.prerequisites,
-            concurrentCourses: [],
-            minimumCompletedCredits: undefined,
-            isPlannable: true,
-            internetDifficulty: 50,
-            difficultyBasis: 'Manual course entry.',
-            requirementText: formatRequirementText({
-              prerequisites: input.prerequisites,
-              concurrentCourses: [],
-              minimumCompletedCredits: undefined,
-            }),
-            passRate: input.passRate,
-            failRate: input.failRate,
-            avgGrade: input.avgGrade,
-            enrollmentCount: input.enrollmentCount,
-            withdrawals: input.withdrawals,
-            diffScore: 50,
-            difficultyLabel: 'Balanced',
-            modelVersion: current.modelVersion,
-            lastCalculatedAt: now,
-            dataPoints: 1,
-          },
-        ]),
-        historicalStats: nextHistoricalStats,
-        modelLastCalculatedAt: now,
-      };
-    });
-
-    if (hasSupabaseConfig()) {
-      void (async () => {
-        try {
-          const departments = await supabaseSelect<DepartmentRow[]>(
-            'departments',
-            `select=id,name&name=eq.${encodeURIComponent(input.department)}&limit=1`
-          );
-          const departmentId = departments[0]?.id;
-          if (!departmentId) {
-            return;
-          }
-
-          const existingRows = await supabaseSelect<CourseRow[]>(
-            'courses',
-            `select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis&course_code=eq.${encodeURIComponent(input.code)}&limit=1`
-          );
-
-          const payload = {
-            course_code: input.code,
-            title: input.name,
-            department_id: departmentId,
-            credits: input.credits,
-            course_type: input.type,
-            is_plannable: existingRows[0]?.is_plannable ?? true,
-            difficulty_basis: 'Manual course entry.',
-          };
-
-          if (existingRows[0]?.id) {
-            await supabasePatch('courses', `id=eq.${encodeURIComponent(existingRows[0].id)}`, payload);
-          } else {
-            await supabaseInsert('courses', payload);
-          }
-        } catch (error) {
-          console.error('Unable to persist course changes to Supabase.', error);
-        }
-      })();
-    }
-  }, []);
-
   const value = useMemo(
     () => ({
       analyzeSchedule,
       clearSelection,
-      assignAdvisor,
       createStudentAccount,
-      createTranscriptFromDraft,
       courses: state.courses,
       currentEvaluations: state.currentEvaluations,
-      deleteTranscriptEntry,
       deleteScheduleDraft,
       getCourseSelectionState,
       getCoursePrerequisitesWithGrades,
@@ -2515,15 +2269,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toggleCourseSelection,
       updateCourseDifficulty,
       upsertTranscriptEntry,
-      upsertCourse,
     }),
     [
       analyzeSchedule,
-      assignAdvisor,
       clearSelection,
       createStudentAccount,
-      createTranscriptFromDraft,
-      deleteTranscriptEntry,
       deleteScheduleDraft,
       getCourseSelectionState,
       getCoursePrerequisitesWithGrades,
@@ -2558,7 +2308,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toggleCourseSelection,
       updateCourseDifficulty,
       upsertTranscriptEntry,
-      upsertCourse,
     ]
   );
 

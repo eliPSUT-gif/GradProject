@@ -2,8 +2,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { sendGeneratedPasswordEmail } from './_email.js';
 
-type Role = 'student' | 'advisor' | 'admin';
-
 const MIN_PASSWORD_LENGTH = 10;
 
 function getPasswordValidationError(password: string) {

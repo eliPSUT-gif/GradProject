@@ -118,15 +118,6 @@ create table if not exists public.historical_course_stats (
   unique (course_id, term_code)
 );
 
-create table if not exists public.student_completed_courses (
-  student_id uuid not null references public.app_users(id) on delete cascade,
-  course_id uuid not null references public.courses(id) on delete restrict,
-  completed_term_code text,
-  final_grade numeric(5,2),
-  created_at timestamptz not null default timezone('utc', now()),
-  primary key (student_id, course_id)
-);
-
 create table if not exists public.schedule_drafts (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.app_users(id) on delete cascade,
@@ -169,19 +160,6 @@ create table if not exists public.messages (
   sent_at timestamptz not null default timezone('utc', now()),
   read_at timestamptz,
   check (sender_id <> recipient_id)
-);
-
-create table if not exists public.import_jobs (
-  id uuid primary key default gen_random_uuid(),
-  created_by uuid references public.app_users(id) on delete set null,
-  file_name text not null,
-  format text not null check (format in ('csv', 'json')),
-  imported_rows integer not null default 0,
-  rejected_rows integer not null default 0,
-  status text not null check (status in ('completed', 'completed_with_errors', 'failed')),
-  validation_messages jsonb not null default '[]'::jsonb,
-  errors jsonb not null default '[]'::jsonb,
-  created_at timestamptz not null default timezone('utc', now())
 );
 
 create index if not exists idx_app_users_role on public.app_users(role);

@@ -53,8 +53,6 @@ export interface ManagedUser {
   authUserId?: string | null;
   lastSeenAt?: string | null;
 }
-export interface ImportError { rowNumber: number; reason: string; }
-export interface ImportJob { id: string; fileName: string; format: 'csv' | 'json'; importedRows: number; rejectedRows: number; status: 'completed' | 'completed_with_errors' | 'failed'; validationMessages: string[]; errors: ImportError[]; createdAt: string; }
 export interface StudentInsight extends StudentProfile { difficulty: number; status: RiskStatus; latestEvaluation: ScheduleEvaluation | null; activeDraft: ScheduleDraft | null; }
 export interface SelectionStatus { eligible: boolean; reasons: string[]; wouldExceedCredits: boolean; }
 
@@ -142,37 +140,12 @@ export const STUDENT_PROFILES: StudentProfile[] = [
   { id: '20220665', name: 'Yousef Barakat', gpa: 3.04, creditsCompleted: 82, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342', '31374', '31251', '31151', '31112', '31254', '31122', 'EUNI-01', 'EUNI-02', 'EUNI-03', '11102', '20200', '20234', '20233'], admissionYear: 2022, admissionTerm: 'fall' }
 ];
 
-const DEMO_PROFILE_TEMPLATES = STUDENT_PROFILES.map((profile) => ({
-  gpa: profile.gpa,
-  creditsCompleted: profile.creditsCompleted,
-  department: profile.department,
-  completedCourseCodes: [...profile.completedCourseCodes],
-  admissionYear: profile.admissionYear,
-  admissionTerm: profile.admissionTerm,
-}));
-
-export const STUDENT_PLAN_SEEDS: Record<string, string[]> = {
-  '20231001': ['11335', '11355', '11449', '13477', '14330', '20333'],
-  '20221045': ['11335', '11355', '11464', '13477', '22541', '20336'],
-  '20221188': ['11313', '11316', '14330', '22541', '20336', '11435'],
-  '20220877': ['11391', '11493', '13477', '11464', '12343'],
-  '20220432': ['11494', '11464', '13477', '11449'],
-  '20221302': ['12243', '12242', '12343', '11449', '22541'],
-  '20220665': ['11335', '11435', '14330', '20336', '22541']
-};
-
-export const PAST_SEMESTER_GPA = [{ label: 'S21', gpa: 3.1 }, { label: 'F21', gpa: 3.25 }, { label: 'S22', gpa: 3.18 }, { label: 'F22', gpa: 3.34 }, { label: 'S23', gpa: 3.38 }, { label: 'F23', gpa: 3.42 }];
 const TYPE_WEIGHT: Record<CourseType, number> = { theoretical: 66, practical: 36, hybrid: 54, project: 74 };
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 const average = (values: number[]) => values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
 const createId = (prefix: string, seed: string) => `${prefix}-${seed.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
 function getTrendAdjustment(courseCode: string) { const trend = COURSE_TRENDS[courseCode]; if (!trend) return 0; if (trend.direction === 'up') return 3; if (trend.direction === 'down') return -3; return 0; }
 export function getInitials(name: string) { return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join(''); }
-function hashSeedToIndex(seed: string, size: number) { if (size <= 0) return 0; const hash = seed.split('').reduce((sum, character, index) => sum + character.charCodeAt(0) * (index + 1), 0); return hash % size; }
-export function buildDemoStudentProfile(student: Pick<ManagedUser, 'id' | 'name'>, advisorId: string | null, templateIndex?: number): StudentProfile {
-  const template = DEMO_PROFILE_TEMPLATES[templateIndex ?? hashSeedToIndex(student.id, DEMO_PROFILE_TEMPLATES.length)] ?? DEMO_PROFILE_TEMPLATES[0];
-  return { id: student.id, name: student.name, gpa: template.gpa, creditsCompleted: template.creditsCompleted, department: template.department, advisorId: advisorId ?? '', completedCourseCodes: [...template.completedCourseCodes], admissionYear: template.admissionYear, admissionTerm: template.admissionTerm };
-}
 export function getCourseName(code: string) { return BASE_COURSES.find((course) => course.code === code)?.name ?? EXTERNAL_PREREQUISITES[code] ?? code; }
 export function formatRequirementText(course: Pick<CourseBlueprint, 'prerequisites' | 'concurrentCourses' | 'minimumCompletedCredits'>) { const lines: string[] = []; course.prerequisites.forEach((code) => lines.push(`Prerequisite: ${getCourseName(code)}`)); course.concurrentCourses.forEach((code) => lines.push(`Concurrent: ${getCourseName(code)}`)); if (course.minimumCompletedCredits) lines.push(`Complete ${course.minimumCompletedCredits} credit hours`); return lines; }
 export function getTermTypeFromCode(termCode: string): TermType {
@@ -270,7 +243,7 @@ export function resolveCurrentAcademicTerm(date = new Date()) {
   return { term: 'fall' as const, year };
 }
 
-export function resolveNextRegisterableAcademicTerm(date = new Date()) {
+function resolveNextRegisterableAcademicTerm(date = new Date()) {
   const current = resolveCurrentAcademicTerm(date);
   if (current.term === 'spring') {
     return getTermOption('summer', current.year);
@@ -341,7 +314,6 @@ export function buildSeedHistoricalStats() {
     return ['2024-Fall', '2025-Spring'].map((termId, termIndex) => ({ id: createId('stat', `${course.code}-${termId}`), courseCode: course.code, termId, ...deriveMetricsFromInternetDifficulty(course, shifts[termIndex] ?? 0) }));
   });
 }
-export const SEED_HISTORICAL_STATS = buildSeedHistoricalStats();
 
 function aggregateStats(courseCode: string, stats: HistoricalCourseStat[], fallback?: Course) {
   const rows = stats.filter((item) => item.courseCode === courseCode);
@@ -370,7 +342,6 @@ export function buildCourses(stats: HistoricalCourseStat[], modelVersion = DEFAU
     return { ...course, requirementText: formatRequirementText(course), ...aggregated, diffScore, difficultyLabel: getDiffLabel(diffScore).label, modelVersion, lastCalculatedAt } satisfies Course;
   });
 }
-export const COURSES = buildCourses(SEED_HISTORICAL_STATS);
 
 export function getCourseSelectionStatus(course: Course, completedCourseCodes: string[], selectedCourseCodes: string[], completedCredits: number, allCourses: Course[], maxCredits = MAX_SEMESTER_CREDITS): SelectionStatus {
   const reasons: string[] = [];
@@ -438,22 +409,6 @@ export function buildMockPlannerAiEvaluation(studentId: string, selectedCourses:
   if (theoryCourses > practicalCourses + hybridCourses) recommendations.push({ id: createId('rec', `${studentId}-balance`), title: 'Rebalance course types', reason: 'The current draft is theory-heavy.', action: 'Swap one theory-heavy course for a practical or hybrid option if available.', expectedImpact: 'Expected impact: smoother weekly workload.', impactDelta: 6 });
   if (recommendations.length === 0) recommendations.push({ id: createId('rec', `${studentId}-keep`), title: 'Schedule is manageable', reason: 'This plan looks balanced across workload, credits, and course mix.', action: 'Keep the draft and review prerequisites before saving.', expectedImpact: 'No immediate balancing action is required.', impactDelta: 0 });
   return { id: createId('eval', `${studentId}-${evaluatedAt}`), studentId, totalScore, riskLabel, totalCredits, evaluatedAt, modelVersion: PLANNER_LOCAL_FALLBACK_MODEL_VERSION, explanation, factors, recommendations, topCourses: buildTopCourseStrings(selectedCourses), courseCodes: selectedCourses.map((course) => course.code) };
-}
-
-export function evaluateSchedule(studentId: string, selectedCourses: Course[], allCourses: Course[], modelVersion: string, completedCourseCodes: string[] = [], completedCredits = 0, evaluatedAt = new Date().toISOString()): ScheduleEvaluation | null {
-  return buildMockPlannerAiEvaluation(
-    studentId,
-    selectedCourses,
-    allCourses,
-    modelVersion,
-    completedCourseCodes,
-    completedCredits,
-    evaluatedAt
-  );
-}
-
-export function buildSeedDrafts(_courses: Course[]) {
-  return [] as ScheduleDraft[];
 }
 
 export function buildStudentInsights(profiles: StudentProfile[], drafts: ScheduleDraft[]): StudentInsight[] {

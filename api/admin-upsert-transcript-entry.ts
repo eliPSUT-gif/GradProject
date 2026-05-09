@@ -65,7 +65,7 @@ async function requireAdmin(request: VercelRequest, supabase: ReturnType<typeof 
   }
 }
 
-function getStatusForGrade(finalGrade: number | null, fallback: TranscriptStatus): TranscriptStatus {
+function getStatusForGrade(finalGrade: number | null): TranscriptStatus {
   if (finalGrade === null) {
     return 'in_progress';
   }
@@ -105,7 +105,7 @@ function validatePayload(payload: TranscriptEntryPayload) {
       termCode,
       courseCode,
       finalGrade,
-      status: getStatusForGrade(finalGrade, status),
+      status: getStatusForGrade(finalGrade),
       attemptNo,
     },
   };

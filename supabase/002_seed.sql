@@ -596,35 +596,3 @@ where not exists (
     and m.body = v.body
     and m.sent_at = v.sent_at::timestamptz
 );
-
-insert into public.import_jobs (
-  created_by,
-  file_name,
-  format,
-  imported_rows,
-  rejected_rows,
-  status,
-  validation_messages,
-  errors,
-  created_at
-)
-select
-  admin_u.id,
-  'seed-historical-data.json',
-  'json',
-  (select count(*) from public.historical_course_stats),
-  0,
-  'completed',
-  '["Seed dataset loaded for MVP demo coverage."]'::jsonb,
-  '[]'::jsonb,
-  '2026-03-12T09:45:00Z'::timestamptz
-from public.app_users admin_u
-where admin_u.university_id = 'ADM-1001'
-and not exists (
-  select 1
-  from public.import_jobs j
-  where j.file_name = 'seed-historical-data.json'
-);
-
-
-
