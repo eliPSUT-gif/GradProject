@@ -156,18 +156,18 @@ export function getCreditLimitForTermCode(termCode: string) {
 }
 export function formatTermLabel(termCode: string) {
   if (!termCode) return '-';
-  const [year, rawTerm] = termCode.split('-');
-  if (!year || !rawTerm) return termCode;
-  const normalized = rawTerm.toLowerCase();
-  const pretty = normalized === 'fall' ? 'Fall' : normalized === 'spring' ? 'Spring' : normalized === 'summer' ? 'Summer' : rawTerm;
+  const year = getYearFromTermCode(termCode);
+  const normalized = getTermNameFromCode(termCode);
+  if (!year || !normalized) return termCode;
+  const pretty = normalized === 'fall' ? 'Fall' : normalized === 'spring' ? 'Spring' : 'Summer';
   return `${pretty} ${year}`;
 }
 
 export function formatCompactTermLabel(termCode: string) {
   if (!termCode) return '-';
-  const [year, rawTerm] = termCode.split('-');
-  if (!year || !rawTerm) return termCode;
-  const normalized = rawTerm.toLowerCase();
+  const year = getYearFromTermCode(termCode);
+  const normalized = getTermNameFromCode(termCode);
+  if (!year || !normalized) return termCode;
   const termNumber = normalized === 'fall' ? '1' : normalized === 'spring' ? '2' : normalized === 'summer' ? '3' : null;
   return termNumber ? `${year}-${termNumber}` : termCode;
 }
@@ -176,23 +176,36 @@ function getAdmissionTermOrder(term: AdmissionTerm) {
 }
 
 function getTermOrderFromCode(termCode: string) {
-  const normalized = termCode.split('-')[1]?.toLowerCase();
+  const normalized = getTermNameFromCode(termCode);
   return normalized === 'spring' ? 1 : normalized === 'summer' ? 2 : normalized === 'fall' ? 3 : 0;
 }
 
+function getTermNameFromCode(termCode: string) {
+  const normalized = termCode.toLowerCase();
+  if (normalized.includes('spring')) return 'spring';
+  if (normalized.includes('summer')) return 'summer';
+  if (normalized.includes('fall')) return 'fall';
+  return null;
+}
+
+function getYearFromTermCode(termCode: string) {
+  return termCode.match(/\d{4}/)?.[0] ?? null;
+}
+
 function getTermRank(termCode: string) {
-  const [yearString, rawTerm] = termCode.split('-');
-  const year = Number(yearString);
-  const order = getTermOrderFromCode(`${yearString}-${rawTerm ?? ''}`);
+  const year = Number(getYearFromTermCode(termCode) ?? 0);
+  const order = getTermOrderFromCode(termCode);
   return year * 10 + order;
 }
 export function compareTermCodesNewestFirst(left: string, right: string) {
   return getTermRank(right) - getTermRank(left);
 }
+export function compareTermCodesOldestFirst(left: string, right: string) {
+  return getTermRank(left) - getTermRank(right);
+}
 
 function isTermOnOrAfterAdmission(termCode: string, admissionYear: number, admissionTerm: AdmissionTerm) {
-  const [yearString] = termCode.split('-');
-  const year = Number(yearString);
+  const year = Number(getYearFromTermCode(termCode) ?? 0);
   if (year > admissionYear) {
     return true;
   }

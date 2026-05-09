@@ -10,7 +10,7 @@ import {
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
-import { formatTermLabel, getDiffLabel } from '../../data/courses';
+import { compareTermCodesOldestFirst, formatTermLabel, getDiffLabel } from '../../data/courses';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
 import { useMessaging } from '../../context/MessagingContext';
@@ -37,6 +37,10 @@ export default function StudentDashboard() {
   const transcriptRows = getStudentTranscript(studentId);
   const transcriptSemesters = getStudentTranscriptSemesters(studentId);
   const termMetrics = getStudentTermMetrics(studentId);
+  const chronologicalTermMetrics = useMemo(
+    () => [...termMetrics].sort((left, right) => compareTermCodesOldestFirst(left.termCode, right.termCode)),
+    [termMetrics]
+  );
   const plannerTermCode = getPlannerTermCode(studentId);
   const currentEvaluation = plannerReviewSnapshots[studentId] ?? null;
   const profile = studentInsights.find((item) => item.id === studentId);
@@ -348,7 +352,7 @@ export default function StudentDashboard() {
             Past Semester GPA
           </h2>
           <div className="flex h-36 items-end gap-2 sm:h-48 sm:gap-3">
-            {termMetrics.length > 0 ? termMetrics.map((semester) => {
+            {chronologicalTermMetrics.length > 0 ? chronologicalTermMetrics.map((semester) => {
               const gpa = semester.gpa ?? 0;
               const pct = (gpa / 4) * 100;
               return (
