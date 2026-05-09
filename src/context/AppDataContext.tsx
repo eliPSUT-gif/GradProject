@@ -26,6 +26,7 @@ import {
   getDiffLabel,
   getInitials,
   MODEL_LAST_CALCULATED_AT,
+  normalizeTermCode,
   STUDENT_PROFILES,
   type AdmissionTerm,
   type Course,
@@ -352,15 +353,6 @@ interface ScheduleEvaluationRow {
   evaluated_at: string;
 }
 
-interface StudentTermMetricRow {
-  student_id: string;
-  term_code: string;
-  term_type: TermType;
-  course_count: number;
-  completed_credits: number;
-  gpa: number | null;
-}
-
 interface PasswordResetInquiryMessageRow {
   id: string;
   sender_id: string;
@@ -640,11 +632,12 @@ function buildDemoTranscriptData(studentProfiles: StudentProfile[], courses: Cou
 
   const termMetricMap = new Map<string, StudentTermMetric>();
   transcriptRows.forEach((row) => {
-    const key = `${row.studentId}:${row.termCode}`;
+    const termCode = normalizeTermCode(row.termCode);
+    const key = `${row.studentId}:${termCode}`;
     const existing = termMetricMap.get(key) ?? {
       studentId: row.studentId,
-      termCode: row.termCode,
-      termLabel: formatTermLabel(row.termCode),
+      termCode,
+      termLabel: formatTermLabel(termCode),
       termType: row.termType,
       courseCount: 0,
       completedCredits: 0,
@@ -660,7 +653,7 @@ function buildDemoTranscriptData(studentProfiles: StudentProfile[], courses: Cou
 
   const groupedRows = new Map<string, StudentTranscriptRow[]>();
   transcriptRows.forEach((row) => {
-    const key = `${row.studentId}:${row.termCode}`;
+    const key = `${row.studentId}:${normalizeTermCode(row.termCode)}`;
     groupedRows.set(key, [...(groupedRows.get(key) ?? []), row]);
   });
 
@@ -693,7 +686,8 @@ function buildTranscriptSemesters(
   transcriptRows
     .filter((row) => row.studentId === studentId && row.termCode)
     .forEach((row) => {
-      rowsByTermCode.set(row.termCode, [...(rowsByTermCode.get(row.termCode) ?? []), row]);
+      const termCode = normalizeTermCode(row.termCode);
+      rowsByTermCode.set(termCode, [...(rowsByTermCode.get(termCode) ?? []), row]);
     });
 
   return termMetrics
@@ -732,7 +726,8 @@ function deriveTermMetrics(transcriptRows: StudentTranscriptRow[]) {
   transcriptRows
     .filter((row) => row.termCode && row.status !== 'not_taken')
     .forEach((row) => {
-      const key = `${row.studentId}:${row.termCode}`;
+      const termCode = normalizeTermCode(row.termCode);
+      const key = `${row.studentId}:${termCode}`;
       rowsByTerm.set(key, [...(rowsByTerm.get(key) ?? []), row]);
     });
 
@@ -881,7 +876,6 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     draftRows,
     draftCourseRows,
     evaluationRows,
-    termMetricRows,
     passwordInquiryMessageRows,
   ] = await Promise.all([
     supabaseSelect<AcademicTermRow[]>('academic_terms', 'select=term_code,academic_year,term_name,term_type,max_credits'),
@@ -906,7 +900,6 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       'schedule_evaluations',
       'select=id,schedule_id,student_id,total_score,risk_label,total_credits,model_version,explanation,factors,recommendations,top_courses,evaluated_at&order=evaluated_at.desc'
     ),
-    supabaseSelect<StudentTermMetricRow[]>('student_term_metrics_v', 'select=student_id,term_code,term_type,course_count,completed_credits,gpa&order=term_code.desc'),
     supabaseSelect<PasswordResetInquiryMessageRow[]>(
       'messages',
       'select=id,sender_id,body,sent_at,read_at,sender:app_users!messages_sender_id_fkey(university_id,full_name,role)&order=sent_at.desc'
@@ -1014,7 +1007,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
   const appUsersByAppId = new Map(users.filter((account) => account.appUserId).map((account) => [account.appUserId!, account]));
   const academicTerms = academicTermRows
     .map((row) => ({
-      termCode: row.term_code,
+      termCode: normalizeTermCode(row.term_code),
       academicYear: row.academic_year,
       termName: row.term_name,
       termType: row.term_type,
@@ -1036,7 +1029,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       completedCourseCodesByStudentId.set(studentUniversityId, existingCompleted);
     }
 
-    const termCode = row.term_code;
+    const termCode = normalizeTermCode(row.term_code);
     transcriptRows.push({
       id: row.id,
       studentId: studentUniversityId,
@@ -1128,7 +1121,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       return [];
     }
     const courseCodes = courseCodesByDraftId.get(row.id) ?? [];
-    const termCode = row.term_code ?? '2026-Spring';
+    const termCode = normalizeTermCode(row.term_code ?? '2026-Spring');
 
     return [{
       id: row.id,
@@ -1180,22 +1173,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
     ? modelVersionSetting.value_json
     : DEFAULT_MODEL_VERSION;
 
-  const termMetrics = termMetricRows.flatMap((row) => {
-    const studentUniversityId = appUsersByAppId.get(row.student_id)?.id;
-    if (!studentUniversityId) {
-      return [];
-    }
-
-    return [{
-      studentId: studentUniversityId,
-      termCode: row.term_code,
-      termLabel: formatTermLabel(row.term_code),
-      termType: row.term_type,
-      courseCount: row.course_count,
-      completedCredits: row.completed_credits,
-      gpa: row.gpa === null ? null : Number(row.gpa),
-    } satisfies StudentTermMetric];
-  }).sort((left, right) => compareTermCodesNewestFirst(left.termCode, right.termCode));
+  const termMetrics = deriveTermMetrics(transcriptRows);
 
   const passwordResetInquiries = passwordInquiryMessageRows.flatMap((row) => {
     if (!row.body.startsWith(PASSWORD_INQUIRY_MESSAGE_PREFIX)) {
