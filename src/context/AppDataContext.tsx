@@ -16,6 +16,7 @@ import {
   buildSeedHistoricalStats,
   buildStudentInsights,
   compareTermCodesNewestFirst,
+  compareTermCodesOldestFirst,
   computeCourseDifficulty,
   DEFAULT_MODEL_VERSION,
   formatCompactTermLabel,
@@ -702,7 +703,8 @@ function buildTranscriptSemesters(
       gpa: metric.gpa,
       rows: [...(rowsByTermCode.get(metric.termCode) ?? [])].sort((left, right) => left.courseCode.localeCompare(right.courseCode)),
     }) satisfies StudentTranscriptSemester)
-    .filter((semester) => semester.rows.length > 0);
+    .filter((semester) => semester.rows.length > 0)
+    .sort((left, right) => compareTermCodesOldestFirst(left.termCode, right.termCode));
 }
 
 function sortTranscriptRows(rows: StudentTranscriptRow[]) {
@@ -1013,7 +1015,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       termType: row.term_type,
       maxCredits: row.max_credits,
     }))
-    .sort((left, right) => compareTermCodesNewestFirst(right.termCode, left.termCode));
+    .sort((left, right) => compareTermCodesOldestFirst(left.termCode, right.termCode));
 
   const completedCourseCodesByStudentId = new Map<string, Set<string>>();
   const transcriptRows: StudentTranscriptRow[] = [];
@@ -1318,7 +1320,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         }
 
         if (left.termCode && right.termCode) {
-          const termCompare = compareTermCodesNewestFirst(right.termCode, left.termCode);
+          const termCompare = compareTermCodesOldestFirst(left.termCode, right.termCode);
           if (termCompare !== 0) {
             return termCompare;
           }
@@ -1331,7 +1333,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   );
 
   const getStudentTermMetrics = useCallback(
-    (studentId: string) => state.termMetrics.filter((row) => row.studentId === studentId),
+    (studentId: string) =>
+      state.termMetrics
+        .filter((row) => row.studentId === studentId)
+        .sort((left, right) => compareTermCodesOldestFirst(left.termCode, right.termCode)),
     [state.termMetrics]
   );
 

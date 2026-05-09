@@ -179,13 +179,9 @@ export function normalizeTermCode(termCode: string) {
   const pretty = normalized === 'fall' ? 'Fall' : normalized === 'spring' ? 'Spring' : 'Summer';
   return `${year}-${pretty}`;
 }
-function getAdmissionTermOrder(term: AdmissionTerm) {
-  return term === 'spring' ? 1 : term === 'summer' ? 2 : 3;
-}
-
 function getTermOrderFromCode(termCode: string) {
   const normalized = getTermNameFromCode(termCode);
-  return normalized === 'spring' ? 1 : normalized === 'summer' ? 2 : normalized === 'fall' ? 3 : 0;
+  return normalized === 'fall' ? 1 : normalized === 'spring' ? 2 : normalized === 'summer' ? 3 : 0;
 }
 
 function getTermNameFromCode(termCode: string) {
@@ -203,7 +199,8 @@ function getYearFromTermCode(termCode: string) {
 function getTermRank(termCode: string) {
   const year = Number(getYearFromTermCode(termCode) ?? 0);
   const order = getTermOrderFromCode(termCode);
-  return year * 10 + order;
+  const academicYear = order === 1 ? year : year - 1;
+  return academicYear * 10 + order;
 }
 export function compareTermCodesNewestFirst(left: string, right: string) {
   return getTermRank(right) - getTermRank(left);
@@ -213,14 +210,7 @@ export function compareTermCodesOldestFirst(left: string, right: string) {
 }
 
 function isTermOnOrAfterAdmission(termCode: string, admissionYear: number, admissionTerm: AdmissionTerm) {
-  const year = Number(getYearFromTermCode(termCode) ?? 0);
-  if (year > admissionYear) {
-    return true;
-  }
-  if (year < admissionYear) {
-    return false;
-  }
-  return getTermOrderFromCode(termCode) >= getAdmissionTermOrder(admissionTerm);
+  return getTermRank(termCode) >= getTermRank(getTermOption(admissionTerm, admissionYear).termCode);
 }
 
 function getTermOption(term: AdmissionTerm, year: number) {
@@ -282,7 +272,7 @@ export function buildRegisterableTerms(admissionYear: number, admissionTerm: Adm
   }
 
   for (let year = admissionYear; year <= admissionYear + 12; year += 1) {
-    for (const term of ['spring', 'summer', 'fall'] as const) {
+    for (const term of ['fall', 'spring', 'summer'] as const) {
       const option = getTermOption(term, year);
       if (isTermOnOrAfterAdmission(option.termCode, admissionYear, admissionTerm)) {
         return [option];
@@ -295,8 +285,7 @@ export function buildRegisterableTerms(admissionYear: number, admissionTerm: Adm
 
 export function buildAvailableTerms(admissionYear: number, admissionTerm: AdmissionTerm, endYear = new Date().getFullYear() + 1) {
   const allTerms: { termCode: string; termType: TermType }[] = [];
-  const termSequence: AdmissionTerm[] = ['fall', 'spring', 'summer'];
-  const admissionOffset = termSequence.indexOf(admissionTerm);
+  const admissionTermCode = getTermOption(admissionTerm, admissionYear).termCode;
   for (let year = admissionYear; year <= endYear; year += 1) {
     allTerms.push(
       { termCode: `${year}-Fall`, termType: 'regular' },
@@ -305,11 +294,7 @@ export function buildAvailableTerms(admissionYear: number, admissionTerm: Admiss
     );
   }
   return allTerms
-    .filter((term) => {
-      const [yearString, season] = term.termCode.split('-');
-      const seasonIndex = termSequence.indexOf(season.toLowerCase() as AdmissionTerm);
-      return Number(yearString) > admissionYear || seasonIndex >= admissionOffset;
-    })
+    .filter((term) => getTermRank(term.termCode) >= getTermRank(admissionTermCode))
     .sort((left, right) => getTermRank(left.termCode) - getTermRank(right.termCode));
 }
 export function getDiffLabel(score: number) {
