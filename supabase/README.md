@@ -23,6 +23,7 @@ Why:
 - `007_transcript_first_academic_schema.sql`: transcript-first academic cleanup and new derived views
 - `008_gpa_only_cleanup.sql`: GPA-only cleanup for transcript-derived 4.00-scale GPA
 - `009_transcript_entry_ids_for_admin_editing.sql`: exposes transcript entry IDs/course IDs for admin transcript editing
+- `010_transcript_view_id_alias.sql`: keeps transcript entry IDs available as both `id` and `entry_id`
 
 ## Import Order
 
@@ -37,6 +38,7 @@ Why:
 9. Run `supabase/007_transcript_first_academic_schema.sql`.
 10. Run `supabase/008_gpa_only_cleanup.sql`.
 11. Run `supabase/009_transcript_entry_ids_for_admin_editing.sql`.
+12. Run `supabase/010_transcript_view_id_alias.sql`.
 
 ## What To Send Me After Import
 
@@ -56,4 +58,3 @@ Then I can replace the current `localStorage` demo state with real Supabase read
   - Supabase Auth signup/login wiring
   - Row Level Security policies for production
   - TypeScript types and data-access layer
-

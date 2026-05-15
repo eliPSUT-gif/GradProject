@@ -3,6 +3,7 @@ import { ArrowLeft, Save } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import {
   formatTermLabel,
+  getCreditLimitForTermCode,
   getTermTypeFromCode,
   type ManagedUser,
 } from '../../data/courses';
@@ -19,8 +20,10 @@ interface TranscriptDraftRow {
   termCode: string;
 }
 
+const UNASSIGNED_TERM_KEY = '__unassigned__';
+
 function getDraftKey(row: StudentTranscriptRow) {
-  return row.id ?? `${row.studentId}-${row.termCode}-${row.courseCode}-${row.attemptNo}`;
+  return row.id ?? `${row.studentId}-${row.courseCode}-${row.attemptNo || 'new'}`;
 }
 
 function formatGradeValue(value: number | null) {
@@ -73,6 +76,10 @@ function getStatusClass(finalGrade: number | null) {
   return finalGrade >= 50 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
 }
 
+function shouldPersistRow(row: StudentTranscriptRow, draft: TranscriptDraftRow | undefined) {
+  return Boolean(row.id || draft);
+}
+
 function getAdvisor(student: ManagedUser | undefined, users: ManagedUser[], rows: ReturnType<typeof useAppData>['studentInsights']) {
   if (!student) {
     return null;
@@ -110,7 +117,11 @@ export default function AdminStudentTranscriptPage() {
 
     const terms = new Map<string, { termCode: string; termType: ReturnType<typeof getTermTypeFromCode> }>();
     getStudentAvailableTerms(studentId).forEach((term) => terms.set(term.termCode, term));
-    transcriptRows.forEach((row) => terms.set(row.termCode, { termCode: row.termCode, termType: row.termType }));
+    transcriptRows.forEach((row) => {
+      if (row.termCode) {
+        terms.set(row.termCode, { termCode: row.termCode, termType: row.termType });
+      }
+    });
     return [...terms.values()].map((term) => ({
       ...term,
       termLabel: formatTermLabel(term.termCode),
@@ -126,14 +137,21 @@ export default function AdminStudentTranscriptPage() {
     return draftRows[key] ?? {
       finalGrade: formatGradeValue(row.finalGrade),
       attemptNo: formatAttemptValue(row.attemptNo),
-      termCode: row.termCode || termOptions[0]?.termCode || '',
+      termCode: row.termCode,
     };
   };
 
-  const validationErrors = transcriptRows.flatMap((row) => {
+  const fieldValidationErrors = transcriptRows.flatMap((row) => {
+    const draftRow = draftRows[getDraftKey(row)];
     const draft = getDraftForRow(row);
     const finalGrade = parseGradeValue(draft.finalGrade);
     const attemptNo = parseAttemptValue(draft.attemptNo);
+    const shouldSaveRow = shouldPersistRow(row, draftRow);
+
+    if (shouldSaveRow && !draft.termCode.trim()) {
+      return [`${row.courseCode} needs a semester before it can be saved.`];
+    }
+
     if (draft.finalGrade.trim()) {
       if (!/^\d+$/.test(draft.finalGrade.trim())) {
         return [`${row.courseCode} needs a whole-number mark, or a blank mark.`];
@@ -161,6 +179,52 @@ export default function AdminStudentTranscriptPage() {
     return [];
   });
 
+  const projectedTranscriptRows = transcriptRows.flatMap((row) => {
+    const key = getDraftKey(row);
+    const draft = draftRows[key];
+    if (!shouldPersistRow(row, draft)) {
+      return [];
+    }
+
+    const effectiveDraft = draft ?? getDraftForRow(row);
+    const finalGrade = parseGradeValue(effectiveDraft.finalGrade);
+    const attemptNo = parseAttemptValue(effectiveDraft.attemptNo);
+    const termCode = effectiveDraft.termCode.trim();
+    if (!termCode) {
+      return [];
+    }
+
+    return [{
+      ...row,
+      termCode,
+      finalGrade,
+      status: getStatusFromGrade(finalGrade),
+      attemptNo: attemptNo ?? Math.max(row.attemptNo, 1),
+    } satisfies StudentTranscriptRow];
+  });
+
+  const creditValidationErrors = (() => {
+    const termCredits = new Map<string, number>();
+    projectedTranscriptRows.forEach((row) => {
+      if (row.status === 'withdrawn') {
+        return;
+      }
+
+      termCredits.set(row.termCode, (termCredits.get(row.termCode) ?? 0) + row.credits);
+    });
+
+    return [...termCredits.entries()].flatMap(([termCode, credits]) => {
+      const limit = getCreditLimitForTermCode(termCode);
+      if (credits <= limit) {
+        return [];
+      }
+
+      return [`${formatTermLabel(termCode)} has ${credits} credit hours. It cannot exceed ${limit} hours.`];
+    });
+  })();
+
+  const validationErrors = [...fieldValidationErrors, ...creditValidationErrors];
+
   const changedRows = transcriptRows.filter((row) => {
     const draft = draftRows[getDraftKey(row)];
     if (!draft) {
@@ -175,8 +239,7 @@ export default function AdminStudentTranscriptPage() {
   const hasChanges = changedRows.length > 0;
 
   const transcriptByTerm = transcriptRows.reduce<Record<string, StudentTranscriptRow[]>>((groups, row) => {
-    const draft = getDraftForRow(row);
-    const termCode = draft.termCode;
+    const termCode = row.termCode || UNASSIGNED_TERM_KEY;
     groups[termCode] = [...(groups[termCode] ?? []), row];
     return groups;
   }, {});
@@ -204,7 +267,7 @@ export default function AdminStudentTranscriptPage() {
       const result = await upsertTranscriptEntry({
         id: row.id,
         studentId: row.studentId,
-        termCode: draft.termCode || row.termCode || termOptions[0]?.termCode || '',
+        termCode: draft.termCode,
         courseCode: row.courseCode,
         finalGrade,
         status: getStatusFromGrade(finalGrade),
@@ -268,7 +331,9 @@ export default function AdminStudentTranscriptPage() {
             {Object.entries(transcriptByTerm).map(([termCode, rows]) => (
               <div key={termCode} className="overflow-hidden rounded-xl border border-gray-200">
                 <div className="flex items-center justify-between bg-slate-50 px-4 py-3">
-                  <p className="font-semibold text-[#0f1e3c]">{formatTermLabel(termCode)}</p>
+                  <p className="font-semibold text-[#0f1e3c]">
+                    {termCode === UNASSIGNED_TERM_KEY ? 'Not taken / unassigned' : formatTermLabel(termCode)}
+                  </p>
                   <span className="text-xs font-medium text-gray-500">{rows.length} course{rows.length !== 1 ? 's' : ''}</span>
                 </div>
                 <div className="overflow-x-auto">
@@ -318,6 +383,7 @@ export default function AdminStudentTranscriptPage() {
                                 }))}
                                 className="w-44 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
                               >
+                                <option value="">Select semester</option>
                                 {termOptions.map((term) => (
                                   <option key={term.termCode} value={term.termCode}>{term.termLabel}</option>
                                 ))}

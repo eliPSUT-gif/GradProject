@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 
 type TranscriptStatus = 'passed' | 'failed' | 'withdrawn' | 'in_progress';
 
+const MAX_SEMESTER_CREDITS = 18;
+const MAX_SUMMER_CREDITS = 9;
+
 interface TranscriptEntryPayload {
   id?: string;
   existingEntry?: boolean;
@@ -12,6 +15,12 @@ interface TranscriptEntryPayload {
   finalGrade?: number | null;
   status?: TranscriptStatus;
   attemptNo?: number;
+}
+
+interface TranscriptEntryCreditRow {
+  id: string;
+  status: TranscriptStatus;
+  course: { credits: number } | { credits: number }[] | null;
 }
 
 function getSupabaseAdminClient() {
@@ -40,6 +49,30 @@ function getErrorMessage(error: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+function getTermTypeFromCode(termCode: string) {
+  return /summer/i.test(termCode) ? 'summer' : 'regular';
+}
+
+function getCreditLimitForTermCode(termCode: string) {
+  return getTermTypeFromCode(termCode) === 'summer' ? MAX_SUMMER_CREDITS : MAX_SEMESTER_CREDITS;
+}
+
+function formatTermLabel(termCode: string) {
+  const match = /^(\d{4})-(fall|spring|summer)$/i.exec(termCode);
+  if (!match) {
+    return termCode;
+  }
+
+  const termName = match[2].toLowerCase();
+  const pretty = termName === 'fall' ? 'Fall' : termName === 'spring' ? 'Spring' : 'Summer';
+  return `${pretty} ${match[1]}`;
+}
+
+function getEntryCredits(row: TranscriptEntryCreditRow) {
+  const course = Array.isArray(row.course) ? row.course[0] : row.course;
+  return Number(course?.credits ?? 0);
 }
 
 async function requireAdmin(request: VercelRequest, supabase: ReturnType<typeof getSupabaseAdminClient>) {
@@ -149,7 +182,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     const { data: course, error: courseError } = await supabase
       .from('courses')
-      .select('id')
+      .select('id,credits')
       .eq('course_code', input.courseCode)
       .maybeSingle();
 
@@ -159,6 +192,52 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     if (!course) {
       response.status(404).json({ success: false, error: 'Course was not found.' });
+      return;
+    }
+
+    let excludedEntryId = input.id;
+    if (!excludedEntryId) {
+      const { data: existingEntry, error: existingEntryError } = await supabase
+        .from('student_transcript_entries')
+        .select('id')
+        .eq('student_id', student.id)
+        .eq('course_id', course.id)
+        .eq('term_code', input.termCode)
+        .eq('attempt_no', input.attemptNo)
+        .maybeSingle();
+
+      if (existingEntryError) {
+        throw existingEntryError;
+      }
+
+      excludedEntryId = existingEntry?.id;
+    }
+
+    let termEntriesQuery = supabase
+      .from('student_transcript_entries')
+      .select('id,status,course:courses(credits)')
+      .eq('student_id', student.id)
+      .eq('term_code', input.termCode)
+      .neq('status', 'withdrawn');
+
+    if (excludedEntryId) {
+      termEntriesQuery = termEntriesQuery.neq('id', excludedEntryId);
+    }
+
+    const { data: termEntries, error: termEntriesError } = await termEntriesQuery;
+    if (termEntriesError) {
+      throw termEntriesError;
+    }
+
+    const existingTermHours = ((termEntries ?? []) as TranscriptEntryCreditRow[])
+      .reduce((sum, row) => sum + getEntryCredits(row), 0);
+    const nextTermHours = existingTermHours + (input.status === 'withdrawn' ? 0 : Number(course.credits));
+    const termLimit = getCreditLimitForTermCode(input.termCode);
+    if (nextTermHours > termLimit) {
+      response.status(400).json({
+        success: false,
+        error: `${formatTermLabel(input.termCode)} has ${nextTermHours} credit hours. It cannot exceed ${termLimit} hours.`,
+      });
       return;
     }
 
