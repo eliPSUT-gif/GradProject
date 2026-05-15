@@ -3,7 +3,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const MIN_RECAPTCHA_SCORE = 0.5;
 const VERIFY_TIMEOUT_MS = 8000;
 const RECAPTCHA_VERIFY_URL = 'https://www.recaptcha.net/recaptcha/api/siteverify';
+const PRIMARY_PRODUCTION_HOST = 'psut.site';
 const PRODUCTION_HOSTS = new Set([
+  PRIMARY_PRODUCTION_HOST,
+  'www.psut.site',
   'grad-project-one.vercel.app',
 ]);
 
@@ -35,7 +38,7 @@ function isTestingDeployment(request: VercelRequest) {
     return true;
   }
 
-  if (deploymentUrl && deploymentUrl !== 'grad-project-one.vercel.app') {
+  if (deploymentUrl && !PRODUCTION_HOSTS.has(deploymentUrl)) {
     return true;
   }
 

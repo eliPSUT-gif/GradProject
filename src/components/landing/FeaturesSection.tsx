@@ -34,7 +34,7 @@ const FEATURES: Feature[] = [
     tag: 'FR-3',
     title: 'Difficulty Score Calculation',
     description:
-      'Combines course difficulty, hard-course penalties, course-mix pressure, credit load, and known difficult pairings into a workload score.',
+      'Combines pass-rate difficulty, average-grade difficulty, survey-weighted course type, and credit hours into one course difficulty score.',
     iconColor: 'text-gold',
     iconBg: 'bg-gold/10',
   },

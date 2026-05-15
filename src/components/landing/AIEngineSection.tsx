@@ -16,47 +16,47 @@ interface WeightCard {
 const WEIGHTS: WeightCard[] = [
   {
     icon: TrendingDown,
-    label: 'Course Average',
-    weight: '68%',
-    variable: 'AVG',
+    label: 'Pass Rate',
+    weight: '30%',
+    variable: 'PR',
     color: 'text-teal',
     iconBg: 'bg-teal/10',
     borderColor: 'border-teal/20',
     barColor: 'bg-teal',
-    barWidth: 'w-[68%]',
+    barWidth: 'w-[30%]',
   },
   {
     icon: Award,
-    label: 'Hard Course Penalty',
-    weight: '+6.5',
-    variable: 'HP',
+    label: 'Average Grade',
+    weight: '25%',
+    variable: 'AG',
     color: 'text-gold',
     iconBg: 'bg-gold/10',
     borderColor: 'border-gold/20',
     barColor: 'bg-gold',
-    barWidth: 'w-[42%]',
+    barWidth: 'w-[25%]',
   },
   {
     icon: BookOpen,
-    label: 'Course Mix Penalty',
-    weight: '+3',
-    variable: 'MP',
+    label: 'Course Type',
+    weight: '25%',
+    variable: 'CT',
     color: 'text-purple-400',
     iconBg: 'bg-purple-400/10',
     borderColor: 'border-purple-400/20',
     barColor: 'bg-purple-400',
-    barWidth: 'w-[28%]',
+    barWidth: 'w-[25%]',
   },
   {
     icon: Clock,
-    label: 'Credit Load Penalty',
-    weight: '+4.8',
-    variable: 'CP',
+    label: 'Credit Hours',
+    weight: '20%',
+    variable: 'CH',
     color: 'text-orange-400',
     iconBg: 'bg-orange-400/10',
     borderColor: 'border-orange-400/20',
     barColor: 'bg-orange-400',
-    barWidth: 'w-[30%]',
+    barWidth: 'w-[20%]',
   },
 ];
 
@@ -74,11 +74,11 @@ export default function AIEngineSection() {
             AI Engine
           </span>
           <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight">
-            How The Planner Scores Workload
+            How We Score Difficulty
           </h2>
           <p className="mt-4 text-lg text-white/50 max-w-2xl mx-auto">
-            The landing page now mirrors the actual planner review logic instead of the old
-            placeholder formula.
+            Our weighted algorithm combines four key factors to produce a clear difficulty score
+            for every course.
           </p>
         </div>
 
@@ -116,47 +116,44 @@ export default function AIEngineSection() {
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-lg sm:text-xl lg:text-2xl font-mono">
-              <span className="font-display font-bold text-white">S</span>
+              <span className="font-display font-bold text-white">D</span>
               <span className="text-white/30">=</span>
-              <span className="text-teal font-bold">0.68</span>
+              <span className="text-teal font-bold">0.30</span>
               <span className="text-white/30">&times;</span>
               <span className="px-2 py-1 bg-teal/10 border border-teal/20 rounded-lg text-teal font-bold">
-                AVG
+                PR
               </span>
               <span className="text-white/30">+</span>
-              <span className="text-gold font-bold">HP</span>
+              <span className="text-gold font-bold">0.25</span>
               <span className="text-white/30">&times;</span>
               <span className="px-2 py-1 bg-gold/10 border border-gold/20 rounded-lg text-gold font-bold">
-                Hard
+                AG
               </span>
               <span className="text-white/30">+</span>
-              <span className="text-purple-400 font-bold">MP</span>
+              <span className="text-purple-400 font-bold">0.25</span>
               <span className="text-white/30">&times;</span>
               <span className="px-2 py-1 bg-purple-400/10 border border-purple-400/20 rounded-lg text-purple-400 font-bold">
-                Mix
+                CT
               </span>
               <span className="text-white/30">+</span>
-              <span className="text-orange-400 font-bold">CP</span>
+              <span className="text-orange-400 font-bold">0.20</span>
               <span className="text-white/30">&times;</span>
               <span className="px-2 py-1 bg-orange-400/10 border border-orange-400/20 rounded-lg text-orange-400 font-bold">
-                Credits
-              </span>
-              <span className="text-white/30">+</span>
-              <span className="text-blue-sky font-bold">PP</span>
-              <span className="text-white/30">&times;</span>
-              <span className="px-2 py-1 bg-blue-sky/10 border border-blue-sky/20 rounded-lg text-blue-sky font-bold">
-                Patterns
+                CH
               </span>
             </div>
 
             <div className="mt-6 pt-6 border-t border-white/5 flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-white/40">
-              <span><strong className="text-teal">AVG</strong> = average course difficulty</span>
-              <span><strong className="text-gold">HP</strong> = hard-course count penalty</span>
-              <span><strong className="text-purple-400">MP</strong> = theory/project mix penalty</span>
-              <span><strong className="text-orange-400">CP</strong> = credit load penalty</span>
-              <span><strong className="text-blue-sky">PP</strong> = known difficult pairings</span>
-              <span><strong className="text-white">S</strong> = schedule workload score</span>
+              <span><strong className="text-teal">PR</strong> = pass-rate difficulty</span>
+              <span><strong className="text-gold">AG</strong> = average-grade difficulty</span>
+              <span><strong className="text-purple-400">CT</strong> = survey-weighted type</span>
+              <span><strong className="text-orange-400">CH</strong> = credit hours</span>
+              <span><strong className="text-white">D</strong> = difficulty score</span>
             </div>
+            <p className="mt-4 text-center text-xs text-white/35">
+              Course type is based on the student survey: theory-based highest, project-based moderate,
+              practical lowest.
+            </p>
           </div>
         </div>
       </div>

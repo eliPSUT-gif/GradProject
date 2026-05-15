@@ -140,11 +140,18 @@ export const STUDENT_PROFILES: StudentProfile[] = [
   { id: '20220665', name: 'Yousef Barakat', gpa: 3.04, creditsCompleted: 82, department: 'Computer Science', advisorId: 'ADV-1002', completedCourseCodes: ['11103', '20134', '11206', '11253', '11212', '11313', '11323', '11435', '12243', '20135', '20141', '20142', '20147', '20333', '22241', '22342', '31374', '31251', '31151', '31112', '31254', '31122', 'EUNI-01', 'EUNI-02', 'EUNI-03', '11102', '20200', '20234', '20233'], admissionYear: 2022, admissionTerm: 'fall' }
 ];
 
-const TYPE_WEIGHT: Record<CourseType, number> = { theoretical: 66, practical: 36, hybrid: 54, project: 74 };
+// Survey-normalized course type difficulty: theory is the hardest baseline,
+// project and practical are scaled from the 53-response survey percentages.
+const TYPE_WEIGHT: Record<CourseType, number> = {
+  practical: 23,
+  hybrid: 62,
+  project: 48,
+  theoretical: 100,
+};
+const MAX_COURSE_CREDITS_FOR_DIFFICULTY = 3;
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 const average = (values: number[]) => values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
 const createId = (prefix: string, seed: string) => `${prefix}-${seed.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
-function getTrendAdjustment(courseCode: string) { const trend = COURSE_TRENDS[courseCode]; if (!trend) return 0; if (trend.direction === 'up') return 3; if (trend.direction === 'down') return -3; return 0; }
 export function getInitials(name: string) { return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join(''); }
 export function getCourseName(code: string) { return BASE_COURSES.find((course) => course.code === code)?.name ?? EXTERNAL_PREREQUISITES[code] ?? code; }
 export function formatRequirementText(course: Pick<CourseBlueprint, 'prerequisites' | 'concurrentCourses' | 'minimumCompletedCredits'>) { const lines: string[] = []; course.prerequisites.forEach((code) => lines.push(`Prerequisite: ${getCourseName(code)}`)); course.concurrentCourses.forEach((code) => lines.push(`Concurrent: ${getCourseName(code)}`)); if (course.minimumCompletedCredits) lines.push(`Complete ${course.minimumCompletedCredits} credit hours`); return lines; }
@@ -329,14 +336,19 @@ function aggregateStats(courseCode: string, stats: HistoricalCourseStat[], fallb
 }
 
 export function computeCourseDifficulty(course: CourseBlueprint, stats: Pick<Course, 'avgGrade' | 'passRate' | 'failRate' | 'enrollmentCount' | 'withdrawals'>) {
-  const gradeFactor = 100 - stats.avgGrade;
-  const passFactor = 100 - stats.passRate;
-  const withdrawalRate = stats.enrollmentCount === 0 ? 0 : (stats.withdrawals / stats.enrollmentCount) * 100;
-  const withdrawalFactor = clamp(withdrawalRate * 2.1, 0, 22);
-  const creditFactor = clamp((course.credits / 4) * 100, 0, 100);
-  const typeFactor = TYPE_WEIGHT[course.type];
-  const statsDerived = clamp(gradeFactor * 0.32 + passFactor * 0.3 + withdrawalFactor * 0.12 + creditFactor * 0.12 + typeFactor * 0.14, 0, 100);
-  return Math.round(clamp(course.internetDifficulty * 0.72 + statsDerived * 0.25 + getTrendAdjustment(course.code), 0, 100));
+  const passRateFactor = clamp(100 - stats.passRate, 0, 100);
+  const averageGradeFactor = clamp(100 - stats.avgGrade, 0, 100);
+  const courseTypeFactor = TYPE_WEIGHT[course.type];
+  const creditHoursFactor = clamp((course.credits / MAX_COURSE_CREDITS_FOR_DIFFICULTY) * 100, 0, 100);
+
+  return Math.round(clamp(
+    passRateFactor * 0.3
+    + averageGradeFactor * 0.25
+    + courseTypeFactor * 0.25
+    + creditHoursFactor * 0.2,
+    0,
+    100
+  ));
 }
 
 export function buildCourses(stats: HistoricalCourseStat[], modelVersion = DEFAULT_MODEL_VERSION, lastCalculatedAt = MODEL_LAST_CALCULATED_AT, existingCourses: Course[] = []) {

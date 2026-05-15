@@ -986,9 +986,7 @@ async function loadRemoteSnapshot(users: ReturnType<typeof useAuth>['users']) {
       difficultyBasis: row.difficulty_basis || 'Difficulty score imported from the catalog.',
     };
     const stats = { avgGrade, passRate, failRate, enrollmentCount, withdrawals };
-    const diffScore = Number(row.difficulty_score) > 0
-      ? Math.round(Number(row.difficulty_score))
-      : computeCourseDifficulty(blueprint, stats);
+    const diffScore = computeCourseDifficulty(blueprint, stats);
 
     return {
       ...blueprint,

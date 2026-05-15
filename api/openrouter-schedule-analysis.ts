@@ -162,6 +162,16 @@ export default async function handler(request: VercelRequest, response: VercelRe
       role: 'user',
       content: JSON.stringify({
         task: 'Review this student schedule and produce brief explanation bullets plus actionable recommendations.',
+        scoring_model: {
+          course_difficulty_formula: 'D = 0.30 * PR + 0.25 * AG + 0.25 * CT + 0.20 * CH',
+          factors: {
+            PR: 'pass-rate difficulty, where lower historical pass rates increase difficulty',
+            AG: 'average-grade difficulty, where lower historical average grades increase difficulty',
+            CT: 'course type survey weight: theory-based courses are highest, project-based courses are moderate, practical courses are lowest, and hybrid courses sit between theory and practical',
+            CH: 'credit-hours weight, where more credit hours increase difficulty',
+          },
+          guidance: 'Use the provided course difficulty values as already computed from this formula. Explain schedule risk in terms of difficult courses, credit load, and practical next actions.',
+        },
         output_schema: {
           explanation: ['string', 'string', 'string'],
           recommendations: [
