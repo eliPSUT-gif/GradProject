@@ -1,0 +1,938 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [7 0 R 9 0 R 11 0 R 13 0 R 15 0 R 17 0 R 19 0 R 21 0 R 23 0 R 25 0 R 27 0 R 29 0 R 31 0 R 33 0 R] /Count 14 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+6 0 obj
+<< /Length 4219 >>
+stream
+BT /F2 15 Tf 36.00 559.00 Td (Smart Academic Advisor - Key Code Snippets) Tj ET
+BT /F1 10.5 Tf 36.00 540.00 Td (Grad project discussion PDF: only the highest-value snippets you are most likely to be asked about: authentication,) Tj ET
+BT /F1 10.5 Tf 36.00 527.00 Td (role protection, data loading, advisor access, admin mark editing, server-side enforcement, and transcript/GPA) Tj ET
+BT /F1 10.5 Tf 36.00 514.00 Td (persistence.) Tj ET
+BT /F1 9 Tf 36.00 501.00 Td (Generated from repository source on 2026-05-15.) Tj ET
+BT /F2 12 Tf 36.00 480.00 Td (Primary defense points) Tj ET
+BT /F1 9.5 Tf 48.00 464.00 Td (- Authentication is handled by Supabase Auth, but app roles come from public.app_users and are checked before) Tj ET
+BT /F1 9.5 Tf 48.00 452.00 Td (  role routes are shown.) Tj ET
+BT /F1 9.5 Tf 48.00 440.00 Td (- The login flow is protected by reCAPTCHA before AuthContext.login processes credentials.) Tj ET
+BT /F1 9.5 Tf 48.00 428.00 Td (- Advisor views are read-only and scoped to the logged-in advisor via advisorId.) Tj ET
+BT /F1 9.5 Tf 48.00 416.00 Td (- Changing marks is admin-only: route guard in App.tsx, UI validation in AdminStudentTranscriptPage, and) Tj ET
+BT /F1 9.5 Tf 48.00 404.00 Td (  token/admin verification in the server endpoint.) Tj ET
+BT /F1 9.5 Tf 48.00 392.00 Td (- Transcript marks are persisted in student_transcript_entries; SQL views recompute transcript rows, GPA, and) Tj ET
+BT /F1 9.5 Tf 48.00 380.00 Td (  completed credits for dashboards.) Tj ET
+BT /F2 12 Tf 36.00 360.00 Td (End-to-end trace) Tj ET
+BT /F1 9.5 Tf 48.00 344.00 Td (- 1. User opens /login, selects role, enters ID and password.) Tj ET
+BT /F1 9.5 Tf 48.00 332.00 Td (- 2. LoginPage obtains and verifies a reCAPTCHA token before credentials are processed.) Tj ET
+BT /F1 9.5 Tf 48.00 320.00 Td (- 3. AuthContext.login looks up the app user by university ID, checks selected role/status, and signs in with) Tj ET
+BT /F1 9.5 Tf 48.00 308.00 Td (  Supabase email/password.) Tj ET
+BT /F1 9.5 Tf 48.00 296.00 Td (- 4. AuthContext resolves the Supabase auth user back to public.app_users and stores the role-aware session.) Tj ET
+BT /F1 9.5 Tf 48.00 284.00 Td (- 5. App.tsx routes the user to the correct protected area. Admin transcript editing is only reachable through) Tj ET
+BT /F1 9.5 Tf 48.00 272.00 Td (  an admin route.) Tj ET
+BT /F1 9.5 Tf 48.00 260.00 Td (- 6. AppDataContext loads Supabase views into frontend state: courses, students, transcripts, GPA summaries,) Tj ET
+BT /F1 9.5 Tf 48.00 248.00 Td (  drafts, and evaluations.) Tj ET
+BT /F1 9.5 Tf 48.00 236.00 Td (- 7. Advisors inspect advisee transcript and risk views, guarded by advisorId === current user ID.) Tj ET
+BT /F1 9.5 Tf 48.00 224.00 Td (- 8. Admins open a student transcript, edit mark/attempt/term fields, and click Save changes.) Tj ET
+BT /F1 9.5 Tf 48.00 212.00 Td (- 9. The admin transcript page validates the edits and calls upsertTranscriptEntry for each changed row.) Tj ET
+BT /F1 9.5 Tf 48.00 200.00 Td (- 10. upsertTranscriptEntry revalidates, posts to /api/admin-upsert-transcript-entry, then refreshes derived) Tj ET
+BT /F1 9.5 Tf 48.00 188.00 Td (  frontend transcript/GPA state.) Tj ET
+BT /F1 9.5 Tf 48.00 176.00 Td (- 11. The server endpoint checks the bearer token belongs to an admin and writes student_transcript_entries) Tj ET
+BT /F1 9.5 Tf 48.00 164.00 Td (  using the service role.) Tj ET
+BT /F1 9.5 Tf 48.00 152.00 Td (- 12. SQL views expose updated transcript rows and recomputed GPA/completed credits back to the dashboards.) Tj ET
+BT /F2 15 Tf 36.00 130.00 Td (1. Login submission and security gate) Tj ET
+BT /F3 8.8 Tf 36.00 111.00 Td (Source: src/pages/LoginPage.tsx:61-88) Tj ET
+BT /F1 9.5 Tf 48.00 99.00 Td (- Most likely login question: what happens when the user presses sign in?) Tj ET
+BT /F1 9.5 Tf 48.00 87.00 Td (- This shows config checks, reCAPTCHA verification, AuthContext.login, and role-home navigation.) Tj ET
+BT /F2 8.5 Tf 36.00 75.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 64.00 Td (  61    const handleSubmit = async \(event: React.FormEvent\) => {) Tj ET
+BT /F3 7 Tf 44.00 55.40 Td (  62      event.preventDefault\(\);) Tj ET
+BT /F3 7 Tf 44.00 46.80 Td (  63      setError\(null\);) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 4548 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  64  ) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  65      if \(backendConfigError\) {) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  66        setError\(backendConfigError\);) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  67        return;) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  68      }) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  69  ) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  70      if \(!hasRecaptchaSiteKey\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  71        setError\('reCAPTCHA is not configured yet. Add the site key before logging in.'\);) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (  72        return;) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  73      }) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (  74  ) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (  75      setIsSubmitting\(true\);) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (  76  ) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (  77      try {) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (  78        const token = await executeRecaptcha\(RECAPTCHA_ACTION\);) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (  79        await verifyRecaptchaToken\(token, RECAPTCHA_ACTION\);) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (  80  ) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (  81        const result = await login\({ role: selectedRole, id: userId, password, rememberMe }\);) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (  82        if \(!result.success\) {) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (  83          setError\(result.error ?? 'Unable to sign in.'\);) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (  84          return;) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (  85        }) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (  86  ) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (  87        navigate\(getHomeRoute\(selectedRole\), { replace: true }\);) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td (  88      } catch \(submissionError\) {) Tj ET
+BT /F2 15 Tf 36.00 337.00 Td (2. AuthContext.login role and Supabase check) Tj ET
+BT /F3 8.8 Tf 36.00 318.00 Td (Source: src/context/AuthContext.tsx:689-748) Tj ET
+BT /F1 9.5 Tf 48.00 306.00 Td (- Most likely auth question: how do you prevent a user from selecting the wrong role?) Tj ET
+BT /F1 9.5 Tf 48.00 294.00 Td (- The app resolves the university ID, verifies role/status/email, signs in with Supabase, then confirms the) Tj ET
+BT /F1 9.5 Tf 48.00 282.00 Td (  auth user maps back to the same app user.) Tj ET
+BT /F2 8.5 Tf 36.00 270.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 259.00 Td ( 689        if \(hasSupabaseConfig\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 250.40 Td ( 690          let matchedUser = usersRef.current.find\(\(account\) => account.id.toLowerCase\(\) === normalizedId.toLowerCase\(\)\);) Tj ET
+BT /F3 7 Tf 44.00 241.80 Td ( 691          const remoteMatchedUser = await fetchRemoteUserByUniversityId\(normalizedId\);) Tj ET
+BT /F3 7 Tf 44.00 233.20 Td ( 692          if \(remoteMatchedUser\) {) Tj ET
+BT /F3 7 Tf 44.00 224.60 Td ( 693            matchedUser = remoteMatchedUser;) Tj ET
+BT /F3 7 Tf 44.00 216.00 Td ( 694          }) Tj ET
+BT /F3 7 Tf 44.00 207.40 Td ( 695          if \(!matchedUser || matchedUser.role !== role\) {) Tj ET
+BT /F3 7 Tf 44.00 198.80 Td ( 696            return { success: false, error: registerFailedAttempt\(\) };) Tj ET
+BT /F3 7 Tf 44.00 190.20 Td ( 697          }) Tj ET
+BT /F3 7 Tf 44.00 181.60 Td ( 698  ) Tj ET
+BT /F3 7 Tf 44.00 173.00 Td ( 699          if \(matchedUser.status !== 'active'\) {) Tj ET
+BT /F3 7 Tf 44.00 164.40 Td ( 700            return { success: false, error: 'This account is inactive. Contact an administrator.' };) Tj ET
+BT /F3 7 Tf 44.00 155.80 Td ( 701          }) Tj ET
+BT /F3 7 Tf 44.00 147.20 Td ( 702  ) Tj ET
+BT /F3 7 Tf 44.00 138.60 Td ( 703          if \(!matchedUser.email\) {) Tj ET
+BT /F3 7 Tf 44.00 130.00 Td ( 704            return { success: false, error: 'This account is missing an email address in public.app_users. Add the email in Supabase and try again.' };) Tj ET
+BT /F3 7 Tf 44.00 121.40 Td ( 705          }) Tj ET
+BT /F3 7 Tf 44.00 112.80 Td ( 706  ) Tj ET
+BT /F3 7 Tf 44.00 104.20 Td ( 707          const signInResult = await supabaseSignInWithPassword\(matchedUser.email, password\);) Tj ET
+BT /F3 7 Tf 44.00 95.60 Td ( 708          if \(signInResult.error\) {) Tj ET
+BT /F3 7 Tf 44.00 87.00 Td ( 709            setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 78.40 Td ( 710            return { success: false, error: registerFailedAttempt\(\) };) Tj ET
+BT /F3 7 Tf 44.00 69.80 Td ( 711          }) Tj ET
+BT /F3 7 Tf 44.00 61.20 Td ( 712  ) Tj ET
+BT /F3 7 Tf 44.00 52.60 Td ( 713          const resolved = await resolveAppUserFromAuth\(signInResult.data.user ?? null\);) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 8 0 R >>
+endobj
+10 0 obj
+<< /Length 4334 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 714          if \(!resolved || resolved.role !== role || resolved.id.toLowerCase\(\) !== normalizedId.toLowerCase\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 715            await supabaseSignOut\(\);) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 716            setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 717            return { success: false, error: 'Your authenticated Supabase account is not linked to the selected app user.' };) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 718          }) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 719  ) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 720          const lastLogin = new Date\(\).toISOString\(\);) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 721          setRememberSession\(Boolean\(rememberMe\)\);) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 722          setUsers\(\(current\) =>) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 723            current.map\(\(account\) =>) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 724              account.id === resolved.id ? { ...account, lastLogin } : account) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 725            \)) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 726          \);) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 727          setUser\({ ...resolved }\);) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 728          setAttempts\(\(current\) => {) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 729            const next = { ...current };) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 730            delete next[attemptKey];) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 731            return next;) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 732          }\);) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 733          setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 734  ) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 735          void supabasePatch\() Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 736            'app_users',) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 737            `university_id=eq.${encodeURIComponent\(resolved.id\)}`,) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 738            {) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 739              last_login_at: lastLogin,) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 740              status: matchedUser.status,) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 741              auth_user_id: resolved.authUserId,) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 742            }) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 743          \).catch\(\(error\) => {) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 744            console.error\('Unable to update Supabase login metadata.', error\);) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 745          }\);) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 746  ) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 747          void syncUsersFromSupabase\(\);) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 748          return { success: true };) Tj ET
+BT /F2 15 Tf 36.00 251.00 Td (3. Protected routes and role boundaries) Tj ET
+BT /F3 8.8 Tf 36.00 232.00 Td (Source: src/App.tsx:25-90) Tj ET
+BT /F1 9.5 Tf 48.00 220.00 Td (- Most likely authorization question: how are student/advisor/admin screens separated?) Tj ET
+BT /F1 9.5 Tf 48.00 208.00 Td (- ProtectedRoute redirects unauthenticated users and blocks roles from routes they do not own.) Tj ET
+BT /F2 8.5 Tf 36.00 196.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td (  25  function ProtectedRoute\({) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td (  26    children,) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td (  27    allowedRoles,) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td (  28  }: {) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td (  29    children: ReactNode;) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td (  30    allowedRoles?: Role[];) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (  31  }\) {) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td (  32    const { isAuthenticated, isAuthReady, user } = useAuth\(\);) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td (  33  ) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td (  34    if \(!isAuthReady\) {) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td (  35      return <div className="min-h-screen bg-bg" />;) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td (  36    }) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td (  37  ) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td (  38    if \(!isAuthenticated\) {) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td (  39      return <Navigate to="/login" replace state={{ authError: 'Your session has expired or you must sign in to continue.' }} />;) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td (  40    }) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td (  41  ) Tj ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 10 0 R >>
+endobj
+12 0 obj
+<< /Length 5958 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  42    if \(allowedRoles && user && !allowedRoles.includes\(user.role\)\) {) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  43      return <Navigate to={getHomeRoute\(user.role\)} replace />;) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  44    }) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  45  ) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  46    return <>{children}</>;) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  47  }) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  48  ) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  49  function RoleHomeRedirect\(\) {) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (  50    const { user } = useAuth\(\);) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  51    return <Navigate to={user ? getHomeRoute\(user.role\) : '/login'} replace />;) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (  52  }) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (  53  ) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (  54  export default function App\(\) {) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (  55    return \() Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (  56      <BrowserRouter>) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (  57        <AuthProvider>) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (  58          <AppDataProvider>) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (  59            <MessagingProvider>) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (  60              <Routes>) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (  61                <Route path="/" element={<LandingPage />} />) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (  62                <Route path="/login" element={<LoginPage />} />) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (  63                <Route) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (  64                  path="/app") Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (  65                  element={) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td (  66                    <ProtectedRoute>) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td (  67                      <AppLayout />) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td (  68                    </ProtectedRoute>) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td (  69                  }) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td (  70                >) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td (  71                  <Route index element={<RoleHomeRedirect />} />) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td (  72                  <Route path="dashboard" element={<ProtectedRoute allowedRoles={['student']}><StudentDashboard /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td (  73                  <Route path="courses" element={<ProtectedRoute allowedRoles={['student']}><CoursePlanner /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td (  74                  <Route path="messages" element={<ProtectedRoute allowedRoles={['student']}><StudentMessagesPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td (  75                  <Route path="profile" element={<Navigate to="/app/dashboard" replace />} />) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td (  76                  <Route path="settings" element={<ProtectedRoute allowedRoles={['student']}><StudentSettingsPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td (  77                  <Route path="advisor" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorDashboard /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td (  78                  <Route path="advisor/student/:studentId" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorStudentDetailPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td (  79                  <Route path="advisor/messages" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorMessagesPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td (  80                  <Route path="advisor/courses" element={<Navigate to="/app/advisor" replace />} />) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td (  81                  <Route path="advisor/reports" element={<Navigate to="/app/advisor" replace />} />) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td (  82                  <Route path="advisor/settings" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorSettingsPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td (  83                  <Route path="admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td (  84                  <Route path="admin/students" element={<ProtectedRoute allowedRoles={['admin']}><AdminStudentsPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td (  85                  <Route path="admin/students/:studentId/transcript" element={<ProtectedRoute allowedRoles={['admin']}><AdminStudentTranscriptPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td (  86                  <Route path="admin/courses" element={<ProtectedRoute allowedRoles={['admin']}><CourseManagement /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td (  87                  <Route path="admin/users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagementPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td (  88                  <Route path="admin/model" element={<Navigate to="/app/admin/courses" replace />} />) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td (  89                  <Route path="admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettingsPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td (  90                </Route>) Tj ET
+BT /F2 15 Tf 36.00 130.60 Td (4. Remote data snapshot after login) Tj ET
+BT /F3 8.8 Tf 36.00 111.60 Td (Source: src/context/AppDataContext.tsx:866-899) Tj ET
+BT /F1 9.5 Tf 48.00 99.60 Td (- Most likely data-flow question: where does dashboard/transcript data come from?) Tj ET
+BT /F1 9.5 Tf 48.00 87.60 Td (- This single snapshot loads courses, student summaries, transcript view rows, drafts, and related academic) Tj ET
+BT /F1 9.5 Tf 48.00 75.60 Td (  data from Supabase.) Tj ET
+BT /F2 8.5 Tf 36.00 63.60 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 52.60 Td ( 866  async function loadRemoteSnapshot\(users: ReturnType<typeof useAuth>['users']\) {) Tj ET
+endstream
+endobj
+13 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 12 0 R >>
+endobj
+14 0 obj
+<< /Length 4869 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 867    const [) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 868      academicTermRows,) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 869      departments,) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 870      settings,) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 871      courseRows,) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 872      prerequisiteRows,) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 873      corequisiteRows,) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 874      ruleRows,) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 875      statRows,) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 876      profileRows,) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 877      transcriptViewRows,) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 878      draftRows,) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 879      draftCourseRows,) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 880      evaluationRows,) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 881      passwordInquiryMessageRows,) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 882    ] = await Promise.all\([) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 883      supabaseSelect<AcademicTermRow[]>\('academic_terms', 'select=term_code,academic_year,term_name,term_type,max_credits'\),) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 884      supabaseSelect<DepartmentRow[]>\('departments', 'select=id,name'\),) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 885      supabaseSelect<AppSettingRow[]>\('app_settings', 'select=key,value_json'\),) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 886      supabaseSelect<CourseRow[]>\() Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 887        'courses',) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 888        'select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis,updated_at&order=course_code.asc) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (      ') Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 889      \),) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 890      supabaseSelect<CoursePrerequisiteRow[]>\('course_prerequisites', 'select=course_id,prerequisite_course_id'\),) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 891      supabaseSelect<CourseCorequisiteRow[]>\('course_corequisites', 'select=course_id,corequisite_course_id'\),) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 892      supabaseSelect<CourseRuleRow[]>\('course_rules', 'select=course_id,rule_type,rule_value_int'\),) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 893      supabaseSelect<HistoricalStatRow[]>\() Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 894        'historical_course_stats',) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 895        'select=id,course_id,term_code,avg_grade,pass_rate,fail_rate,enrollment_count,withdrawals') Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 896      \),) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 897      supabaseSelect<StudentProfileRow[]>\('student_dashboard_summary_v', 'select=student_id,student_name,department_name,advisor_id,gpa,admission_year,admission_term,comp) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td (      leted_credits'\),) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 898      supabaseSelect<StudentCompletedCourseRow[]>\('student_transcript_v', 'select=id,student_id,term_code,term_type,course_code,course_name,credits,final_grade,status,att) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td (      empt_no'\),) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 899      supabaseSelect<ScheduleDraftRow[]>\('schedule_drafts', 'select=id,student_id,name,term_code,status,saved_at&order=saved_at.desc'\),) Tj ET
+BT /F2 15 Tf 36.00 242.40 Td (5. Advisor ownership guard) Tj ET
+BT /F3 8.8 Tf 36.00 223.40 Td (Source: src/pages/advisor/AdvisorStudentDetailPage.tsx:20-40) Tj ET
+BT /F1 9.5 Tf 48.00 211.40 Td (- Most likely advisor question: can an advisor see every student?) Tj ET
+BT /F1 9.5 Tf 48.00 199.40 Td (- The page only resolves a profile when the student advisorId matches the logged-in advisor ID.) Tj ET
+BT /F2 8.5 Tf 36.00 187.40 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td (  20  export default function AdvisorStudentDetailPage\(\) {) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td (  21    const { studentId = '' } = useParams\(\);) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td (  22    const navigate = useNavigate\(\);) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td (  23    const { user } = useAuth\(\);) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td (  24    const {) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (  25      courses,) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td (  26      getSelectedCourses,) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td (  27      getStudentDrafts,) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td (  28      getStudentTranscriptSemesters,) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td (  29      getStudentTermMetrics,) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td (  30      getStudentTranscript,) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td (  31      isAppDataReady,) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td (  32      plannerReviewSnapshots,) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td (  33      studentInsights,) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td (  34    } = useAppData\(\);) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td (  35  ) Tj ET
+endstream
+endobj
+15 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 14 0 R >>
+endobj
+16 0 obj
+<< /Length 4777 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  36    const profile = studentInsights.find\(\(item\) => item.id === studentId && item.advisorId === user?.id\) ?? null;) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  37    const selectedCourses = getSelectedCourses\(studentId\);) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  38    const drafts = getStudentDrafts\(studentId\);) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  39    const transcriptRows = getStudentTranscript\(studentId\);) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  40    const transcriptSemesters = getStudentTranscriptSemesters\(studentId\);) Tj ET
+BT /F2 15 Tf 36.00 509.00 Td (6. Admin transcript validation and save path) Tj ET
+BT /F3 8.8 Tf 36.00 490.00 Td (Source: src/pages/admin/AdminStudentTranscriptPage.tsx:133-212) Tj ET
+BT /F1 9.5 Tf 48.00 478.00 Td (- Most likely mark-changing question: how is input validated before saving?) Tj ET
+BT /F1 9.5 Tf 48.00 466.00 Td (- The editor accepts whole-number marks from 35 to 99, attempt numbers from 1 to 10, saves only changed rows,) Tj ET
+BT /F1 9.5 Tf 48.00 454.00 Td (  and sends each change through upsertTranscriptEntry.) Tj ET
+BT /F2 8.5 Tf 36.00 442.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 431.00 Td ( 133    const validationErrors = transcriptRows.flatMap\(\(row\) => {) Tj ET
+BT /F3 7 Tf 44.00 422.40 Td ( 134      const draft = getDraftForRow\(row\);) Tj ET
+BT /F3 7 Tf 44.00 413.80 Td ( 135      const finalGrade = parseGradeValue\(draft.finalGrade\);) Tj ET
+BT /F3 7 Tf 44.00 405.20 Td ( 136      const attemptNo = parseAttemptValue\(draft.attemptNo\);) Tj ET
+BT /F3 7 Tf 44.00 396.60 Td ( 137      if \(draft.finalGrade.trim\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 388.00 Td ( 138        if \(!/^\\d+$/.test\(draft.finalGrade.trim\(\)\)\) {) Tj ET
+BT /F3 7 Tf 44.00 379.40 Td ( 139          return [`${row.courseCode} needs a whole-number mark, or a blank mark.`];) Tj ET
+BT /F3 7 Tf 44.00 370.80 Td ( 140        }) Tj ET
+BT /F3 7 Tf 44.00 362.20 Td ( 141  ) Tj ET
+BT /F3 7 Tf 44.00 353.60 Td ( 142        if \(!Number.isInteger\(finalGrade\) || finalGrade === null || finalGrade < 35 || finalGrade > 99\) {) Tj ET
+BT /F3 7 Tf 44.00 345.00 Td ( 143          return [`${row.courseCode} needs a whole-number mark from 35 to 99, or a blank mark.`];) Tj ET
+BT /F3 7 Tf 44.00 336.40 Td ( 144        }) Tj ET
+BT /F3 7 Tf 44.00 327.80 Td ( 145  ) Tj ET
+BT /F3 7 Tf 44.00 319.20 Td ( 146        if \(!draft.attemptNo.trim\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 310.60 Td ( 147          return [`${row.courseCode} needs an attempt number from 1 to 10 when a mark is entered.`];) Tj ET
+BT /F3 7 Tf 44.00 302.00 Td ( 148        }) Tj ET
+BT /F3 7 Tf 44.00 293.40 Td ( 149      }) Tj ET
+BT /F3 7 Tf 44.00 284.80 Td ( 150  ) Tj ET
+BT /F3 7 Tf 44.00 276.20 Td ( 151      if \(draft.attemptNo.trim\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 267.60 Td ( 152        if \(!/^\\d+$/.test\(draft.attemptNo.trim\(\)\)\) {) Tj ET
+BT /F3 7 Tf 44.00 259.00 Td ( 153          return [`${row.courseCode} needs a whole-number attempt from 1 to 10, or a blank attempt.`];) Tj ET
+BT /F3 7 Tf 44.00 250.40 Td ( 154        }) Tj ET
+BT /F3 7 Tf 44.00 241.80 Td ( 155  ) Tj ET
+BT /F3 7 Tf 44.00 233.20 Td ( 156        if \(!Number.isInteger\(attemptNo\) || attemptNo === null || attemptNo < 1 || attemptNo > 10\) {) Tj ET
+BT /F3 7 Tf 44.00 224.60 Td ( 157          return [`${row.courseCode} needs a whole-number attempt from 1 to 10, or a blank attempt.`];) Tj ET
+BT /F3 7 Tf 44.00 216.00 Td ( 158        }) Tj ET
+BT /F3 7 Tf 44.00 207.40 Td ( 159      }) Tj ET
+BT /F3 7 Tf 44.00 198.80 Td ( 160  ) Tj ET
+BT /F3 7 Tf 44.00 190.20 Td ( 161      return [];) Tj ET
+BT /F3 7 Tf 44.00 181.60 Td ( 162    }\);) Tj ET
+BT /F3 7 Tf 44.00 173.00 Td ( 163  ) Tj ET
+BT /F3 7 Tf 44.00 164.40 Td ( 164    const changedRows = transcriptRows.filter\(\(row\) => {) Tj ET
+BT /F3 7 Tf 44.00 155.80 Td ( 165      const draft = draftRows[getDraftKey\(row\)];) Tj ET
+BT /F3 7 Tf 44.00 147.20 Td ( 166      if \(!draft\) {) Tj ET
+BT /F3 7 Tf 44.00 138.60 Td ( 167        return false;) Tj ET
+BT /F3 7 Tf 44.00 130.00 Td ( 168      }) Tj ET
+BT /F3 7 Tf 44.00 121.40 Td ( 169  ) Tj ET
+BT /F3 7 Tf 44.00 112.80 Td ( 170      return !row.id) Tj ET
+BT /F3 7 Tf 44.00 104.20 Td ( 171        || draft.termCode !== row.termCode) Tj ET
+BT /F3 7 Tf 44.00 95.60 Td ( 172        || parseGradeValue\(draft.finalGrade\) !== row.finalGrade) Tj ET
+BT /F3 7 Tf 44.00 87.00 Td ( 173        || parseAttemptValue\(draft.attemptNo\) !== row.attemptNo;) Tj ET
+BT /F3 7 Tf 44.00 78.40 Td ( 174    }\);) Tj ET
+BT /F3 7 Tf 44.00 69.80 Td ( 175    const hasChanges = changedRows.length > 0;) Tj ET
+BT /F3 7 Tf 44.00 61.20 Td ( 176  ) Tj ET
+BT /F3 7 Tf 44.00 52.60 Td ( 177    const transcriptByTerm = transcriptRows.reduce<Record<string, StudentTranscriptRow[]>>\(\(groups, row\) => {) Tj ET
+endstream
+endobj
+17 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 16 0 R >>
+endobj
+18 0 obj
+<< /Length 4659 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 178      const draft = getDraftForRow\(row\);) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 179      const termCode = draft.termCode;) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 180      groups[termCode] = [...\(groups[termCode] ?? []\), row];) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 181      return groups;) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 182    }, {}\);) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 183  ) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 184    const handleReset = \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 185      setDraftRows\({}\);) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 186      setMessage\(null\);) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 187      setError\(null\);) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 188    };) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 189  ) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 190    const handleSave = async \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 191      setMessage\(null\);) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 192      setError\(null\);) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 193  ) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 194      if \(validationErrors.length > 0\) {) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 195        setError\(validationErrors[0]\);) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 196        return;) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 197      }) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 198  ) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 199      setIsSaving\(true\);) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 200      for \(const row of changedRows\) {) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 201        const draft = draftRows[getDraftKey\(row\)];) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 202        const finalGrade = parseGradeValue\(draft.finalGrade\);) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 203        const attemptNo = parseAttemptValue\(draft.attemptNo\);) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 204        const result = await upsertTranscriptEntry\({) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 205          id: row.id,) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 206          studentId: row.studentId,) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 207          termCode: draft.termCode || row.termCode || termOptions[0]?.termCode || '',) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 208          courseCode: row.courseCode,) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 209          finalGrade,) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 210          status: getStatusFromGrade\(finalGrade\),) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 211          attemptNo: attemptNo ?? Math.max\(row.attemptNo, 1\),) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 212        }\);) Tj ET
+BT /F2 15 Tf 36.00 251.00 Td (7. Admin transcript mark input UI) Tj ET
+BT /F3 8.8 Tf 36.00 232.00 Td (Source: src/pages/admin/AdminStudentTranscriptPage.tsx:297-355) Tj ET
+BT /F1 9.5 Tf 48.00 220.00 Td (- Most likely UI question: which exact fields are editable?) Tj ET
+BT /F1 9.5 Tf 48.00 208.00 Td (- The admin can change attempt number, semester taken, and mark; status is derived from the mark.) Tj ET
+BT /F2 8.5 Tf 36.00 196.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td ( 297                              <td className="px-4 py-3 text-center">) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td ( 298                                <input) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td ( 299                                  type="number") Tj ET
+BT /F3 7 Tf 44.00 159.20 Td ( 300                                  min="1") Tj ET
+BT /F3 7 Tf 44.00 150.60 Td ( 301                                  max="10") Tj ET
+BT /F3 7 Tf 44.00 142.00 Td ( 302                                  step="1") Tj ET
+BT /F3 7 Tf 44.00 133.40 Td ( 303                                  inputMode="numeric") Tj ET
+BT /F3 7 Tf 44.00 124.80 Td ( 304                                  value={draft.attemptNo}) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td ( 305                                  onChange={\(event\) => setDraftRows\(\(current\) => \({) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td ( 306                                    ...current,) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td ( 307                                    [key]: { ...draft, attemptNo: event.target.value },) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td ( 308                                  }\)\)}) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td ( 309                                  className="w-20 rounded-lg border border-gray-200 px-3 py-2 text-center text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 f) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td (      ocus:ring-[#2563eb]/30") Tj ET
+BT /F3 7 Tf 44.00 64.60 Td ( 310                                />) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td ( 311                              </td>) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td ( 312                              <td className="px-4 py-3">) Tj ET
+endstream
+endobj
+19 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 18 0 R >>
+endobj
+20 0 obj
+<< /Length 5717 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 313                                <select) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 314                                  value={draft.termCode}) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 315                                  onChange={\(event\) => setDraftRows\(\(current\) => \({) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 316                                    ...current,) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 317                                    [key]: { ...draft, termCode: event.target.value },) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 318                                  }\)\)}) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 319                                  className="w-44 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (      2563eb]/30") Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 320                                >) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 321                                  {termOptions.map\(\(term\) => \() Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 322                                    <option key={term.termCode} value={term.termCode}>{term.termLabel}</option>) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 323                                  \)\)}) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 324                                </select>) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 325                              </td>) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 326                              <td className="px-4 py-3">) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 327                                <input) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 328                                  type="number") Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 329                                  min="35") Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 330                                  max="99") Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 331                                  step="1") Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 332                                  inputMode="numeric") Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 333                                  value={draft.finalGrade}) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 334                                  onChange={\(event\) => setDraftRows\(\(current\) => \({) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 335                                    ...current,) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 336                                    [key]: { ...draft, finalGrade: event.target.value },) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 337                                  }\)\)}) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 338                                  className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td (      2563eb]/30") Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 339                                />) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 340                                <button) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 341                                  type="button") Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 342                                  onClick={\(\) => setDraftRows\(\(current\) => \({) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 343                                    ...current,) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 344                                    [key]: { ...draft, finalGrade: '' },) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 345                                  }\)\)}) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 346                                  className="mt-2 text-xs font-semibold text-gray-500 transition-colors hover:text-[#2563eb]") Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 347                                >) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 348                                  Clear grade) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 349                                </button>) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 350                              </td>) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 351                              <td className="px-4 py-3 text-center">) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 352                                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${getStatusClass\(parsedGrade\)}`}>) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 353                                  {getStatusLabel\(parsedGrade\)}) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 354                                </span>) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 355                              </td>) Tj ET
+BT /F2 15 Tf 36.00 165.00 Td (8. Client upsert: revalidate, call API, sync derived state) Tj ET
+BT /F3 8.8 Tf 36.00 146.00 Td (Source: src/context/AppDataContext.tsx:1998-2054) Tj ET
+BT /F1 9.5 Tf 48.00 134.00 Td (- Most likely state-management question: what happens after Save changes?) Tj ET
+BT /F1 9.5 Tf 48.00 122.00 Td (- The client normalizes status, validates again, calls the admin endpoint, then updates local) Tj ET
+BT /F1 9.5 Tf 48.00 110.00 Td (  transcript/GPA-derived state.) Tj ET
+BT /F2 8.5 Tf 36.00 98.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 87.00 Td (1998    const upsertTranscriptEntry = useCallback\(async \(input: TranscriptEntryInput\): Promise<PlannerActionResult> => {) Tj ET
+BT /F3 7 Tf 44.00 78.40 Td (1999      const normalizedStatus = getTranscriptStatusForGrade\(input.finalGrade, input.status\);) Tj ET
+BT /F3 7 Tf 44.00 69.80 Td (2000      const normalizedInput = { ...input, status: normalizedStatus } satisfies TranscriptEntryInput;) Tj ET
+BT /F3 7 Tf 44.00 61.20 Td (2001      const validationError = validateTranscriptInput\(normalizedInput, state.transcriptRows\);) Tj ET
+BT /F3 7 Tf 44.00 52.60 Td (2002      if \(validationError\) {) Tj ET
+endstream
+endobj
+21 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 20 0 R >>
+endobj
+22 0 obj
+<< /Length 4544 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (2003        return { success: false, error: validationError };) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (2004      }) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (2005  ) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (2006      const course = state.courses.find\(\(item\) => item.code === normalizedInput.courseCode\);) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (2007      if \(!course\) {) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (2008        return { success: false, error: 'Course was not found.' };) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (2009      }) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (2010  ) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (2011      let entryId = normalizedInput.id ?? createId\(\);) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (2012  ) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (2013      if \(hasSupabaseConfig\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (2014        try {) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (2015          const result = await callAdminDataEndpoint<{ id?: string }>\('/api/admin-upsert-transcript-entry', {) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (2016            id: entryId,) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (2017            existingEntry: Boolean\(normalizedInput.id\),) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (2018            studentId: normalizedInput.studentId,) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (2019            termCode: normalizedInput.termCode,) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (2020            courseCode: normalizedInput.courseCode,) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (2021            finalGrade: normalizedInput.finalGrade,) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (2022            status: normalizedStatus,) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (2023            attemptNo: normalizedInput.attemptNo,) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (2024          }\);) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (2025          entryId = result?.id ?? entryId;) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (2026        } catch \(error\) {) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td (2027          return {) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td (2028            success: false,) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td (2029            error: error instanceof Error ? error.message : 'Unable to save transcript entry.',) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td (2030          };) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td (2031        }) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td (2032      }) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td (2033  ) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td (2034      const nextRow = {) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td (2035        id: entryId,) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td (2036        studentId: normalizedInput.studentId,) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td (2037        termCode: normalizedInput.termCode,) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td (2038        termLabel: formatTermLabel\(normalizedInput.termCode\),) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td (2039        termType: /summer/i.test\(normalizedInput.termCode\) ? 'summer' : 'regular',) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td (2040        courseCode: course.code,) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td (2041        courseName: course.name,) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td (2042        credits: course.credits,) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td (2043        finalGrade: normalizedInput.finalGrade,) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td (2044        status: normalizedStatus,) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td (2045        attemptNo: normalizedInput.attemptNo,) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td (2046      } satisfies StudentTranscriptRow;) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td (2047  ) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td (2048      setState\(\(current\) => syncDerivedTranscriptState\(current, [) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td (2049        ...current.transcriptRows.filter\(\(row\) => row.id !== entryId\),) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td (2050        nextRow,) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td (2051      ]\)\);) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td (2052  ) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td (2053      return { success: true };) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td (2054    }, [state.courses, state.transcriptRows, validateTranscriptInput]\);) Tj ET
+BT /F2 15 Tf 36.00 104.80 Td (9. Server endpoint: admin-only service-role write) Tj ET
+BT /F3 8.8 Tf 36.00 85.80 Td (Source: api/admin-upsert-transcript-entry.ts:45-65) Tj ET
+BT /F1 9.5 Tf 48.00 73.80 Td (- Most likely security question: how do you stop non-admin users from changing marks?) Tj ET
+BT /F1 9.5 Tf 48.00 61.80 Td (- The API validates the bearer token with Supabase Auth and requires a matching public.app_users admin record) Tj ET
+BT /F1 9.5 Tf 48.00 49.80 Td (  before any write.) Tj ET
+endstream
+endobj
+23 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 22 0 R >>
+endobj
+24 0 obj
+<< /Length 4653 >>
+stream
+BT /F2 8.5 Tf 36.00 559.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 548.00 Td (  45  async function requireAdmin\(request: VercelRequest, supabase: ReturnType<typeof getSupabaseAdminClient>\) {) Tj ET
+BT /F3 7 Tf 44.00 539.40 Td (  46    const token = String\(request.headers.authorization ?? ''\).replace\(/^Bearer\\s+/i, ''\).trim\(\);) Tj ET
+BT /F3 7 Tf 44.00 530.80 Td (  47    if \(!token\) {) Tj ET
+BT /F3 7 Tf 44.00 522.20 Td (  48      throw new Error\('Missing admin session token.'\);) Tj ET
+BT /F3 7 Tf 44.00 513.60 Td (  49    }) Tj ET
+BT /F3 7 Tf 44.00 505.00 Td (  50  ) Tj ET
+BT /F3 7 Tf 44.00 496.40 Td (  51    const { data: authData, error: authError } = await supabase.auth.getUser\(token\);) Tj ET
+BT /F3 7 Tf 44.00 487.80 Td (  52    if \(authError || !authData.user\) {) Tj ET
+BT /F3 7 Tf 44.00 479.20 Td (  53      throw new Error\('Invalid admin session token.'\);) Tj ET
+BT /F3 7 Tf 44.00 470.60 Td (  54    }) Tj ET
+BT /F3 7 Tf 44.00 462.00 Td (  55  ) Tj ET
+BT /F3 7 Tf 44.00 453.40 Td (  56    const { data: adminRows, error: profileError } = await supabase) Tj ET
+BT /F3 7 Tf 44.00 444.80 Td (  57      .from\('app_users'\)) Tj ET
+BT /F3 7 Tf 44.00 436.20 Td (  58      .select\('id,role'\)) Tj ET
+BT /F3 7 Tf 44.00 427.60 Td (  59      .or\(`auth_user_id.eq.${authData.user.id},email.eq.${authData.user.email ?? ''}`\)) Tj ET
+BT /F3 7 Tf 44.00 419.00 Td (  60      .eq\('role', 'admin'\)) Tj ET
+BT /F3 7 Tf 44.00 410.40 Td (  61      .limit\(1\);) Tj ET
+BT /F3 7 Tf 44.00 401.80 Td (  62  ) Tj ET
+BT /F3 7 Tf 44.00 393.20 Td (  63    if \(profileError || !adminRows || adminRows.length === 0\) {) Tj ET
+BT /F3 7 Tf 44.00 384.60 Td (  64      throw new Error\('Only admins can perform this operation.'\);) Tj ET
+BT /F3 7 Tf 44.00 376.00 Td (  65    }) Tj ET
+BT /F2 15 Tf 36.00 360.40 Td (10. Server endpoint: validate and persist mark) Tj ET
+BT /F3 8.8 Tf 36.00 341.40 Td (Source: api/admin-upsert-transcript-entry.ts:76-193) Tj ET
+BT /F1 9.5 Tf 48.00 329.40 Td (- Most likely backend question: what is written to the database?) Tj ET
+BT /F1 9.5 Tf 48.00 317.40 Td (- The endpoint validates student/course/grade/attempt, resolves IDs, then updates an existing transcript row) Tj ET
+BT /F1 9.5 Tf 48.00 305.40 Td (  or upserts by student/course/term/attempt.) Tj ET
+BT /F2 8.5 Tf 36.00 293.40 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 282.40 Td (  76  function validatePayload\(payload: TranscriptEntryPayload\) {) Tj ET
+BT /F3 7 Tf 44.00 273.80 Td (  77    const studentId = String\(payload.studentId ?? ''\).trim\(\);) Tj ET
+BT /F3 7 Tf 44.00 265.20 Td (  78    const termCode = String\(payload.termCode ?? ''\).trim\(\);) Tj ET
+BT /F3 7 Tf 44.00 256.60 Td (  79    const courseCode = String\(payload.courseCode ?? ''\).trim\(\);) Tj ET
+BT /F3 7 Tf 44.00 248.00 Td (  80    const finalGrade = payload.finalGrade ?? null;) Tj ET
+BT /F3 7 Tf 44.00 239.40 Td (  81    const attemptNo = Number\(payload.attemptNo\);) Tj ET
+BT /F3 7 Tf 44.00 230.80 Td (  82    const status = payload.status ?? 'in_progress';) Tj ET
+BT /F3 7 Tf 44.00 222.20 Td (  83  ) Tj ET
+BT /F3 7 Tf 44.00 213.60 Td (  84    if \(!studentId || !termCode || !courseCode\) {) Tj ET
+BT /F3 7 Tf 44.00 205.00 Td (  85      return { error: 'Missing transcript entry fields.' };) Tj ET
+BT /F3 7 Tf 44.00 196.40 Td (  86    }) Tj ET
+BT /F3 7 Tf 44.00 187.80 Td (  87  ) Tj ET
+BT /F3 7 Tf 44.00 179.20 Td (  88    if \(!['passed', 'failed', 'withdrawn', 'in_progress'].includes\(status\)\) {) Tj ET
+BT /F3 7 Tf 44.00 170.60 Td (  89      return { error: 'Invalid transcript status.' };) Tj ET
+BT /F3 7 Tf 44.00 162.00 Td (  90    }) Tj ET
+BT /F3 7 Tf 44.00 153.40 Td (  91  ) Tj ET
+BT /F3 7 Tf 44.00 144.80 Td (  92    if \(finalGrade !== null && \(!Number.isInteger\(finalGrade\) || finalGrade < 35 || finalGrade > 99\)\) {) Tj ET
+BT /F3 7 Tf 44.00 136.20 Td (  93      return { error: 'Marks must be whole numbers from 35 to 99, or blank.' };) Tj ET
+BT /F3 7 Tf 44.00 127.60 Td (  94    }) Tj ET
+BT /F3 7 Tf 44.00 119.00 Td (  95  ) Tj ET
+BT /F3 7 Tf 44.00 110.40 Td (  96    if \(!Number.isInteger\(attemptNo\) || attemptNo < 1 || attemptNo > 10\) {) Tj ET
+BT /F3 7 Tf 44.00 101.80 Td (  97      return { error: 'Attempt number must be a whole number from 1 to 10.' };) Tj ET
+BT /F3 7 Tf 44.00 93.20 Td (  98    }) Tj ET
+BT /F3 7 Tf 44.00 84.60 Td (  99  ) Tj ET
+BT /F3 7 Tf 44.00 76.00 Td ( 100    return {) Tj ET
+BT /F3 7 Tf 44.00 67.40 Td ( 101      input: {) Tj ET
+BT /F3 7 Tf 44.00 58.80 Td ( 102        id: payload.id ? String\(payload.id\) : undefined,) Tj ET
+BT /F3 7 Tf 44.00 50.20 Td ( 103        existingEntry: payload.existingEntry === true,) Tj ET
+endstream
+endobj
+25 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 24 0 R >>
+endobj
+26 0 obj
+<< /Length 4166 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 104        studentId,) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 105        termCode,) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 106        courseCode,) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 107        finalGrade,) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 108        status: getStatusForGrade\(finalGrade\),) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 109        attemptNo,) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 110      },) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 111    };) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 112  }) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 113  ) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 114  export default async function handler\(request: VercelRequest, response: VercelResponse\) {) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 115    if \(request.method !== 'POST'\) {) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 116      response.status\(405\).json\({ success: false, error: 'Method not allowed.' }\);) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 117      return;) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 118    }) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 119  ) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 120    try {) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 121      const payload = typeof request.body === 'string') Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 122        ? JSON.parse\(request.body\) as TranscriptEntryPayload) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 123        : request.body as TranscriptEntryPayload;) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 124      const validation = validatePayload\(payload\);) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 125      if \('error' in validation\) {) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 126        response.status\(400\).json\({ success: false, error: validation.error }\);) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 127        return;) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 128      }) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 129  ) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 130      const supabase = getSupabaseAdminClient\(\);) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 131      await requireAdmin\(request, supabase\);) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 132  ) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 133      const { input } = validation;) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 134      const { data: student, error: studentError } = await supabase) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 135        .from\('app_users'\)) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 136        .select\('id'\)) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 137        .eq\('university_id', input.studentId\)) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 138        .eq\('role', 'student'\)) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 139        .maybeSingle\(\);) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 140  ) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 141      if \(studentError\) {) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 142        throw studentError;) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 143      }) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 144  ) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 145      if \(!student\) {) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 146        response.status\(404\).json\({ success: false, error: 'Student account was not found.' }\);) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 147        return;) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 148      }) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 149  ) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 150      const { data: course, error: courseError } = await supabase) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 151        .from\('courses'\)) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 152        .select\('id'\)) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 153        .eq\('course_code', input.courseCode\)) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 154        .maybeSingle\(\);) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 155  ) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 156      if \(courseError\) {) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 157        throw courseError;) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 158      }) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 159  ) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 160      if \(!course\) {) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 161        response.status\(404\).json\({ success: false, error: 'Course was not found.' }\);) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 162        return;) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 163      }) Tj ET
+endstream
+endobj
+27 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 26 0 R >>
+endobj
+28 0 obj
+<< /Length 4397 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 164  ) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 165      const transcriptPayload = {) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 166        id: input.id,) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 167        student_id: student.id,) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 168        term_code: input.termCode,) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 169        course_id: course.id,) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 170        final_grade: input.finalGrade,) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 171        status: input.status,) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 172        attempt_no: input.attemptNo,) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 173      };) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 174  ) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 175      const query = input.existingEntry && input.id) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 176        ? supabase) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 177            .from\('student_transcript_entries'\)) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 178            .update\(transcriptPayload\)) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 179            .eq\('id', input.id\)) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 180            .select\('id'\)) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 181            .single\(\)) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 182        : supabase) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 183            .from\('student_transcript_entries'\)) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 184            .upsert\(transcriptPayload, { onConflict: 'student_id,course_id,term_code,attempt_no' }\)) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 185            .select\('id'\)) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 186            .single\(\);) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 187  ) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 188      const { data: savedEntry, error: saveError } = await query;) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 189      if \(saveError\) {) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 190        throw saveError;) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 191      }) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 192  ) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 193      response.status\(200\).json\({ success: true, id: savedEntry.id }\);) Tj ET
+BT /F2 15 Tf 36.00 294.00 Td (11. Database transcript table) Tj ET
+BT /F3 8.8 Tf 36.00 275.00 Td (Source: supabase/007_transcript_first_academic_schema.sql:29-40) Tj ET
+BT /F1 9.5 Tf 48.00 263.00 Td (- Most likely schema question: where are marks stored?) Tj ET
+BT /F1 9.5 Tf 48.00 251.00 Td (- student_transcript_entries is the canonical table for term, course, final_grade, status, and attempt number.) Tj ET
+BT /F2 8.5 Tf 36.00 239.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 228.00 Td (  29  create table if not exists public.student_transcript_entries \() Tj ET
+BT /F3 7 Tf 44.00 219.40 Td (  30    id uuid primary key default gen_random_uuid\(\),) Tj ET
+BT /F3 7 Tf 44.00 210.80 Td (  31    student_id uuid not null references public.app_users\(id\) on delete cascade,) Tj ET
+BT /F3 7 Tf 44.00 202.20 Td (  32    term_code text not null,) Tj ET
+BT /F3 7 Tf 44.00 193.60 Td (  33    course_id uuid not null references public.courses\(id\) on delete restrict,) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td (  34    final_grade numeric\(5,2\),) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td (  35    status text not null check \(status in \('passed', 'failed', 'withdrawn', 'in_progress'\)\),) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td (  36    attempt_no integer not null default 1 check \(attempt_no >= 1\),) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td (  37    created_at timestamptz not null default timezone\('utc', now\(\)\),) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td (  38    updated_at timestamptz not null default timezone\('utc', now\(\)\),) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td (  39    unique \(student_id, course_id, term_code, attempt_no\)) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (  40  \);) Tj ET
+BT /F2 15 Tf 36.00 117.80 Td (12. Database views derive transcript, GPA, and credits) Tj ET
+BT /F3 8.8 Tf 36.00 98.80 Td (Source: supabase/007_transcript_first_academic_schema.sql:215-323) Tj ET
+BT /F1 9.5 Tf 48.00 86.80 Td (- Most likely dashboard question: how does changing a mark affect GPA?) Tj ET
+BT /F1 9.5 Tf 48.00 74.80 Td (- Views expose joined transcript rows and recompute GPA/completed credits from the transcript table.) Tj ET
+BT /F2 8.5 Tf 36.00 62.80 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 51.80 Td ( 215  create or replace view public.student_transcript_v as) Tj ET
+endstream
+endobj
+29 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 28 0 R >>
+endobj
+30 0 obj
+<< /Length 4548 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 216  select) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 217    ste.id,) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 218    ste.student_id,) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 219    ste.term_code,) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 220    coalesce\(at.term_type, public.term_type_from_term_name\(public.term_name_from_code\(ste.term_code\)\)\) as term_type,) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 221    c.course_code,) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 222    c.title as course_name,) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 223    c.credits,) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 224    ste.final_grade,) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 225    ste.status,) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 226    ste.attempt_no) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 227  from public.student_transcript_entries ste) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 228  join public.courses c on c.id = ste.course_id) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 229  left join public.academic_terms at on at.term_code = ste.term_code;) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 230  ) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 231  create or replace view public.student_term_metrics_v as) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 232  select) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 233    ste.student_id,) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 234    ste.term_code,) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 235    coalesce\(at.term_type, public.term_type_from_term_name\(public.term_name_from_code\(ste.term_code\)\)\) as term_type,) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 236    count\(*\)::integer as course_count,) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 237    coalesce\(sum\(case when ste.status = 'passed' then c.credits else 0 end\), 0\)::integer as completed_credits,) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 238    round\(\(avg\(public.normalize_transcript_mark\(ste.final_grade\)\) * 4 / 100.0\)::numeric, 2\) as gpa) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 239  from public.student_transcript_entries ste) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 240  join public.courses c on c.id = ste.course_id) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 241  left join public.academic_terms at on at.term_code = ste.term_code) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 242  group by) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 243    ste.student_id,) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 244    ste.term_code,) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 245    coalesce\(at.term_type, public.term_type_from_term_name\(public.term_name_from_code\(ste.term_code\)\)\);) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 246  ) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 247  create or replace view public.student_dashboard_summary_v as) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 248  with transcript_marks as \() Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 249    select) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 250      ste.student_id,) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 251      round\(\(avg\(public.normalize_transcript_mark\(ste.final_grade\)\) * 4 / 100.0\)::numeric, 2\) as gpa) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 252    from public.student_transcript_entries ste) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 253    where ste.final_grade is not null) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 254    group by ste.student_id) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 255  \),) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 256  completed_credit_totals as \() Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 257    select) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 258      passed.student_id,) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 259      coalesce\(sum\(c.credits\), 0\)::integer as completed_credits) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 260    from \() Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 261      select distinct student_id, course_id) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 262      from public.student_transcript_entries) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 263      where status = 'passed') Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 264    \) passed) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 265    join public.courses c on c.id = passed.course_id) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 266    group by passed.student_id) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 267  \),) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 268  latest_draft as \() Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 269    select distinct on \(student_id\)) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 270      id,) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 271      student_id,) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 272      name,) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 273      term_code,) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 274      status,) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 275      saved_at) Tj ET
+endstream
+endobj
+31 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 30 0 R >>
+endobj
+32 0 obj
+<< /Length 3896 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 276    from public.schedule_drafts) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 277    order by student_id, saved_at desc) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 278  \),) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 279  latest_evaluation as \() Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 280    select distinct on \(student_id\)) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 281      id,) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 282      schedule_id,) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 283      student_id,) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 284      total_score,) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 285      risk_label,) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 286      total_credits,) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 287      recommendations,) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 288      explanation,) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 289      evaluated_at) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 290    from public.schedule_evaluations) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 291    order by student_id, evaluated_at desc) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 292  \)) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 293  select) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 294    student_user.id as student_id,) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 295    student_user.university_id,) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 296    student_user.full_name as student_name,) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 297    coalesce\(transcript_marks.gpa, 0\) as gpa,) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 298    coalesce\(completed_credit_totals.completed_credits, 0\) as completed_credits,) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 299    sp.admission_year,) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 300    sp.admission_term,) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 301    d.name as department_name,) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 302    advisor_user.id as advisor_id,) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 303    advisor_user.full_name as advisor_name,) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 304    latest_draft.id as latest_draft_id,) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 305    latest_draft.name as latest_draft_name,) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 306    latest_draft.term_code as latest_draft_term_code,) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 307    latest_draft.status as latest_draft_status,) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 308    latest_draft.saved_at as latest_draft_saved_at,) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 309    latest_evaluation.id as latest_evaluation_id,) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 310    latest_evaluation.total_score as latest_total_score,) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 311    latest_evaluation.risk_label as latest_risk_label,) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 312    latest_evaluation.total_credits as latest_total_credits,) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 313    latest_evaluation.recommendations as latest_recommendations,) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 314    latest_evaluation.explanation as latest_explanation,) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 315    latest_evaluation.evaluated_at as latest_evaluated_at) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 316  from public.student_profiles sp) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 317  join public.app_users student_user on student_user.id = sp.user_id) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 318  join public.departments d on d.id = sp.department_id) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 319  left join public.app_users advisor_user on advisor_user.id = sp.advisor_id) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 320  left join transcript_marks on transcript_marks.student_id = sp.user_id) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 321  left join completed_credit_totals on completed_credit_totals.student_id = sp.user_id) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 322  left join latest_draft on latest_draft.student_id = sp.user_id) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 323  left join latest_evaluation on latest_evaluation.student_id = sp.user_id;) Tj ET
+endstream
+endobj
+33 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 32 0 R >>
+endobj
+xref
+0 34
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000206 00000 n 
+0000000276 00000 n 
+0000000351 00000 n 
+0000000419 00000 n 
+0000004689 00000 n 
+0000004835 00000 n 
+0000009434 00000 n 
+0000009580 00000 n 
+0000013966 00000 n 
+0000014114 00000 n 
+0000020124 00000 n 
+0000020272 00000 n 
+0000025193 00000 n 
+0000025341 00000 n 
+0000030170 00000 n 
+0000030318 00000 n 
+0000035029 00000 n 
+0000035177 00000 n 
+0000040946 00000 n 
+0000041094 00000 n 
+0000045690 00000 n 
+0000045838 00000 n 
+0000050543 00000 n 
+0000050691 00000 n 
+0000054909 00000 n 
+0000055057 00000 n 
+0000059506 00000 n 
+0000059654 00000 n 
+0000064254 00000 n 
+0000064402 00000 n 
+0000068350 00000 n 
+trailer
+<< /Size 34 /Root 1 0 R >>
+startxref
+68498
+%%EOF

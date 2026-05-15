@@ -1,0 +1,2232 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [7 0 R 9 0 R 11 0 R 13 0 R 15 0 R 17 0 R 19 0 R 21 0 R 23 0 R 25 0 R 27 0 R 29 0 R 31 0 R 33 0 R 35 0 R 37 0 R 39 0 R 41 0 R 43 0 R 45 0 R 47 0 R 49 0 R 51 0 R 53 0 R 55 0 R 57 0 R 59 0 R 61 0 R 63 0 R 65 0 R 67 0 R 69 0 R 71 0 R] /Count 33 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+6 0 obj
+<< /Length 4270 >>
+stream
+BT /F2 15 Tf 36.00 559.00 Td (Smart Academic Advisor - Code Trace) Tj ET
+BT /F1 10.5 Tf 36.00 540.00 Td (Grad project discussion PDF: the most important source snippets from login through protected routing, data loading,) Tj ET
+BT /F1 10.5 Tf 36.00 527.00 Td (advisor transcript review, admin mark editing, API persistence, and SQL-derived GPA views.) Tj ET
+BT /F1 9 Tf 36.00 514.00 Td (Generated from repository source on 2026-05-15.) Tj ET
+BT /F2 12 Tf 36.00 493.00 Td (Primary defense points) Tj ET
+BT /F1 9.5 Tf 48.00 477.00 Td (- Authentication is handled by Supabase Auth, but app roles come from public.app_users and are checked before) Tj ET
+BT /F1 9.5 Tf 48.00 465.00 Td (  role routes are shown.) Tj ET
+BT /F1 9.5 Tf 48.00 453.00 Td (- The login flow is protected by reCAPTCHA before AuthContext.login processes credentials.) Tj ET
+BT /F1 9.5 Tf 48.00 441.00 Td (- Advisor views are read-only and scoped to the logged-in advisor via advisorId.) Tj ET
+BT /F1 9.5 Tf 48.00 429.00 Td (- Changing marks is admin-only: route guard in App.tsx, UI validation in AdminStudentTranscriptPage, and) Tj ET
+BT /F1 9.5 Tf 48.00 417.00 Td (  token/admin verification in the server endpoint.) Tj ET
+BT /F1 9.5 Tf 48.00 405.00 Td (- Transcript marks are persisted in student_transcript_entries; SQL views recompute transcript rows, GPA, and) Tj ET
+BT /F1 9.5 Tf 48.00 393.00 Td (  completed credits for dashboards.) Tj ET
+BT /F2 12 Tf 36.00 373.00 Td (End-to-end trace) Tj ET
+BT /F1 9.5 Tf 48.00 357.00 Td (- 1. User opens /login, selects role, enters ID and password.) Tj ET
+BT /F1 9.5 Tf 48.00 345.00 Td (- 2. LoginPage obtains and verifies a reCAPTCHA token before credentials are processed.) Tj ET
+BT /F1 9.5 Tf 48.00 333.00 Td (- 3. AuthContext.login looks up the app user by university ID, checks selected role/status, and signs in with) Tj ET
+BT /F1 9.5 Tf 48.00 321.00 Td (  Supabase email/password.) Tj ET
+BT /F1 9.5 Tf 48.00 309.00 Td (- 4. AuthContext resolves the Supabase auth user back to public.app_users and stores the role-aware session.) Tj ET
+BT /F1 9.5 Tf 48.00 297.00 Td (- 5. App.tsx routes the user to the correct protected area. Admin transcript editing is only reachable through) Tj ET
+BT /F1 9.5 Tf 48.00 285.00 Td (  an admin route.) Tj ET
+BT /F1 9.5 Tf 48.00 273.00 Td (- 6. AppDataContext loads Supabase views into frontend state: courses, students, transcripts, GPA summaries,) Tj ET
+BT /F1 9.5 Tf 48.00 261.00 Td (  drafts, and evaluations.) Tj ET
+BT /F1 9.5 Tf 48.00 249.00 Td (- 7. Advisors inspect advisee transcript and risk views, guarded by advisorId === current user ID.) Tj ET
+BT /F1 9.5 Tf 48.00 237.00 Td (- 8. Admins open a student transcript, edit mark/attempt/term fields, and click Save changes.) Tj ET
+BT /F1 9.5 Tf 48.00 225.00 Td (- 9. The admin transcript page validates the edits and calls upsertTranscriptEntry for each changed row.) Tj ET
+BT /F1 9.5 Tf 48.00 213.00 Td (- 10. upsertTranscriptEntry revalidates, posts to /api/admin-upsert-transcript-entry, then refreshes derived) Tj ET
+BT /F1 9.5 Tf 48.00 201.00 Td (  frontend transcript/GPA state.) Tj ET
+BT /F1 9.5 Tf 48.00 189.00 Td (- 11. The server endpoint checks the bearer token belongs to an admin and writes student_transcript_entries) Tj ET
+BT /F1 9.5 Tf 48.00 177.00 Td (  using the service role.) Tj ET
+BT /F1 9.5 Tf 48.00 165.00 Td (- 12. SQL views expose updated transcript rows and recomputed GPA/completed credits back to the dashboards.) Tj ET
+BT /F2 15 Tf 36.00 143.00 Td (1. Login Form: role, reCAPTCHA, credentials) Tj ET
+BT /F3 8.8 Tf 36.00 124.00 Td (Source: src/pages/LoginPage.tsx:20-93) Tj ET
+BT /F1 9.5 Tf 48.00 112.00 Td (- Shows the role selector state and login submission entry point.) Tj ET
+BT /F1 9.5 Tf 48.00 100.00 Td (- Checks Supabase config, verifies reCAPTCHA, calls AuthContext.login, then routes to the selected role home.) Tj ET
+BT /F2 8.5 Tf 36.00 88.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 77.00 Td (  20  export default function LoginPage\(\) {) Tj ET
+BT /F3 7 Tf 44.00 68.40 Td (  21    const { isAuthenticated, login, user } = useAuth\(\);) Tj ET
+BT /F3 7 Tf 44.00 59.80 Td (  22    const { submitPasswordResetInquiry } = useAppData\(\);) Tj ET
+BT /F3 7 Tf 44.00 51.20 Td (  23    const navigate = useNavigate\(\);) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 4691 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  24    const location = useLocation\(\);) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  25    const authError = \(location.state as { authError?: string } | null\)?.authError ?? null;) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  26  ) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  27    const [selectedRole, setSelectedRole] = useState<Role>\('student'\);) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  28    const [userId, setUserId] = useState\(''\);) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  29    const [password, setPassword] = useState\(''\);) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  30    const [rememberMe, setRememberMe] = useState\(false\);) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  31    const [isSubmitting, setIsSubmitting] = useState\(false\);) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (  32    const [error, setError] = useState<string | null>\(null\);) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  33    const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState\(false\);) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (  34    const [forgotPasswordId, setForgotPasswordId] = useState\(''\);) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (  35    const [forgotPasswordMessage, setForgotPasswordMessage] = useState<string | null>\(null\);) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (  36    const [forgotPasswordError, setForgotPasswordError] = useState<string | null>\(null\);) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (  37    const [isSubmittingInquiry, setIsSubmittingInquiry] = useState\(false\);) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (  38  ) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (  39    useEffect\(\(\) => {) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (  40      if \(isAuthenticated && user\) {) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (  41        navigate\(getHomeRoute\(user.role\), { replace: true }\);) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (  42      }) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (  43    }, [isAuthenticated, navigate, user]\);) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (  44  ) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (  45    useEffect\(\(\) => {) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (  46      if \(authError\) {) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (  47        navigate\(location.pathname, { replace: true, state: null }\);) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td (  48      }) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td (  49    }, [authError, location.pathname, navigate]\);) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td (  50  ) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td (  51    const handleRoleChange = \(role: Role\) => {) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td (  52      setSelectedRole\(role\);) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td (  53      setError\(null\);) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td (  54      setForgotPasswordError\(null\);) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td (  55      setForgotPasswordMessage\(null\);) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td (  56      if \(role === 'admin'\) {) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td (  57        setIsForgotPasswordOpen\(false\);) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td (  58      }) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td (  59    };) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td (  60  ) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td (  61    const handleSubmit = async \(event: React.FormEvent\) => {) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td (  62      event.preventDefault\(\);) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td (  63      setError\(null\);) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td (  64  ) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td (  65      if \(backendConfigError\) {) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td (  66        setError\(backendConfigError\);) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td (  67        return;) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td (  68      }) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td (  69  ) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td (  70      if \(!hasRecaptchaSiteKey\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td (  71        setError\('reCAPTCHA is not configured yet. Add the site key before logging in.'\);) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td (  72        return;) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td (  73      }) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td (  74  ) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td (  75      setIsSubmitting\(true\);) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td (  76  ) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td (  77      try {) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td (  78        const token = await executeRecaptcha\(RECAPTCHA_ACTION\);) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td (  79        await verifyRecaptchaToken\(token, RECAPTCHA_ACTION\);) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td (  80  ) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td (  81        const result = await login\({ role: selectedRole, id: userId, password, rememberMe }\);) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td (  82        if \(!result.success\) {) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td (  83          setError\(result.error ?? 'Unable to sign in.'\);) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 8 0 R >>
+endobj
+10 0 obj
+<< /Length 4242 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  84          return;) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  85        }) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  86  ) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  87        navigate\(getHomeRoute\(selectedRole\), { replace: true }\);) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  88      } catch \(submissionError\) {) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  89        setError\(submissionError instanceof Error ? submissionError.message : 'Unable to verify reCAPTCHA.'\);) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  90      } finally {) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  91        setIsSubmitting\(false\);) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (  92      }) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  93    };) Tj ET
+BT /F2 15 Tf 36.00 466.00 Td (2. reCAPTCHA Client Verification Call) Tj ET
+BT /F3 8.8 Tf 36.00 447.00 Td (Source: src/lib/recaptcha.ts:80-139) Tj ET
+BT /F1 9.5 Tf 48.00 435.00 Td (- Generates the browser token and posts it to the server verification endpoint.) Tj ET
+BT /F1 9.5 Tf 48.00 423.00 Td (- Keeps login protected before credentials are sent to Supabase.) Tj ET
+BT /F2 8.5 Tf 36.00 411.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 400.00 Td (  80  export function hasRecaptchaSiteKey\(\) {) Tj ET
+BT /F3 7 Tf 44.00 391.40 Td (  81    return Boolean\(RECAPTCHA_SITE_KEY\);) Tj ET
+BT /F3 7 Tf 44.00 382.80 Td (  82  }) Tj ET
+BT /F3 7 Tf 44.00 374.20 Td (  83  ) Tj ET
+BT /F3 7 Tf 44.00 365.60 Td (  84  export async function executeRecaptcha\(action: string\) {) Tj ET
+BT /F3 7 Tf 44.00 357.00 Td (  85    if \(!RECAPTCHA_SITE_KEY\) {) Tj ET
+BT /F3 7 Tf 44.00 348.40 Td (  86      throw new Error\('reCAPTCHA is not configured for this environment.'\);) Tj ET
+BT /F3 7 Tf 44.00 339.80 Td (  87    }) Tj ET
+BT /F3 7 Tf 44.00 331.20 Td (  88  ) Tj ET
+BT /F3 7 Tf 44.00 322.60 Td (  89    await withTimeout\(loadRecaptchaScript\(\), 'Timed out while loading reCAPTCHA.'\);) Tj ET
+BT /F3 7 Tf 44.00 314.00 Td (  90    await withTimeout\(waitForRecaptchaReady\(\), 'Timed out while waiting for reCAPTCHA to become ready.'\);) Tj ET
+BT /F3 7 Tf 44.00 305.40 Td (  91  ) Tj ET
+BT /F3 7 Tf 44.00 296.80 Td (  92    if \(!window.grecaptcha\) {) Tj ET
+BT /F3 7 Tf 44.00 288.20 Td (  93      throw new Error\('reCAPTCHA is unavailable.'\);) Tj ET
+BT /F3 7 Tf 44.00 279.60 Td (  94    }) Tj ET
+BT /F3 7 Tf 44.00 271.00 Td (  95  ) Tj ET
+BT /F3 7 Tf 44.00 262.40 Td (  96    return withTimeout\() Tj ET
+BT /F3 7 Tf 44.00 253.80 Td (  97      window.grecaptcha.execute\(RECAPTCHA_SITE_KEY, { action }\),) Tj ET
+BT /F3 7 Tf 44.00 245.20 Td (  98      'Timed out while generating the reCAPTCHA token. Try disabling ad blockers or privacy shields and try again.') Tj ET
+BT /F3 7 Tf 44.00 236.60 Td (  99    \);) Tj ET
+BT /F3 7 Tf 44.00 228.00 Td ( 100  }) Tj ET
+BT /F3 7 Tf 44.00 219.40 Td ( 101  ) Tj ET
+BT /F3 7 Tf 44.00 210.80 Td ( 102  interface RecaptchaVerificationResult {) Tj ET
+BT /F3 7 Tf 44.00 202.20 Td ( 103    success: boolean;) Tj ET
+BT /F3 7 Tf 44.00 193.60 Td ( 104    score?: number;) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td ( 105    action?: string;) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td ( 106    error?: string;) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td ( 107    errors?: string[];) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td ( 108  }) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td ( 109  ) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td ( 110  export async function verifyRecaptchaToken\(token: string, action: string\) {) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td ( 111    const controller = new AbortController\(\);) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td ( 112    const timeoutId = window.setTimeout\(\(\) => controller.abort\(\), RECAPTCHA_TIMEOUT_MS\);) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td ( 113  ) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td ( 114    try {) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td ( 115      const response = await fetch\('/api/verify-recaptcha', {) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td ( 116        method: 'POST',) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td ( 117        headers: {) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td ( 118          'Content-Type': 'application/json',) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td ( 119        },) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td ( 120        body: JSON.stringify\({ token, action }\),) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td ( 121        signal: controller.signal,) Tj ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 10 0 R >>
+endobj
+12 0 obj
+<< /Length 4211 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 122      }\);) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 123  ) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 124      const payload = \(await response.json\(\)\) as RecaptchaVerificationResult;) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 125      if \(!response.ok || !payload.success\) {) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 126        throw new Error\(payload.error ?? 'reCAPTCHA verification failed.'\);) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 127      }) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 128  ) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 129      return payload;) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 130    } catch \(error\) {) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 131      if \(error instanceof DOMException && error.name === 'AbortError'\) {) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 132        throw new Error\('Timed out while verifying reCAPTCHA. Check the deployment logs or try again.'\);) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 133      }) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 134  ) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 135      throw error;) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 136    } finally {) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 137      window.clearTimeout\(timeoutId\);) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 138    }) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 139  }) Tj ET
+BT /F2 15 Tf 36.00 397.20 Td (3. reCAPTCHA Server Endpoint) Tj ET
+BT /F3 8.8 Tf 36.00 378.20 Td (Source: api/verify-recaptcha.ts:45-145) Tj ET
+BT /F1 9.5 Tf 48.00 366.20 Td (- Rejects non-POST requests and missing tokens.) Tj ET
+BT /F1 9.5 Tf 48.00 354.20 Td (- Bypasses preview deployments, but validates production requests against Google with action and score checks.) Tj ET
+BT /F2 8.5 Tf 36.00 342.20 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 331.20 Td (  45  export default async function handler\(request: VercelRequest, response: VercelResponse\) {) Tj ET
+BT /F3 7 Tf 44.00 322.60 Td (  46    if \(request.method !== 'POST'\) {) Tj ET
+BT /F3 7 Tf 44.00 314.00 Td (  47      response.status\(405\).json\({ success: false, error: 'Method not allowed.' }\);) Tj ET
+BT /F3 7 Tf 44.00 305.40 Td (  48      return;) Tj ET
+BT /F3 7 Tf 44.00 296.80 Td (  49    }) Tj ET
+BT /F3 7 Tf 44.00 288.20 Td (  50  ) Tj ET
+BT /F3 7 Tf 44.00 279.60 Td (  51    const secret = process.env.RECAPTCHA_SECRET_KEY;) Tj ET
+BT /F3 7 Tf 44.00 271.00 Td (  52    const isPreviewDeployment = isTestingDeployment\(request\);) Tj ET
+BT /F3 7 Tf 44.00 262.40 Td (  53    if \(!secret\) {) Tj ET
+BT /F3 7 Tf 44.00 253.80 Td (  54      response.status\(500\).json\({ success: false, error: 'reCAPTCHA secret key is not configured.' }\);) Tj ET
+BT /F3 7 Tf 44.00 245.20 Td (  55      return;) Tj ET
+BT /F3 7 Tf 44.00 236.60 Td (  56    }) Tj ET
+BT /F3 7 Tf 44.00 228.00 Td (  57  ) Tj ET
+BT /F3 7 Tf 44.00 219.40 Td (  58    const payload = typeof request.body === 'string') Tj ET
+BT /F3 7 Tf 44.00 210.80 Td (  59      ? JSON.parse\(request.body\) as { token?: string; action?: string }) Tj ET
+BT /F3 7 Tf 44.00 202.20 Td (  60      : \(request.body ?? {}\) as { token?: string; action?: string };) Tj ET
+BT /F3 7 Tf 44.00 193.60 Td (  61  ) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td (  62    if \(!payload.token || !payload.action\) {) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td (  63      response.status\(400\).json\({ success: false, error: 'Missing reCAPTCHA token or action.' }\);) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td (  64      return;) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td (  65    }) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td (  66  ) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td (  67    if \(isPreviewDeployment\) {) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (  68      response.status\(200\).json\({) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td (  69        success: true,) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td (  70        score: 1,) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td (  71        action: payload.action,) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td (  72        bypassed: true,) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td (  73      }\);) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td (  74      return;) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td (  75    }) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td (  76  ) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td (  77    const verificationBody = new URLSearchParams\({) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td (  78      secret,) Tj ET
+endstream
+endobj
+13 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 12 0 R >>
+endobj
+14 0 obj
+<< /Length 4519 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  79      response: payload.token,) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  80    }\);) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  81  ) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  82    try {) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  83      const googleResult = await Promise.race\([) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  84        fetch\(RECAPTCHA_VERIFY_URL, {) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  85          method: 'POST',) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  86          headers: {) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (  87            'Content-Type': 'application/x-www-form-urlencoded',) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  88          },) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (  89          body: verificationBody.toString\(\),) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (  90        }\).then\(async \(googleResponse\) => {) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (  91          if \(!googleResponse.ok\) {) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (  92            throw new Error\(`Google verification failed with status ${googleResponse.status}.`\);) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (  93          }) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (  94  ) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (  95          return \(await googleResponse.json\(\)\) as {) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (  96            success?: boolean;) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (  97            score?: number;) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (  98            action?: string;) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (  99            ['error-codes']?: string[];) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 100          };) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 101        }\),) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 102        timeoutAfter\(VERIFY_TIMEOUT_MS, {) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 103          success: false,) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 104          score: 0,) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 105          action: payload.action,) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 106          ['error-codes']: ['verification-timeout'],) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 107        }\),) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 108      ]\);) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 109  ) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 110      const score = Number\(googleResult.score ?? 0\);) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 111      const expectedAction = normalizeAction\(payload.action\);) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 112      const returnedAction = normalizeAction\(googleResult.action\);) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 113      const hasReturnedAction = returnedAction.length > 0;) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 114      const isActionMatch = !hasReturnedAction || returnedAction === expectedAction;) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 115      const isVerified = Boolean\(googleResult.success\) && isActionMatch && score >= MIN_RECAPTCHA_SCORE;) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 116  ) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 117      if \(!isVerified\) {) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 118        const timeoutHit = googleResult['error-codes']?.includes\('verification-timeout'\);) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 119  ) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 120        response.status\(timeoutHit ? 504 : 400\).json\({) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 121          success: false,) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 122          score,) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 123          action: googleResult.action,) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 124          errors: googleResult['error-codes'] ?? [],) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 125          error: timeoutHit) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 126            ? 'Timed out while talking to Google reCAPTCHA.') Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 127            : !isActionMatch) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 128              ? 'reCAPTCHA action mismatch.') Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 129              : score < MIN_RECAPTCHA_SCORE) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 130                ? 'Suspicious activity detected. Please try again.') Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 131                : 'reCAPTCHA verification failed.',) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 132        }\);) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 133        return;) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 134      }) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 135  ) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 136      response.status\(200\).json\({) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 137        success: true,) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 138        score,) Tj ET
+endstream
+endobj
+15 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 14 0 R >>
+endobj
+16 0 obj
+<< /Length 4651 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 139        action: googleResult.action,) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 140      }\);) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 141    } catch \(error\) {) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 142      const message = error instanceof Error ? error.message : 'Unable to verify reCAPTCHA right now.';) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 143      response.status\(502\).json\({ success: false, error: message }\);) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 144    }) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 145  }) Tj ET
+BT /F2 15 Tf 36.00 491.80 Td (4. Auth Session Hydration and Supabase User Mapping) Tj ET
+BT /F3 8.8 Tf 36.00 472.80 Td (Source: src/context/AuthContext.tsx:481-650) Tj ET
+BT /F1 9.5 Tf 48.00 460.80 Td (- Maps Supabase auth users back to public.app_users records.) Tj ET
+BT /F1 9.5 Tf 48.00 448.80 Td (- Restores session state on refresh and listens for Supabase auth changes.) Tj ET
+BT /F2 8.5 Tf 36.00 436.80 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 425.80 Td ( 481    const resolveAppUserFromAuth = useCallback\(async \(authUser: User | null\) => {) Tj ET
+BT /F3 7 Tf 44.00 417.20 Td ( 482      if \(!authUser || !hasSupabaseConfig\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 408.60 Td ( 483        return null;) Tj ET
+BT /F3 7 Tf 44.00 400.00 Td ( 484      }) Tj ET
+BT /F3 7 Tf 44.00 391.40 Td ( 485  ) Tj ET
+BT /F3 7 Tf 44.00 382.80 Td ( 486      const authUserId = authUser.id;) Tj ET
+BT /F3 7 Tf 44.00 374.20 Td ( 487      const encodedAuthUserId = encodeURIComponent\(authUserId\);) Tj ET
+BT /F3 7 Tf 44.00 365.60 Td ( 488      let remoteRows = await supabaseSelect<RemoteAppUserRow[]>\() Tj ET
+BT /F3 7 Tf 44.00 357.00 Td ( 489        'app_users',) Tj ET
+BT /F3 7 Tf 44.00 348.40 Td ( 490        `select=id,auth_user_id,university_id,role,full_name,initials,email,subtitle,status,last_login_at,last_seen_at&auth_user_id=eq.${encodedAuthUserId}&limit=1`) Tj ET
+BT /F3 7 Tf 44.00 339.80 Td ( 491      \);) Tj ET
+BT /F3 7 Tf 44.00 331.20 Td ( 492  ) Tj ET
+BT /F3 7 Tf 44.00 322.60 Td ( 493      if \(remoteRows.length === 0 && authUser.email\) {) Tj ET
+BT /F3 7 Tf 44.00 314.00 Td ( 494        const encodedEmail = encodeURIComponent\(authUser.email\);) Tj ET
+BT /F3 7 Tf 44.00 305.40 Td ( 495        remoteRows = await supabaseSelect<RemoteAppUserRow[]>\() Tj ET
+BT /F3 7 Tf 44.00 296.80 Td ( 496          'app_users',) Tj ET
+BT /F3 7 Tf 44.00 288.20 Td ( 497          `select=id,auth_user_id,university_id,role,full_name,initials,email,subtitle,status,last_login_at,last_seen_at&email=eq.${encodedEmail}&limit=1`) Tj ET
+BT /F3 7 Tf 44.00 279.60 Td ( 498        \);) Tj ET
+BT /F3 7 Tf 44.00 271.00 Td ( 499  ) Tj ET
+BT /F3 7 Tf 44.00 262.40 Td ( 500        if \(remoteRows.length > 0 && remoteRows[0]?.auth_user_id !== authUserId\) {) Tj ET
+BT /F3 7 Tf 44.00 253.80 Td ( 501          await supabasePatch<RemoteAppUserRow[]>\() Tj ET
+BT /F3 7 Tf 44.00 245.20 Td ( 502            'app_users',) Tj ET
+BT /F3 7 Tf 44.00 236.60 Td ( 503            `id=eq.${encodeURIComponent\(remoteRows[0].id\)}`,) Tj ET
+BT /F3 7 Tf 44.00 228.00 Td ( 504            { auth_user_id: authUserId }) Tj ET
+BT /F3 7 Tf 44.00 219.40 Td ( 505          \);) Tj ET
+BT /F3 7 Tf 44.00 210.80 Td ( 506          remoteRows = [{ ...remoteRows[0], auth_user_id: authUserId }];) Tj ET
+BT /F3 7 Tf 44.00 202.20 Td ( 507        }) Tj ET
+BT /F3 7 Tf 44.00 193.60 Td ( 508      }) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td ( 509  ) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td ( 510      const resolved = remoteRows[0];) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td ( 511      if \(!resolved\) {) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td ( 512        return null;) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td ( 513      }) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td ( 514  ) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td ( 515      const passwordById = new Map\(usersRef.current.map\(\(account\) => [account.id, account.password]\)\);) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td ( 516      const mapped = mapRemoteUser\(resolved, passwordById\);) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td ( 517  ) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td ( 518      setUsers\(\(current\) => {) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td ( 519        const nextUsers = mergeManagedUsers\(SEED_MANAGED_USERS.map\(normalizeManagedUser\), current, [mapped]\).map\(normalizeManagedUser\);) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td ( 520        return areManagedUsersEqual\(current, nextUsers\) ? current : nextUsers;) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td ( 521      }\);) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td ( 522  ) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td ( 523      return toSessionUser\(mapped\);) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td ( 524    }, []\);) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td ( 525  ) Tj ET
+endstream
+endobj
+17 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 16 0 R >>
+endobj
+18 0 obj
+<< /Length 4250 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 526    useEffect\(\(\) => {) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 527      if \(hasSupabaseConfig\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 528        window.localStorage.removeItem\(USERS_KEY\);) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 529        return;) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 530      }) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 531  ) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 532      window.localStorage.setItem\(USERS_KEY, JSON.stringify\(users.map\(normalizeManagedUser\)\)\);) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 533    }, [users]\);) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 534  ) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 535    useEffect\(\(\) => {) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 536      if \(!isLocalDemoModeEnabled\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 537        window.localStorage.removeItem\(LOCAL_SESSION_KEY\);) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 538        window.sessionStorage.removeItem\(SESSION_SESSION_KEY\);) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 539        window.localStorage.removeItem\(REMEMBER_ME_KEY\);) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 540        return;) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 541      }) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 542  ) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 543      window.localStorage.removeItem\(LOCAL_SESSION_KEY\);) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 544      window.sessionStorage.removeItem\(SESSION_SESSION_KEY\);) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 545  ) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 546      if \(user\) {) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 547        const target = rememberSession ? window.localStorage : window.sessionStorage;) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 548        target.setItem\(rememberSession ? LOCAL_SESSION_KEY : SESSION_SESSION_KEY, JSON.stringify\(user\)\);) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 549        window.localStorage.setItem\(REMEMBER_ME_KEY, rememberSession ? 'true' : 'false'\);) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 550      } else {) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 551        window.localStorage.removeItem\(REMEMBER_ME_KEY\);) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 552      }) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 553    }, [rememberSession, user]\);) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 554  ) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 555    useEffect\(\(\) => {) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 556      window.localStorage.setItem\(ATTEMPTS_KEY, JSON.stringify\(attempts\)\);) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 557    }, [attempts]\);) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 558  ) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 559    useEffect\(\(\) => {) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 560      if \(!hasSupabaseConfig\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 561        return;) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 562      }) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 563  ) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 564      let cancelled = false;) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 565  ) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 566      const hydrate = async \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 567        try {) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 568          await syncUsersFromSupabase\(\);) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 569          const {) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 570            data: { session },) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 571          } = await getSupabaseSession\(\);) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 572  ) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 573          if \(cancelled\) {) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 574            return;) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 575          }) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 576  ) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 577          if \(!session?.user\) {) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 578            setUser\(null\);) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 579            setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 580            return;) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 581          }) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 582  ) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 583          const resolved = await resolveAppUserFromAuth\(session.user\);) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 584          if \(cancelled\) {) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 585            return;) Tj ET
+endstream
+endobj
+19 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 18 0 R >>
+endobj
+20 0 obj
+<< /Length 4060 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 586          }) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 587  ) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 588          setUser\(resolved\);) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 589          setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 590        } catch \(error\) {) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 591          console.error\('Unable to initialize Supabase auth session.', error\);) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 592          if \(!cancelled\) {) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 593            setUser\(null\);) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 594            setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 595          }) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 596        }) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 597      };) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 598  ) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 599      void hydrate\(\);) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 600  ) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 601      const { data: authListener } = onSupabaseAuthStateChange\(\(event, session\) => {) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 602        if \(cancelled\) return;) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 603  ) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 604        if \(event === 'SIGNED_OUT'\) {) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 605          setUser\(null\);) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 606          setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 607          return;) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 608        }) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 609  ) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 610        // Ignore transient null sessions \(e.g. during TOKEN_REFRESHED\)) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 611        if \(!session?.user\) {) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 612          return;) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 613        }) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 614  ) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 615        if \(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'\) {) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 616          void \(async \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 617            if \(cancelled\) return;) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 618            const resolved = await resolveAppUserFromAuth\(session.user\);) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 619            if \(cancelled\) return;) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 620            if \(resolved\) {) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 621              setUser\(resolved\);) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 622            }) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 623            setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 624          }\)\(\);) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 625        }) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 626      }\);) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 627  ) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 628      const syncInterval = window.setInterval\(\(\) => {) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 629        if \(document.visibilityState === 'hidden'\) {) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 630          return;) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 631        }) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 632  ) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 633        void syncUsersFromSupabase\(\);) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 634      }, USER_SYNC_INTERVAL_MS\);) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 635  ) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 636      const handleVisibilityChange = \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 637        if \(document.visibilityState === 'visible'\) {) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 638          void syncUsersFromSupabase\(\);) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 639        }) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 640      };) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 641  ) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 642      document.addEventListener\('visibilitychange', handleVisibilityChange\);) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 643  ) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 644      return \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 645        cancelled = true;) Tj ET
+endstream
+endobj
+21 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 20 0 R >>
+endobj
+22 0 obj
+<< /Length 4973 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 646        authListener.subscription.unsubscribe\(\);) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 647        window.clearInterval\(syncInterval\);) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 648        document.removeEventListener\('visibilitychange', handleVisibilityChange\);) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 649      };) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 650    }, [resolveAppUserFromAuth, syncUsersFromSupabase]\);) Tj ET
+BT /F2 15 Tf 36.00 509.00 Td (5. AuthContext.login: ID-to-email lookup and role check) Tj ET
+BT /F3 8.8 Tf 36.00 490.00 Td (Source: src/context/AuthContext.tsx:652-760) Tj ET
+BT /F1 9.5 Tf 48.00 478.00 Td (- Validates the selected role, active status, lockout state, and Supabase email binding.) Tj ET
+BT /F1 9.5 Tf 48.00 466.00 Td (- Signs in with Supabase, verifies the authenticated account matches the app user, then updates login) Tj ET
+BT /F1 9.5 Tf 48.00 454.00 Td (  metadata.) Tj ET
+BT /F2 8.5 Tf 36.00 442.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 431.00 Td ( 652    const login = useCallback\() Tj ET
+BT /F3 7 Tf 44.00 422.40 Td ( 653      async \({ role, id, password, rememberMe = false }: { role: Role; id: string; password: string; rememberMe?: boolean }\): Promise<LoginResult> => {) Tj ET
+BT /F3 7 Tf 44.00 413.80 Td ( 654        const normalizedId = id.trim\(\);) Tj ET
+BT /F3 7 Tf 44.00 405.20 Td ( 655        const attemptKey = normalizedId || `role:${role}`;) Tj ET
+BT /F3 7 Tf 44.00 396.60 Td ( 656        const attemptState = attempts[attemptKey];) Tj ET
+BT /F3 7 Tf 44.00 388.00 Td ( 657        if \(attemptState?.lockedUntil && new Date\(attemptState.lockedUntil\).getTime\(\) > Date.now\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 379.40 Td ( 658          return { success: false, error: formatRemainingLockout\(attemptState.lockedUntil\) };) Tj ET
+BT /F3 7 Tf 44.00 370.80 Td ( 659        }) Tj ET
+BT /F3 7 Tf 44.00 362.20 Td ( 660  ) Tj ET
+BT /F3 7 Tf 44.00 353.60 Td ( 661        if \(!normalizedId || !password\) {) Tj ET
+BT /F3 7 Tf 44.00 345.00 Td ( 662          return { success: false, error: 'Enter both your ID and password.' };) Tj ET
+BT /F3 7 Tf 44.00 336.40 Td ( 663        }) Tj ET
+BT /F3 7 Tf 44.00 327.80 Td ( 664  ) Tj ET
+BT /F3 7 Tf 44.00 319.20 Td ( 665        const registerFailedAttempt = \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 310.60 Td ( 666          const nextCount = \(attemptState?.count ?? 0\) + 1;) Tj ET
+BT /F3 7 Tf 44.00 302.00 Td ( 667          const nextLockedUntil = nextCount >= MAX_ATTEMPTS ? new Date\(Date.now\(\) + LOCKOUT_MS\).toISOString\(\) : undefined;) Tj ET
+BT /F3 7 Tf 44.00 293.40 Td ( 668  ) Tj ET
+BT /F3 7 Tf 44.00 284.80 Td ( 669          setAttempts\(\(current\) => \({) Tj ET
+BT /F3 7 Tf 44.00 276.20 Td ( 670            ...current,) Tj ET
+BT /F3 7 Tf 44.00 267.60 Td ( 671            [attemptKey]: {) Tj ET
+BT /F3 7 Tf 44.00 259.00 Td ( 672              count: nextCount >= MAX_ATTEMPTS ? 0 : nextCount,) Tj ET
+BT /F3 7 Tf 44.00 250.40 Td ( 673              lockedUntil: nextLockedUntil,) Tj ET
+BT /F3 7 Tf 44.00 241.80 Td ( 674            },) Tj ET
+BT /F3 7 Tf 44.00 233.20 Td ( 675          }\)\);) Tj ET
+BT /F3 7 Tf 44.00 224.60 Td ( 676  ) Tj ET
+BT /F3 7 Tf 44.00 216.00 Td ( 677          return nextLockedUntil) Tj ET
+BT /F3 7 Tf 44.00 207.40 Td ( 678            ? formatRemainingLockout\(nextLockedUntil\)) Tj ET
+BT /F3 7 Tf 44.00 198.80 Td ( 679            : `Invalid credentials. ${MAX_ATTEMPTS - nextCount} attempt${MAX_ATTEMPTS - nextCount === 1 ? '' : 's'} remaining before temporary lockout.`;) Tj ET
+BT /F3 7 Tf 44.00 190.20 Td ( 680        };) Tj ET
+BT /F3 7 Tf 44.00 181.60 Td ( 681  ) Tj ET
+BT /F3 7 Tf 44.00 173.00 Td ( 682        if \(!hasSupabaseConfig\(\) && !isLocalDemoModeEnabled\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 164.40 Td ( 683          return {) Tj ET
+BT /F3 7 Tf 44.00 155.80 Td ( 684            success: false,) Tj ET
+BT /F3 7 Tf 44.00 147.20 Td ( 685            error: `${getSupabaseConfigError\(\)} Add the Supabase URL and anon key to the deployment environment and rebuild.`,) Tj ET
+BT /F3 7 Tf 44.00 138.60 Td ( 686          };) Tj ET
+BT /F3 7 Tf 44.00 130.00 Td ( 687        }) Tj ET
+BT /F3 7 Tf 44.00 121.40 Td ( 688  ) Tj ET
+BT /F3 7 Tf 44.00 112.80 Td ( 689        if \(hasSupabaseConfig\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 104.20 Td ( 690          let matchedUser = usersRef.current.find\(\(account\) => account.id.toLowerCase\(\) === normalizedId.toLowerCase\(\)\);) Tj ET
+BT /F3 7 Tf 44.00 95.60 Td ( 691          const remoteMatchedUser = await fetchRemoteUserByUniversityId\(normalizedId\);) Tj ET
+BT /F3 7 Tf 44.00 87.00 Td ( 692          if \(remoteMatchedUser\) {) Tj ET
+BT /F3 7 Tf 44.00 78.40 Td ( 693            matchedUser = remoteMatchedUser;) Tj ET
+BT /F3 7 Tf 44.00 69.80 Td ( 694          }) Tj ET
+BT /F3 7 Tf 44.00 61.20 Td ( 695          if \(!matchedUser || matchedUser.role !== role\) {) Tj ET
+BT /F3 7 Tf 44.00 52.60 Td ( 696            return { success: false, error: registerFailedAttempt\(\) };) Tj ET
+endstream
+endobj
+23 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 22 0 R >>
+endobj
+24 0 obj
+<< /Length 4860 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 697          }) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 698  ) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 699          if \(matchedUser.status !== 'active'\) {) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 700            return { success: false, error: 'This account is inactive. Contact an administrator.' };) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 701          }) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 702  ) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 703          if \(!matchedUser.email\) {) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 704            return { success: false, error: 'This account is missing an email address in public.app_users. Add the email in Supabase and try again.' };) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 705          }) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 706  ) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 707          const signInResult = await supabaseSignInWithPassword\(matchedUser.email, password\);) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 708          if \(signInResult.error\) {) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 709            setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 710            return { success: false, error: registerFailedAttempt\(\) };) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 711          }) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 712  ) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 713          const resolved = await resolveAppUserFromAuth\(signInResult.data.user ?? null\);) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 714          if \(!resolved || resolved.role !== role || resolved.id.toLowerCase\(\) !== normalizedId.toLowerCase\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 715            await supabaseSignOut\(\);) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 716            setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 717            return { success: false, error: 'Your authenticated Supabase account is not linked to the selected app user.' };) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 718          }) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 719  ) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 720          const lastLogin = new Date\(\).toISOString\(\);) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 721          setRememberSession\(Boolean\(rememberMe\)\);) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 722          setUsers\(\(current\) =>) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 723            current.map\(\(account\) =>) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 724              account.id === resolved.id ? { ...account, lastLogin } : account) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 725            \)) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 726          \);) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 727          setUser\({ ...resolved }\);) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 728          setAttempts\(\(current\) => {) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 729            const next = { ...current };) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 730            delete next[attemptKey];) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 731            return next;) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 732          }\);) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 733          setIsAuthReady\(true\);) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 734  ) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 735          void supabasePatch\() Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 736            'app_users',) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 737            `university_id=eq.${encodeURIComponent\(resolved.id\)}`,) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 738            {) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 739              last_login_at: lastLogin,) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 740              status: matchedUser.status,) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 741              auth_user_id: resolved.authUserId,) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 742            }) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 743          \).catch\(\(error\) => {) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 744            console.error\('Unable to update Supabase login metadata.', error\);) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 745          }\);) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 746  ) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 747          void syncUsersFromSupabase\(\);) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 748          return { success: true };) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 749        }) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 750  ) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 751        const matchedUser = usersRef.current.find\(\(account\) => account.id.toLowerCase\(\) === normalizedId.toLowerCase\(\)\);) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 752        if \(!matchedUser || matchedUser.role !== role || matchedUser.password !== password\) {) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 753          return { success: false, error: registerFailedAttempt\(\) };) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 754        }) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 755  ) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 756        if \(matchedUser.status !== 'active'\) {) Tj ET
+endstream
+endobj
+25 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 24 0 R >>
+endobj
+26 0 obj
+<< /Length 4244 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 757          return { success: false, error: 'This account is inactive. Contact an administrator.' };) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 758        }) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 759  ) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 760        const nextUser = normalizeManagedUser\({ ...matchedUser, lastLogin: new Date\(\).toISOString\(\) }\);) Tj ET
+BT /F2 15 Tf 36.00 517.60 Td (6. Role-based Route Protection) Tj ET
+BT /F3 8.8 Tf 36.00 498.60 Td (Source: src/App.tsx:25-90) Tj ET
+BT /F1 9.5 Tf 48.00 486.60 Td (- ProtectedRoute blocks unauthenticated access and redirects users away from routes outside their role.) Tj ET
+BT /F1 9.5 Tf 48.00 474.60 Td (- The admin transcript-edit route is explicitly admin-only.) Tj ET
+BT /F2 8.5 Tf 36.00 462.60 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 451.60 Td (  25  function ProtectedRoute\({) Tj ET
+BT /F3 7 Tf 44.00 443.00 Td (  26    children,) Tj ET
+BT /F3 7 Tf 44.00 434.40 Td (  27    allowedRoles,) Tj ET
+BT /F3 7 Tf 44.00 425.80 Td (  28  }: {) Tj ET
+BT /F3 7 Tf 44.00 417.20 Td (  29    children: ReactNode;) Tj ET
+BT /F3 7 Tf 44.00 408.60 Td (  30    allowedRoles?: Role[];) Tj ET
+BT /F3 7 Tf 44.00 400.00 Td (  31  }\) {) Tj ET
+BT /F3 7 Tf 44.00 391.40 Td (  32    const { isAuthenticated, isAuthReady, user } = useAuth\(\);) Tj ET
+BT /F3 7 Tf 44.00 382.80 Td (  33  ) Tj ET
+BT /F3 7 Tf 44.00 374.20 Td (  34    if \(!isAuthReady\) {) Tj ET
+BT /F3 7 Tf 44.00 365.60 Td (  35      return <div className="min-h-screen bg-bg" />;) Tj ET
+BT /F3 7 Tf 44.00 357.00 Td (  36    }) Tj ET
+BT /F3 7 Tf 44.00 348.40 Td (  37  ) Tj ET
+BT /F3 7 Tf 44.00 339.80 Td (  38    if \(!isAuthenticated\) {) Tj ET
+BT /F3 7 Tf 44.00 331.20 Td (  39      return <Navigate to="/login" replace state={{ authError: 'Your session has expired or you must sign in to continue.' }} />;) Tj ET
+BT /F3 7 Tf 44.00 322.60 Td (  40    }) Tj ET
+BT /F3 7 Tf 44.00 314.00 Td (  41  ) Tj ET
+BT /F3 7 Tf 44.00 305.40 Td (  42    if \(allowedRoles && user && !allowedRoles.includes\(user.role\)\) {) Tj ET
+BT /F3 7 Tf 44.00 296.80 Td (  43      return <Navigate to={getHomeRoute\(user.role\)} replace />;) Tj ET
+BT /F3 7 Tf 44.00 288.20 Td (  44    }) Tj ET
+BT /F3 7 Tf 44.00 279.60 Td (  45  ) Tj ET
+BT /F3 7 Tf 44.00 271.00 Td (  46    return <>{children}</>;) Tj ET
+BT /F3 7 Tf 44.00 262.40 Td (  47  }) Tj ET
+BT /F3 7 Tf 44.00 253.80 Td (  48  ) Tj ET
+BT /F3 7 Tf 44.00 245.20 Td (  49  function RoleHomeRedirect\(\) {) Tj ET
+BT /F3 7 Tf 44.00 236.60 Td (  50    const { user } = useAuth\(\);) Tj ET
+BT /F3 7 Tf 44.00 228.00 Td (  51    return <Navigate to={user ? getHomeRoute\(user.role\) : '/login'} replace />;) Tj ET
+BT /F3 7 Tf 44.00 219.40 Td (  52  }) Tj ET
+BT /F3 7 Tf 44.00 210.80 Td (  53  ) Tj ET
+BT /F3 7 Tf 44.00 202.20 Td (  54  export default function App\(\) {) Tj ET
+BT /F3 7 Tf 44.00 193.60 Td (  55    return \() Tj ET
+BT /F3 7 Tf 44.00 185.00 Td (  56      <BrowserRouter>) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td (  57        <AuthProvider>) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td (  58          <AppDataProvider>) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td (  59            <MessagingProvider>) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td (  60              <Routes>) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td (  61                <Route path="/" element={<LandingPage />} />) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (  62                <Route path="/login" element={<LoginPage />} />) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td (  63                <Route) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td (  64                  path="/app") Tj ET
+BT /F3 7 Tf 44.00 107.60 Td (  65                  element={) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td (  66                    <ProtectedRoute>) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td (  67                      <AppLayout />) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td (  68                    </ProtectedRoute>) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td (  69                  }) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td (  70                >) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td (  71                  <Route index element={<RoleHomeRedirect />} />) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td (  72                  <Route path="dashboard" element={<ProtectedRoute allowedRoles={['student']}><StudentDashboard /></ProtectedRoute>} />) Tj ET
+endstream
+endobj
+27 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 26 0 R >>
+endobj
+28 0 obj
+<< /Length 6474 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  73                  <Route path="courses" element={<ProtectedRoute allowedRoles={['student']}><CoursePlanner /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  74                  <Route path="messages" element={<ProtectedRoute allowedRoles={['student']}><StudentMessagesPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  75                  <Route path="profile" element={<Navigate to="/app/dashboard" replace />} />) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  76                  <Route path="settings" element={<ProtectedRoute allowedRoles={['student']}><StudentSettingsPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  77                  <Route path="advisor" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorDashboard /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  78                  <Route path="advisor/student/:studentId" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorStudentDetailPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  79                  <Route path="advisor/messages" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorMessagesPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  80                  <Route path="advisor/courses" element={<Navigate to="/app/advisor" replace />} />) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (  81                  <Route path="advisor/reports" element={<Navigate to="/app/advisor" replace />} />) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  82                  <Route path="advisor/settings" element={<ProtectedRoute allowedRoles={['advisor']}><AdvisorSettingsPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (  83                  <Route path="admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (  84                  <Route path="admin/students" element={<ProtectedRoute allowedRoles={['admin']}><AdminStudentsPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (  85                  <Route path="admin/students/:studentId/transcript" element={<ProtectedRoute allowedRoles={['admin']}><AdminStudentTranscriptPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (  86                  <Route path="admin/courses" element={<ProtectedRoute allowedRoles={['admin']}><CourseManagement /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (  87                  <Route path="admin/users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagementPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (  88                  <Route path="admin/model" element={<Navigate to="/app/admin/courses" replace />} />) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (  89                  <Route path="admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettingsPage /></ProtectedRoute>} />) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (  90                </Route>) Tj ET
+BT /F2 15 Tf 36.00 397.20 Td (7. Remote Data Snapshot: transcript and dashboard views) Tj ET
+BT /F3 8.8 Tf 36.00 378.20 Td (Source: src/context/AppDataContext.tsx:866-909) Tj ET
+BT /F1 9.5 Tf 48.00 366.20 Td (- Loads all app data needed after login in one remote snapshot.) Tj ET
+BT /F1 9.5 Tf 48.00 354.20 Td (- Pulls transcript rows from student_transcript_v and student summaries from student_dashboard_summary_v.) Tj ET
+BT /F2 8.5 Tf 36.00 342.20 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 331.20 Td ( 866  async function loadRemoteSnapshot\(users: ReturnType<typeof useAuth>['users']\) {) Tj ET
+BT /F3 7 Tf 44.00 322.60 Td ( 867    const [) Tj ET
+BT /F3 7 Tf 44.00 314.00 Td ( 868      academicTermRows,) Tj ET
+BT /F3 7 Tf 44.00 305.40 Td ( 869      departments,) Tj ET
+BT /F3 7 Tf 44.00 296.80 Td ( 870      settings,) Tj ET
+BT /F3 7 Tf 44.00 288.20 Td ( 871      courseRows,) Tj ET
+BT /F3 7 Tf 44.00 279.60 Td ( 872      prerequisiteRows,) Tj ET
+BT /F3 7 Tf 44.00 271.00 Td ( 873      corequisiteRows,) Tj ET
+BT /F3 7 Tf 44.00 262.40 Td ( 874      ruleRows,) Tj ET
+BT /F3 7 Tf 44.00 253.80 Td ( 875      statRows,) Tj ET
+BT /F3 7 Tf 44.00 245.20 Td ( 876      profileRows,) Tj ET
+BT /F3 7 Tf 44.00 236.60 Td ( 877      transcriptViewRows,) Tj ET
+BT /F3 7 Tf 44.00 228.00 Td ( 878      draftRows,) Tj ET
+BT /F3 7 Tf 44.00 219.40 Td ( 879      draftCourseRows,) Tj ET
+BT /F3 7 Tf 44.00 210.80 Td ( 880      evaluationRows,) Tj ET
+BT /F3 7 Tf 44.00 202.20 Td ( 881      passwordInquiryMessageRows,) Tj ET
+BT /F3 7 Tf 44.00 193.60 Td ( 882    ] = await Promise.all\([) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td ( 883      supabaseSelect<AcademicTermRow[]>\('academic_terms', 'select=term_code,academic_year,term_name,term_type,max_credits'\),) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td ( 884      supabaseSelect<DepartmentRow[]>\('departments', 'select=id,name'\),) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td ( 885      supabaseSelect<AppSettingRow[]>\('app_settings', 'select=key,value_json'\),) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td ( 886      supabaseSelect<CourseRow[]>\() Tj ET
+BT /F3 7 Tf 44.00 150.60 Td ( 887        'courses',) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td ( 888        'select=id,course_code,title,department_id,credits,course_type,is_plannable,internet_difficulty,difficulty_score,difficulty_basis,updated_at&order=course_code.asc) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (      ') Tj ET
+BT /F3 7 Tf 44.00 124.80 Td ( 889      \),) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td ( 890      supabaseSelect<CoursePrerequisiteRow[]>\('course_prerequisites', 'select=course_id,prerequisite_course_id'\),) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td ( 891      supabaseSelect<CourseCorequisiteRow[]>\('course_corequisites', 'select=course_id,corequisite_course_id'\),) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td ( 892      supabaseSelect<CourseRuleRow[]>\('course_rules', 'select=course_id,rule_type,rule_value_int'\),) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td ( 893      supabaseSelect<HistoricalStatRow[]>\() Tj ET
+BT /F3 7 Tf 44.00 81.80 Td ( 894        'historical_course_stats',) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td ( 895        'select=id,course_id,term_code,avg_grade,pass_rate,fail_rate,enrollment_count,withdrawals') Tj ET
+BT /F3 7 Tf 44.00 64.60 Td ( 896      \),) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td ( 897      supabaseSelect<StudentProfileRow[]>\('student_dashboard_summary_v', 'select=student_id,student_name,department_name,advisor_id,gpa,admission_year,admission_term,comp) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td (      leted_credits'\),) Tj ET
+endstream
+endobj
+29 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 28 0 R >>
+endobj
+30 0 obj
+<< /Length 4999 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 898      supabaseSelect<StudentCompletedCourseRow[]>\('student_transcript_v', 'select=id,student_id,term_code,term_type,course_code,course_name,credits,final_grade,status,att) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (      empt_no'\),) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 899      supabaseSelect<ScheduleDraftRow[]>\('schedule_drafts', 'select=id,student_id,name,term_code,status,saved_at&order=saved_at.desc'\),) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 900      supabaseSelect<ScheduleDraftCourseRow[]>\('schedule_draft_courses', 'select=schedule_id,course_id'\),) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 901      supabaseSelect<ScheduleEvaluationRow[]>\() Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 902        'schedule_evaluations',) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 903        'select=id,schedule_id,student_id,total_score,risk_label,total_credits,model_version,explanation,factors,recommendations,top_courses,evaluated_at&order=evaluated_) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (      at.desc') Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 904      \),) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 905      supabaseSelect<PasswordResetInquiryMessageRow[]>\() Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 906        'messages',) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 907        'select=id,sender_id,body,sent_at,read_at,sender:app_users!messages_sender_id_fkey\(university_id,full_name,role\)&order=sent_at.desc') Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 908      \),) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 909    ]\);) Tj ET
+BT /F2 15 Tf 36.00 431.60 Td (8. Mapping Transcript Rows into Frontend State) Tj ET
+BT /F3 8.8 Tf 36.00 412.60 Td (Source: src/context/AppDataContext.tsx:1020-1082) Tj ET
+BT /F1 9.5 Tf 48.00 400.60 Td (- Converts DB transcript records into StudentTranscriptRow objects used by student, advisor, and admin pages.) Tj ET
+BT /F1 9.5 Tf 48.00 388.60 Td (- Builds completed-course sets and student profile summaries from transcript state.) Tj ET
+BT /F2 8.5 Tf 36.00 376.60 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 365.60 Td (1020    const completedCourseCodesByStudentId = new Map<string, Set<string>>\(\);) Tj ET
+BT /F3 7 Tf 44.00 357.00 Td (1021    const transcriptRows: StudentTranscriptRow[] = [];) Tj ET
+BT /F3 7 Tf 44.00 348.40 Td (1022    transcriptViewRows.forEach\(\(row\) => {) Tj ET
+BT /F3 7 Tf 44.00 339.80 Td (1023      const studentUniversityId = appUsersByAppId.get\(row.student_id\)?.id;) Tj ET
+BT /F3 7 Tf 44.00 331.20 Td (1024      if \(!studentUniversityId\) {) Tj ET
+BT /F3 7 Tf 44.00 322.60 Td (1025        return;) Tj ET
+BT /F3 7 Tf 44.00 314.00 Td (1026      }) Tj ET
+BT /F3 7 Tf 44.00 305.40 Td (1027  ) Tj ET
+BT /F3 7 Tf 44.00 296.80 Td (1028      if \(row.status === 'passed'\) {) Tj ET
+BT /F3 7 Tf 44.00 288.20 Td (1029        const existingCompleted = completedCourseCodesByStudentId.get\(studentUniversityId\) ?? new Set<string>\(\);) Tj ET
+BT /F3 7 Tf 44.00 279.60 Td (1030        existingCompleted.add\(row.course_code\);) Tj ET
+BT /F3 7 Tf 44.00 271.00 Td (1031        completedCourseCodesByStudentId.set\(studentUniversityId, existingCompleted\);) Tj ET
+BT /F3 7 Tf 44.00 262.40 Td (1032      }) Tj ET
+BT /F3 7 Tf 44.00 253.80 Td (1033  ) Tj ET
+BT /F3 7 Tf 44.00 245.20 Td (1034      const termCode = normalizeTermCode\(row.term_code\);) Tj ET
+BT /F3 7 Tf 44.00 236.60 Td (1035      transcriptRows.push\({) Tj ET
+BT /F3 7 Tf 44.00 228.00 Td (1036        id: row.id,) Tj ET
+BT /F3 7 Tf 44.00 219.40 Td (1037        studentId: studentUniversityId,) Tj ET
+BT /F3 7 Tf 44.00 210.80 Td (1038        termCode,) Tj ET
+BT /F3 7 Tf 44.00 202.20 Td (1039        termLabel: formatTermLabel\(termCode\),) Tj ET
+BT /F3 7 Tf 44.00 193.60 Td (1040        termType: row.term_type,) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td (1041        courseCode: row.course_code,) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td (1042        courseName: row.course_name,) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td (1043        credits: row.credits,) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td (1044        finalGrade: row.final_grade === null ? null : Number\(row.final_grade\),) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td (1045        status: row.status,) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td (1046        attemptNo: row.attempt_no,) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (1047      }\);) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td (1048    }\);) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td (1049    transcriptRows.sort\(\(left, right\) => {) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td (1050      const termCompare = compareTermCodesNewestFirst\(left.termCode, right.termCode\);) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td (1051      if \(termCompare !== 0\) {) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td (1052        return termCompare;) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td (1053      }) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td (1054  ) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td (1055      const attemptCompare = \(right.attemptNo ?? 1\) - \(left.attemptNo ?? 1\);) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td (1056      if \(attemptCompare !== 0\) {) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td (1057        return attemptCompare;) Tj ET
+endstream
+endobj
+31 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 30 0 R >>
+endobj
+32 0 obj
+<< /Length 4437 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (1058      }) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (1059  ) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (1060      return left.courseCode.localeCompare\(right.courseCode\);) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (1061    }\);) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (1062  ) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (1063    const remoteProfiles = profileRows.flatMap\(\(row\) => {) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (1064      const student = appUsersByAppId.get\(row.student_id\);) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (1065      if \(!student\) {) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (1066        return [];) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (1067      }) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (1068  ) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (1069      const advisor = row.advisor_id ? appUsersByAppId.get\(row.advisor_id\) : null;) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (1070  ) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (1071      return [{) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (1072        id: student.id,) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (1073        name: row.student_name,) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (1074        gpa: Number\(row.gpa ?? 0\),) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (1075        creditsCompleted: row.completed_credits,) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (1076        department: row.department_name,) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (1077        advisorId: advisor?.id ?? '',) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (1078        completedCourseCodes: [...\(completedCourseCodesByStudentId.get\(student.id\) ?? new Set<string>\(\)\)],) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (1079        admissionYear: row.admission_year ?? \(Number\(student.id.slice\(0, 4\)\) || new Date\(\).getFullYear\(\)\),) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (1080        admissionTerm: row.admission_term ?? 'fall',) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (1081      } satisfies StudentProfile];) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td (1082    }\);) Tj ET
+BT /F2 15 Tf 36.00 337.00 Td (9. Shared Transcript Accessor) Tj ET
+BT /F3 8.8 Tf 36.00 318.00 Td (Source: src/context/AppDataContext.tsx:1264-1348) Tj ET
+BT /F1 9.5 Tf 48.00 306.00 Td (- Builds the transcript view consumed by dashboards.) Tj ET
+BT /F1 9.5 Tf 48.00 294.00 Td (- Merges recorded marks with catalog courses so untaken courses still appear in the transcript table.) Tj ET
+BT /F2 8.5 Tf 36.00 282.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 271.00 Td (1264    const studentInsights = useMemo\() Tj ET
+BT /F3 7 Tf 44.00 262.40 Td (1265      \(\) => buildStudentInsights\(state.studentProfiles, state.scheduleDrafts.filter\(isUserVisibleScheduleDraft\)\),) Tj ET
+BT /F3 7 Tf 44.00 253.80 Td (1266      [state.scheduleDrafts, state.studentProfiles]) Tj ET
+BT /F3 7 Tf 44.00 245.20 Td (1267    \);) Tj ET
+BT /F3 7 Tf 44.00 236.60 Td (1268  ) Tj ET
+BT /F3 7 Tf 44.00 228.00 Td (1269    const getStudentProfile = useCallback\() Tj ET
+BT /F3 7 Tf 44.00 219.40 Td (1270      \(studentId: string\) =>) Tj ET
+BT /F3 7 Tf 44.00 210.80 Td (1271        state.studentProfiles.find\(\(profile\) => profile.id === studentId\)) Tj ET
+BT /F3 7 Tf 44.00 202.20 Td (1272        ?? null,) Tj ET
+BT /F3 7 Tf 44.00 193.60 Td (1273      [state.studentProfiles]) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td (1274    \);) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td (1275  ) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td (1276    const getStudentTranscript = useCallback\() Tj ET
+BT /F3 7 Tf 44.00 159.20 Td (1277      \(studentId: string\) => {) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td (1278        const profile = getStudentProfile\(studentId\);) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td (1279        const recordedRows = state.transcriptRows.filter\(\(row\) => row.studentId === studentId\);) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (1280  ) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td (1281        if \(!profile\) {) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td (1282          return recordedRows;) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td (1283        }) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td (1284  ) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td (1285        const latestRecordedByCode = new Map<string, StudentTranscriptRow>\(\);) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td (1286        recordedRows.forEach\(\(row\) => {) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td (1287          if \(!latestRecordedByCode.has\(row.courseCode\)\) {) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td (1288            latestRecordedByCode.set\(row.courseCode, row\);) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td (1289          }) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td (1290        }\);) Tj ET
+endstream
+endobj
+33 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 32 0 R >>
+endobj
+34 0 obj
+<< /Length 4302 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (1291  ) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (1292        const transcriptRows = state.courses.map\(\(course\) => {) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (1293          const recorded = latestRecordedByCode.get\(course.code\);) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (1294          if \(recorded\) {) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (1295            return {) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (1296              ...recorded,) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (1297              termLabel: formatCompactTermLabel\(recorded.termCode\),) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (1298            } satisfies StudentTranscriptRow;) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (1299          }) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (1300  ) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (1301          return {) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (1302            studentId,) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (1303            termCode: '',) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (1304            termLabel: '-',) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (1305            termType: 'regular',) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (1306            courseCode: course.code,) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (1307            courseName: course.name,) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (1308            credits: course.credits,) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (1309            finalGrade: null,) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (1310            status: 'not_taken',) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (1311            attemptNo: 0,) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (1312          } satisfies StudentTranscriptRow;) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (1313        }\);) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (1314  ) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td (1315        return transcriptRows.sort\(\(left, right\) => {) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td (1316          const leftTaken = left.termCode ? 1 : 0;) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td (1317          const rightTaken = right.termCode ? 1 : 0;) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td (1318          if \(leftTaken !== rightTaken\) {) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td (1319            return rightTaken - leftTaken;) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td (1320          }) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td (1321  ) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td (1322          if \(left.termCode && right.termCode\) {) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td (1323            const termCompare = compareTermCodesOldestFirst\(left.termCode, right.termCode\);) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td (1324            if \(termCompare !== 0\) {) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td (1325              return termCompare;) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td (1326            }) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td (1327          }) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td (1328  ) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td (1329          return left.courseCode.localeCompare\(right.courseCode\);) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td (1330        }\);) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td (1331      },) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td (1332      [getStudentProfile, state.courses, state.transcriptRows]) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td (1333    \);) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td (1334  ) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td (1335    const getStudentTermMetrics = useCallback\() Tj ET
+BT /F3 7 Tf 44.00 172.00 Td (1336      \(studentId: string\) =>) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td (1337        state.termMetrics) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td (1338          .filter\(\(row\) => row.studentId === studentId\)) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td (1339          .sort\(\(left, right\) => compareTermCodesOldestFirst\(left.termCode, right.termCode\)\),) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td (1340      [state.termMetrics]) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td (1341    \);) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td (1342  ) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td (1343    const getStudentTranscriptSemesters = useCallback\() Tj ET
+BT /F3 7 Tf 44.00 103.20 Td (1344      \(studentId: string\) => buildTranscriptSemesters\(studentId, state.transcriptRows, state.termMetrics\),) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td (1345      [state.termMetrics, state.transcriptRows]) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td (1346    \);) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td (1347  ) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td (1348    const getStudentAvailableTerms = useCallback\() Tj ET
+endstream
+endobj
+35 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 34 0 R >>
+endobj
+36 0 obj
+<< /Length 4986 >>
+stream
+BT /F2 15 Tf 36.00 559.00 Td (10. Advisor Student Detail: ownership guard) Tj ET
+BT /F3 8.8 Tf 36.00 540.00 Td (Source: src/pages/advisor/AdvisorStudentDetailPage.tsx:20-110) Tj ET
+BT /F1 9.5 Tf 48.00 528.00 Td (- Advisor page only resolves a profile when the student belongs to the logged-in advisor.) Tj ET
+BT /F1 9.5 Tf 48.00 516.00 Td (- Advisors can inspect schedule drafts, risk, GPA, and transcript rows.) Tj ET
+BT /F2 8.5 Tf 36.00 504.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 493.00 Td (  20  export default function AdvisorStudentDetailPage\(\) {) Tj ET
+BT /F3 7 Tf 44.00 484.40 Td (  21    const { studentId = '' } = useParams\(\);) Tj ET
+BT /F3 7 Tf 44.00 475.80 Td (  22    const navigate = useNavigate\(\);) Tj ET
+BT /F3 7 Tf 44.00 467.20 Td (  23    const { user } = useAuth\(\);) Tj ET
+BT /F3 7 Tf 44.00 458.60 Td (  24    const {) Tj ET
+BT /F3 7 Tf 44.00 450.00 Td (  25      courses,) Tj ET
+BT /F3 7 Tf 44.00 441.40 Td (  26      getSelectedCourses,) Tj ET
+BT /F3 7 Tf 44.00 432.80 Td (  27      getStudentDrafts,) Tj ET
+BT /F3 7 Tf 44.00 424.20 Td (  28      getStudentTranscriptSemesters,) Tj ET
+BT /F3 7 Tf 44.00 415.60 Td (  29      getStudentTermMetrics,) Tj ET
+BT /F3 7 Tf 44.00 407.00 Td (  30      getStudentTranscript,) Tj ET
+BT /F3 7 Tf 44.00 398.40 Td (  31      isAppDataReady,) Tj ET
+BT /F3 7 Tf 44.00 389.80 Td (  32      plannerReviewSnapshots,) Tj ET
+BT /F3 7 Tf 44.00 381.20 Td (  33      studentInsights,) Tj ET
+BT /F3 7 Tf 44.00 372.60 Td (  34    } = useAppData\(\);) Tj ET
+BT /F3 7 Tf 44.00 364.00 Td (  35  ) Tj ET
+BT /F3 7 Tf 44.00 355.40 Td (  36    const profile = studentInsights.find\(\(item\) => item.id === studentId && item.advisorId === user?.id\) ?? null;) Tj ET
+BT /F3 7 Tf 44.00 346.80 Td (  37    const selectedCourses = getSelectedCourses\(studentId\);) Tj ET
+BT /F3 7 Tf 44.00 338.20 Td (  38    const drafts = getStudentDrafts\(studentId\);) Tj ET
+BT /F3 7 Tf 44.00 329.60 Td (  39    const transcriptRows = getStudentTranscript\(studentId\);) Tj ET
+BT /F3 7 Tf 44.00 321.00 Td (  40    const transcriptSemesters = getStudentTranscriptSemesters\(studentId\);) Tj ET
+BT /F3 7 Tf 44.00 312.40 Td (  41    const termMetrics = getStudentTermMetrics\(studentId\);) Tj ET
+BT /F3 7 Tf 44.00 303.80 Td (  42    const currentEvaluation = plannerReviewSnapshots[studentId] ?? null;) Tj ET
+BT /F3 7 Tf 44.00 295.20 Td (  43    const [activeTab, setActiveTab] = useState<'overview' | 'transcript' | 'semester-transcript'>\('overview'\);) Tj ET
+BT /F3 7 Tf 44.00 286.60 Td (  44    const [selectedSemesterTermCode, setSelectedSemesterTermCode] = useState\(''\);) Tj ET
+BT /F3 7 Tf 44.00 278.00 Td (  45    const [isDraftsOpen, setIsDraftsOpen] = useState\(false\);) Tj ET
+BT /F3 7 Tf 44.00 269.40 Td (  46    const [selectedDraftId, setSelectedDraftId] = useState<string | null>\(null\);) Tj ET
+BT /F3 7 Tf 44.00 260.80 Td (  47  ) Tj ET
+BT /F3 7 Tf 44.00 252.20 Td (  48    const selectedCoursesForDisplay = useMemo\() Tj ET
+BT /F3 7 Tf 44.00 243.60 Td (  49      \(\) =>) Tj ET
+BT /F3 7 Tf 44.00 235.00 Td (  50        selectedCourses.length > 0) Tj ET
+BT /F3 7 Tf 44.00 226.40 Td (  51          ? selectedCourses) Tj ET
+BT /F3 7 Tf 44.00 217.80 Td (  52          : drafts[0]) Tj ET
+BT /F3 7 Tf 44.00 209.20 Td (  53            ? drafts[0].courseCodes) Tj ET
+BT /F3 7 Tf 44.00 200.60 Td (  54                .map\(\(code\) => courses.find\(\(course\) => course.code === code\)\)) Tj ET
+BT /F3 7 Tf 44.00 192.00 Td (  55                .filter\(\(course\): course is NonNullable<typeof course> => Boolean\(course\)\)) Tj ET
+BT /F3 7 Tf 44.00 183.40 Td (  56            : [],) Tj ET
+BT /F3 7 Tf 44.00 174.80 Td (  57      [courses, drafts, selectedCourses]) Tj ET
+BT /F3 7 Tf 44.00 166.20 Td (  58    \);) Tj ET
+BT /F3 7 Tf 44.00 157.60 Td (  59  ) Tj ET
+BT /F3 7 Tf 44.00 149.00 Td (  60    const totalCredits = useMemo\() Tj ET
+BT /F3 7 Tf 44.00 140.40 Td (  61      \(\) => selectedCoursesForDisplay.reduce\(\(sum, course\) => sum + course.credits, 0\),) Tj ET
+BT /F3 7 Tf 44.00 131.80 Td (  62      [selectedCoursesForDisplay]) Tj ET
+BT /F3 7 Tf 44.00 123.20 Td (  63    \);) Tj ET
+BT /F3 7 Tf 44.00 114.60 Td (  64  ) Tj ET
+BT /F3 7 Tf 44.00 106.00 Td (  65    const score = currentEvaluation?.totalScore ?? drafts[0]?.evaluation.totalScore ?? null;) Tj ET
+BT /F3 7 Tf 44.00 97.40 Td (  66    const diffInfo = score !== null ? getDiffLabel\(score\) : null;) Tj ET
+BT /F3 7 Tf 44.00 88.80 Td (  67    const meterPct = score !== null ? clamp\(score, 0, 100\) : 50;) Tj ET
+BT /F3 7 Tf 44.00 80.20 Td (  68    const explanation = currentEvaluation?.explanation ?? drafts[0]?.evaluation.explanation ?? [];) Tj ET
+BT /F3 7 Tf 44.00 71.60 Td (  69    const selectedDraft = drafts.find\(\(draft\) => draft.id === selectedDraftId\) ?? null;) Tj ET
+BT /F3 7 Tf 44.00 63.00 Td (  70    const selectedDraftCourses = useMemo\() Tj ET
+BT /F3 7 Tf 44.00 54.40 Td (  71      \(\) =>) Tj ET
+BT /F3 7 Tf 44.00 45.80 Td (  72        selectedDraft) Tj ET
+endstream
+endobj
+37 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 36 0 R >>
+endobj
+38 0 obj
+<< /Length 4648 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  73          ? selectedDraft.courseCodes) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  74              .map\(\(code\) => courses.find\(\(course\) => course.code === code\)\)) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  75              .filter\(\(course\): course is NonNullable<typeof course> => Boolean\(course\)\)) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  76          : [],) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  77      [courses, selectedDraft]) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  78    \);) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  79    const selectedSemester = transcriptSemesters.find\(\(semester\) => semester.termCode === selectedSemesterTermCode\)) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  80      ?? transcriptSemesters[0]) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (  81      ?? null;) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  82  ) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (  83    const handleMessageStudent = \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (  84      if \(!profile\) {) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (  85        return;) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (  86      }) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (  87  ) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (  88      navigate\('/app/advisor/messages', { state: { focusUserId: profile.id, scrollToBottom: true } }\);) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (  89    };) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (  90  ) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (  91    const handleOpenDrafts = \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (  92      setSelectedDraftId\(null\);) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (  93      setIsDraftsOpen\(true\);) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (  94    };) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (  95  ) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (  96    const handleCloseDrafts = \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td (  97      setSelectedDraftId\(null\);) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td (  98      setIsDraftsOpen\(false\);) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td (  99    };) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 100  ) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 101    if \(!isAppDataReady\) {) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 102      return \() Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 103        <div className="rounded-xl border border-gray-200 bg-white p-8 text-sm text-gray-500">) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 104          Loading student details...) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 105        </div>) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 106      \);) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 107    }) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 108  ) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 109    if \(!profile\) {) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 110      return \() Tj ET
+BT /F2 15 Tf 36.00 225.20 Td (11. Advisor Transcript Display) Tj ET
+BT /F3 8.8 Tf 36.00 206.20 Td (Source: src/pages/advisor/AdvisorStudentDetailPage.tsx:380-488) Tj ET
+BT /F1 9.5 Tf 48.00 194.20 Td (- Shows advisor-facing full transcript and semester transcript views.) Tj ET
+BT /F1 9.5 Tf 48.00 182.20 Td (- Important boundary: this page displays marks, but does not mutate them.) Tj ET
+BT /F2 8.5 Tf 36.00 170.20 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td ( 380            <div className="mb-4">) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td ( 381              <h2 className="text-lg font-bold text-[#0f1e3c]">Full Transcript</h2>) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td ( 382              <p className="mt-1 text-sm text-gray-500">All degree courses for this advisee, including untaken courses and recorded marks.</p>) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td ( 383            </div>) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td ( 384            {transcriptRows.length > 0 ? \() Tj ET
+BT /F3 7 Tf 44.00 116.20 Td ( 385              <div className="overflow-hidden rounded-xl border border-gray-200">) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td ( 386                <div className="flex items-center justify-between bg-slate-50 px-4 py-3">) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td ( 387                  <p className="font-semibold text-[#0f1e3c]">Degree Transcript</p>) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td ( 388                  <span className="text-xs font-medium text-gray-500">{transcriptRows.length} course{transcriptRows.length !== 1 ? 's' : ''}</span>) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td ( 389                </div>) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td ( 390                <div className="overflow-x-auto">) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td ( 391                  <table className="w-full text-sm">) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td ( 392                    <thead>) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td ( 393                      <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">) Tj ET
+endstream
+endobj
+39 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 38 0 R >>
+endobj
+40 0 obj
+<< /Length 5925 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 394                        <th className="px-4 py-3 pr-4">Code</th>) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 395                        <th className="px-4 py-3 pr-4">Course</th>) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 396                        <th className="px-4 py-3 pr-4 text-center">Credits</th>) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 397                        <th className="px-4 py-3 pr-4 text-center">Term</th>) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 398                        <th className="px-4 py-3 text-center">Grade</th>) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 399                      </tr>) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 400                    </thead>) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 401                    <tbody>) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 402                      {transcriptRows.map\(\(row\) => \() Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 403                        <tr key={row.courseCode} className="border-b border-gray-50 last:border-0">) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 404                          <td className="px-4 py-3 font-mono font-semibold text-[#0f1e3c]">{row.courseCode}</td>) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 405                          <td className="px-4 py-3 text-gray-700">{row.courseName}</td>) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 406                          <td className="px-4 py-3 text-center text-gray-600">{row.credits}</td>) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 407                          <td className="px-4 py-3 text-center text-gray-600">{row.termLabel}</td>) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 408                          <td className="px-4 py-3 text-center font-semibold text-[#0f1e3c]">{row.finalGrade === null ? '-' : row.finalGrade.toFixed\(0\)}</td>) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 409                        </tr>) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 410                      \)\)}) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 411                    </tbody>) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 412                  </table>) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 413                </div>) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 414              </div>) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 415            \) : \() Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 416              <div className="rounded-lg border border-dashed border-gray-300 p-6 text-sm text-gray-500">) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 417                No transcript rows are available yet.) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 418              </div>) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 419            \)}) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 420          </div>) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 421        \) : \() Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 422          <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 423            <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 424              <div>) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 425                <h2 className="text-lg font-bold text-[#0f1e3c]">Semester Transcript</h2>) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 426                <p className="mt-1 text-sm text-gray-500">Review the selected student&apos;s recorded courses and marks semester by semester.</p>) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 427              </div>) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 428              <label className="flex flex-col gap-1 text-sm font-medium text-gray-600">) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 429                Semester) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 430                <select) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 431                  value={selectedSemester?.termCode ?? ''}) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 432                  onChange={\(event\) => setSelectedSemesterTermCode\(event.target.value\)}) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 433                  className="min-w-[200px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-[#0f1e3c] outline-none ring-0 transition-colors focus:border-) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td (      [#2563eb]") Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 434                >) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 435                  {transcriptSemesters.map\(\(semester\) => \() Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 436                    <option key={semester.termCode} value={semester.termCode}>) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 437                      {semester.termLabel}) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 438                    </option>) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 439                  \)\)}) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 440                </select>) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 441              </label>) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 442            </div>) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 443            {selectedSemester ? \() Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 444              <div className="overflow-hidden rounded-xl border border-gray-200">) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 445                <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3">) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 446                  <div>) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 447                    <p className="font-semibold text-[#0f1e3c]">{selectedSemester.termLabel}</p>) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 448                    <p className="text-xs text-gray-500">) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 449                      {selectedSemester.completedCredits} hour{selectedSemester.completedCredits !== 1 ? 's' : ''} | {selectedSemester.courseCount} course{selectedSemeste) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td (      r.courseCount !== 1 ? 's' : ''} | GPA {selectedSemester.gpa?.toFixed\(2\) ?? '-'}) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 450                    </p>) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 451                  </div>) Tj ET
+endstream
+endobj
+41 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 40 0 R >>
+endobj
+42 0 obj
+<< /Length 5160 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 452                </div>) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 453                <div className="overflow-x-auto">) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 454                  <table className="w-full text-sm">) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 455                    <thead>) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 456                      <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 457                        <th className="px-4 py-3 pr-4">Code</th>) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 458                        <th className="px-4 py-3 pr-4">Course</th>) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 459                        <th className="px-4 py-3 pr-4 text-center">Credits</th>) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 460                        <th className="px-4 py-3 pr-4 text-center">Status</th>) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 461                        <th className="px-4 py-3 text-center">Grade</th>) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 462                      </tr>) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 463                    </thead>) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 464                    <tbody>) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 465                      {selectedSemester.rows.map\(\(row\) => \() Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 466                        <tr key={`${row.termCode}-${row.courseCode}`} className="border-b border-gray-50 last:border-0">) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 467                          <td className="px-4 py-3 font-mono font-semibold text-[#0f1e3c]">{row.courseCode}</td>) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 468                          <td className="px-4 py-3 text-gray-700">{row.courseName}</td>) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 469                          <td className="px-4 py-3 text-center text-gray-600">{row.credits}</td>) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 470                          <td className="px-4 py-3 text-center">) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 471                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 472                              {row.status.replace\('_', ' '\)}) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 473                            </span>) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 474                          </td>) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 475                          <td className="px-4 py-3 text-center font-semibold text-[#0f1e3c]">{row.finalGrade === null ? '-' : row.finalGrade.toFixed\(0\)}</td>) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 476                        </tr>) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 477                      \)\)}) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 478                    </tbody>) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 479                  </table>) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 480                </div>) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 481              </div>) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 482            \) : \() Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 483              <div className="rounded-lg border border-dashed border-gray-300 p-6 text-sm text-gray-500">) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 484                No semester transcript data is available yet.) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 485              </div>) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 486            \)}) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 487          </div>) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 488        \)}) Tj ET
+BT /F2 15 Tf 36.00 233.80 Td (12. Admin Student List to Transcript Editor) Tj ET
+BT /F3 8.8 Tf 36.00 214.80 Td (Source: src/pages/admin/AdminStudentsPage.tsx:7-111) Tj ET
+BT /F1 9.5 Tf 48.00 202.80 Td (- Filters users to students and links admins into /app/admin/students/:studentId/transcript.) Tj ET
+BT /F1 9.5 Tf 48.00 190.80 Td (- This is the UI entry point for changing a mark.) Tj ET
+BT /F2 8.5 Tf 36.00 178.80 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td (   7  export default function AdminStudentsPage\(\) {) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td (   8    const { users } = useAuth\(\);) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td (   9    const {) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td (  10      isAppDataReady,) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (  11      studentInsights,) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td (  12    } = useAppData\(\);) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td (  13    const [search, setSearch] = useState\(''\);) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td (  14    const deferredSearch = useDeferredValue\(search\);) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td (  15  ) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td (  16    const students = useMemo\() Tj ET
+BT /F3 7 Tf 44.00 81.80 Td (  17      \(\) => users.filter\(\(account\) => account.role === 'student'\),) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td (  18      [users]) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td (  19    \);) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td (  20    const insightById = useMemo\() Tj ET
+BT /F3 7 Tf 44.00 47.40 Td (  21      \(\) => new Map\(studentInsights.map\(\(student\) => [student.id, student]\)\),) Tj ET
+endstream
+endobj
+43 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 42 0 R >>
+endobj
+44 0 obj
+<< /Length 5177 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  22      [studentInsights]) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  23    \);) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  24  ) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  25    const filteredStudents = useMemo\(\(\) => {) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  26      const query = deferredSearch.trim\(\).toLowerCase\(\);) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  27      if \(!query\) {) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  28        return students;) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  29      }) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (  30  ) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  31      return students.filter\(\(student\) => \() Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (  32        student.name.toLowerCase\(\).includes\(query\) ||) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (  33        student.id.toLowerCase\(\).includes\(query\)) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (  34      \)\);) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (  35    }, [deferredSearch, students]\);) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (  36  ) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (  37    return \() Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (  38      <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (  39        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (  40          <h2 className="flex items-center gap-2 text-lg font-bold text-[#0f1e3c]">) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (  41            <GraduationCap className="h-5 w-5 text-[#2563eb]" />) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (  42            Students) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (  43          </h2>) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (  44          <div className="relative w-full sm:max-w-sm">) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (  45            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td (  46            <input) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td (  47              type="text") Tj ET
+BT /F3 7 Tf 44.00 335.40 Td (  48              value={search}) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td (  49              onChange={\(event\) => setSearch\(event.target.value\)}) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td (  50              placeholder="Search by student name or ID") Tj ET
+BT /F3 7 Tf 44.00 309.60 Td (  51              className="w-full rounded-lg border border-gray-200 py-2 pl-10 pr-4 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30") Tj ET
+BT /F3 7 Tf 44.00 301.00 Td (  52            />) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td (  53          </div>) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td (  54        </div>) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td (  55  ) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td (  56        {!isAppDataReady ? \() Tj ET
+BT /F3 7 Tf 44.00 258.00 Td (  57          <div className="rounded-lg border border-dashed border-gray-200 p-6 text-sm text-gray-500">) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td (  58            Loading students...) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td (  59          </div>) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td (  60        \) : \() Tj ET
+BT /F3 7 Tf 44.00 223.60 Td (  61          <div className="overflow-x-auto">) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td (  62            <table className="w-full text-sm">) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td (  63              <thead>) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td (  64                <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td (  65                  <th className="pb-2 pr-4">Student</th>) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td (  66                  <th className="pb-2 pr-4">Advisor</th>) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td (  67                  <th className="pb-2 pr-4 text-center">GPA</th>) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td (  68                  <th className="pb-2 pr-4 text-center">Credits</th>) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td (  69                  <th className="pb-2 text-right">Action</th>) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td (  70                </tr>) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td (  71              </thead>) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td (  72              <tbody>) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td (  73                {filteredStudents.map\(\(student\) => {) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td (  74                  const insight = insightById.get\(student.id\);) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td (  75                  const advisor = insight?.advisorId ? users.find\(\(account\) => account.id === insight.advisorId\) : null;) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td (  76                  return \() Tj ET
+BT /F3 7 Tf 44.00 86.00 Td (  77                    <tr key={student.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60">) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td (  78                      <td className="py-2.5 pr-4">) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td (  79                        <p className="font-semibold text-[#0f1e3c]">{student.name}</p>) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td (  80                        <p className="text-xs text-gray-400">{student.id}</p>) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td (  81                      </td>) Tj ET
+endstream
+endobj
+45 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 44 0 R >>
+endobj
+46 0 obj
+<< /Length 4923 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  82                      <td className="py-2.5 pr-4 text-gray-600">{advisor?.name ?? 'Unassigned'}</td>) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  83                      <td className="py-2.5 pr-4 text-center font-semibold text-[#0f1e3c]">{insight ? insight.gpa.toFixed\(2\) : '-'}</td>) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  84                      <td className="py-2.5 pr-4 text-center text-gray-600">{insight?.creditsCompleted ?? '-'}</td>) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  85                      <td className="py-2.5 text-right">) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  86                        <div className="flex justify-end gap-2">) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  87                          <Link) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  88                            to={`/app/admin/students/${student.id}/transcript`}) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  89                            className="inline-flex items-center justify-center rounded-lg border border-[#2563eb]/20 bg-[#2563eb]/5 px-3 py-1.5 text-xs font-semibold text) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (      -[#2563eb] transition-colors hover:bg-[#2563eb]/10") Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  90                          >) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (  91                            View transcript) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (  92                          </Link>) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (  93                        </div>) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (  94                      </td>) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (  95                    </tr>) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (  96                  \);) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (  97                }\)}) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (  98                {filteredStudents.length === 0 && \() Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (  99                  <tr>) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 100                    <td colSpan={5} className="py-8 text-center text-sm text-gray-500">) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 101                      No students match this search.) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 102                    </td>) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 103                  </tr>) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 104                \)}) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 105              </tbody>) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 106            </table>) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 107          </div>) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 108        \)}) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 109      </section>) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 110    \);) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 111  }) Tj ET
+BT /F2 15 Tf 36.00 285.40 Td (13. Admin Transcript Editor: validation and save loop) Tj ET
+BT /F3 8.8 Tf 36.00 266.40 Td (Source: src/pages/admin/AdminStudentTranscriptPage.tsx:85-223) Tj ET
+BT /F1 9.5 Tf 48.00 254.40 Td (- Tracks edited draft rows and validates whole-number marks from 35 to 99 plus attempt numbers from 1 to 10.) Tj ET
+BT /F1 9.5 Tf 48.00 242.40 Td (- Only changed rows are saved; each row is sent through upsertTranscriptEntry.) Tj ET
+BT /F2 8.5 Tf 36.00 230.40 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 219.40 Td (  85  export default function AdminStudentTranscriptPage\(\) {) Tj ET
+BT /F3 7 Tf 44.00 210.80 Td (  86    const { studentId } = useParams\(\);) Tj ET
+BT /F3 7 Tf 44.00 202.20 Td (  87    const { users } = useAuth\(\);) Tj ET
+BT /F3 7 Tf 44.00 193.60 Td (  88    const {) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td (  89      getStudentAvailableTerms,) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td (  90      getStudentTranscript,) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td (  91      isAppDataReady,) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td (  92      studentInsights,) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td (  93      upsertTranscriptEntry,) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td (  94    } = useAppData\(\);) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (  95    const [draftRows, setDraftRows] = useState<Record<string, TranscriptDraftRow>>\({}\);) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td (  96    const [message, setMessage] = useState<string | null>\(null\);) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td (  97    const [error, setError] = useState<string | null>\(null\);) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td (  98    const [isSaving, setIsSaving] = useState\(false\);) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td (  99  ) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td ( 100    const student = users.find\(\(account\) => account.id === studentId && account.role === 'student'\);) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td ( 101    const advisor = getAdvisor\(student, users, studentInsights\);) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td ( 102    const transcriptRows = useMemo\() Tj ET
+BT /F3 7 Tf 44.00 64.60 Td ( 103      \(\) => studentId ? getStudentTranscript\(studentId\) : [],) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td ( 104      [getStudentTranscript, studentId]) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td ( 105    \);) Tj ET
+endstream
+endobj
+47 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 46 0 R >>
+endobj
+48 0 obj
+<< /Length 4895 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 106    const termOptions = useMemo\(\(\) => {) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 107      if \(!studentId\) {) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 108        return [];) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 109      }) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 110  ) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 111      const terms = new Map<string, { termCode: string; termType: ReturnType<typeof getTermTypeFromCode> }>\(\);) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 112      getStudentAvailableTerms\(studentId\).forEach\(\(term\) => terms.set\(term.termCode, term\)\);) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 113      transcriptRows.forEach\(\(row\) => terms.set\(row.termCode, { termCode: row.termCode, termType: row.termType }\)\);) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 114      return [...terms.values\(\)].map\(\(term\) => \({) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 115        ...term,) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 116        termLabel: formatTermLabel\(term.termCode\),) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 117      }\)\);) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 118    }, [getStudentAvailableTerms, studentId, transcriptRows]\);) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 119  ) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 120    if \(!studentId || \(!student && isAppDataReady\)\) {) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 121      return <Navigate to="/app/admin/students" replace />;) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 122    }) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 123  ) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 124    const getDraftForRow = \(row: StudentTranscriptRow\) => {) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 125      const key = getDraftKey\(row\);) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 126      return draftRows[key] ?? {) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 127        finalGrade: formatGradeValue\(row.finalGrade\),) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 128        attemptNo: formatAttemptValue\(row.attemptNo\),) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 129        termCode: row.termCode || termOptions[0]?.termCode || '',) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 130      };) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 131    };) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 132  ) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 133    const validationErrors = transcriptRows.flatMap\(\(row\) => {) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 134      const draft = getDraftForRow\(row\);) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 135      const finalGrade = parseGradeValue\(draft.finalGrade\);) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 136      const attemptNo = parseAttemptValue\(draft.attemptNo\);) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 137      if \(draft.finalGrade.trim\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 138        if \(!/^\\d+$/.test\(draft.finalGrade.trim\(\)\)\) {) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 139          return [`${row.courseCode} needs a whole-number mark, or a blank mark.`];) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 140        }) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 141  ) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 142        if \(!Number.isInteger\(finalGrade\) || finalGrade === null || finalGrade < 35 || finalGrade > 99\) {) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 143          return [`${row.courseCode} needs a whole-number mark from 35 to 99, or a blank mark.`];) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 144        }) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 145  ) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 146        if \(!draft.attemptNo.trim\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 147          return [`${row.courseCode} needs an attempt number from 1 to 10 when a mark is entered.`];) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 148        }) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 149      }) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 150  ) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 151      if \(draft.attemptNo.trim\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 152        if \(!/^\\d+$/.test\(draft.attemptNo.trim\(\)\)\) {) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 153          return [`${row.courseCode} needs a whole-number attempt from 1 to 10, or a blank attempt.`];) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 154        }) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 155  ) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 156        if \(!Number.isInteger\(attemptNo\) || attemptNo === null || attemptNo < 1 || attemptNo > 10\) {) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 157          return [`${row.courseCode} needs a whole-number attempt from 1 to 10, or a blank attempt.`];) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 158        }) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 159      }) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 160  ) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 161      return [];) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 162    }\);) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 163  ) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 164    const changedRows = transcriptRows.filter\(\(row\) => {) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 165      const draft = draftRows[getDraftKey\(row\)];) Tj ET
+endstream
+endobj
+49 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 48 0 R >>
+endobj
+50 0 obj
+<< /Length 4170 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 166      if \(!draft\) {) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 167        return false;) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 168      }) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 169  ) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 170      return !row.id) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 171        || draft.termCode !== row.termCode) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 172        || parseGradeValue\(draft.finalGrade\) !== row.finalGrade) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 173        || parseAttemptValue\(draft.attemptNo\) !== row.attemptNo;) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 174    }\);) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 175    const hasChanges = changedRows.length > 0;) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 176  ) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 177    const transcriptByTerm = transcriptRows.reduce<Record<string, StudentTranscriptRow[]>>\(\(groups, row\) => {) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 178      const draft = getDraftForRow\(row\);) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 179      const termCode = draft.termCode;) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 180      groups[termCode] = [...\(groups[termCode] ?? []\), row];) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 181      return groups;) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 182    }, {}\);) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 183  ) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 184    const handleReset = \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 185      setDraftRows\({}\);) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 186      setMessage\(null\);) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 187      setError\(null\);) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 188    };) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 189  ) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 190    const handleSave = async \(\) => {) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 191      setMessage\(null\);) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 192      setError\(null\);) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 193  ) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 194      if \(validationErrors.length > 0\) {) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 195        setError\(validationErrors[0]\);) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 196        return;) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 197      }) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 198  ) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 199      setIsSaving\(true\);) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 200      for \(const row of changedRows\) {) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 201        const draft = draftRows[getDraftKey\(row\)];) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 202        const finalGrade = parseGradeValue\(draft.finalGrade\);) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 203        const attemptNo = parseAttemptValue\(draft.attemptNo\);) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 204        const result = await upsertTranscriptEntry\({) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 205          id: row.id,) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 206          studentId: row.studentId,) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 207          termCode: draft.termCode || row.termCode || termOptions[0]?.termCode || '',) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 208          courseCode: row.courseCode,) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 209          finalGrade,) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 210          status: getStatusFromGrade\(finalGrade\),) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 211          attemptNo: attemptNo ?? Math.max\(row.attemptNo, 1\),) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 212        }\);) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 213  ) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 214        if \(!result.success\) {) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 215          setIsSaving\(false\);) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 216          setError\(result.error ?? `Unable to save ${row.courseCode}.`\);) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 217          return;) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 218        }) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 219      }) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 220      setIsSaving\(false\);) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 221      setDraftRows\({}\);) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 222      setMessage\('Transcript changes saved.'\);) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 223    };) Tj ET
+endstream
+endobj
+51 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 50 0 R >>
+endobj
+52 0 obj
+<< /Length 6077 >>
+stream
+BT /F2 15 Tf 36.00 559.00 Td (14. Admin Transcript Editor: mark inputs) Tj ET
+BT /F3 8.8 Tf 36.00 540.00 Td (Source: src/pages/admin/AdminStudentTranscriptPage.tsx:265-373) Tj ET
+BT /F1 9.5 Tf 48.00 528.00 Td (- Shows the exact inputs used to change attempt number, semester taken, mark, and derived status.) Tj ET
+BT /F1 9.5 Tf 48.00 516.00 Td (- The Save button above this table persists draftRows through handleSave.) Tj ET
+BT /F2 8.5 Tf 36.00 504.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 493.00 Td ( 265        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6">) Tj ET
+BT /F3 7 Tf 44.00 484.40 Td ( 266          {transcriptRows.length > 0 ? \() Tj ET
+BT /F3 7 Tf 44.00 475.80 Td ( 267            <div className="space-y-5">) Tj ET
+BT /F3 7 Tf 44.00 467.20 Td ( 268              {Object.entries\(transcriptByTerm\).map\(\([termCode, rows]\) => \() Tj ET
+BT /F3 7 Tf 44.00 458.60 Td ( 269                <div key={termCode} className="overflow-hidden rounded-xl border border-gray-200">) Tj ET
+BT /F3 7 Tf 44.00 450.00 Td ( 270                  <div className="flex items-center justify-between bg-slate-50 px-4 py-3">) Tj ET
+BT /F3 7 Tf 44.00 441.40 Td ( 271                    <p className="font-semibold text-[#0f1e3c]">{formatTermLabel\(termCode\)}</p>) Tj ET
+BT /F3 7 Tf 44.00 432.80 Td ( 272                    <span className="text-xs font-medium text-gray-500">{rows.length} course{rows.length !== 1 ? 's' : ''}</span>) Tj ET
+BT /F3 7 Tf 44.00 424.20 Td ( 273                  </div>) Tj ET
+BT /F3 7 Tf 44.00 415.60 Td ( 274                  <div className="overflow-x-auto">) Tj ET
+BT /F3 7 Tf 44.00 407.00 Td ( 275                    <table className="w-full text-sm">) Tj ET
+BT /F3 7 Tf 44.00 398.40 Td ( 276                      <thead>) Tj ET
+BT /F3 7 Tf 44.00 389.80 Td ( 277                        <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wider text-gray-400">) Tj ET
+BT /F3 7 Tf 44.00 381.20 Td ( 278                          <th className="px-4 py-3 pr-4">Code</th>) Tj ET
+BT /F3 7 Tf 44.00 372.60 Td ( 279                          <th className="px-4 py-3 pr-4">Course</th>) Tj ET
+BT /F3 7 Tf 44.00 364.00 Td ( 280                          <th className="px-4 py-3 pr-4 text-center">Credits</th>) Tj ET
+BT /F3 7 Tf 44.00 355.40 Td ( 281                          <th className="px-4 py-3 pr-4 text-center">Attempt</th>) Tj ET
+BT /F3 7 Tf 44.00 346.80 Td ( 282                          <th className="px-4 py-3 pr-4">Semester taken</th>) Tj ET
+BT /F3 7 Tf 44.00 338.20 Td ( 283                          <th className="px-4 py-3 pr-4">Mark</th>) Tj ET
+BT /F3 7 Tf 44.00 329.60 Td ( 284                          <th className="px-4 py-3 text-center">Status</th>) Tj ET
+BT /F3 7 Tf 44.00 321.00 Td ( 285                        </tr>) Tj ET
+BT /F3 7 Tf 44.00 312.40 Td ( 286                      </thead>) Tj ET
+BT /F3 7 Tf 44.00 303.80 Td ( 287                      <tbody>) Tj ET
+BT /F3 7 Tf 44.00 295.20 Td ( 288                        {rows.map\(\(row\) => {) Tj ET
+BT /F3 7 Tf 44.00 286.60 Td ( 289                          const key = getDraftKey\(row\);) Tj ET
+BT /F3 7 Tf 44.00 278.00 Td ( 290                          const draft = getDraftForRow\(row\);) Tj ET
+BT /F3 7 Tf 44.00 269.40 Td ( 291                          const parsedGrade = parseGradeValue\(draft.finalGrade\);) Tj ET
+BT /F3 7 Tf 44.00 260.80 Td ( 292                          return \() Tj ET
+BT /F3 7 Tf 44.00 252.20 Td ( 293                            <tr key={key} className="border-b border-gray-50 last:border-0">) Tj ET
+BT /F3 7 Tf 44.00 243.60 Td ( 294                              <td className="px-4 py-3 font-mono font-semibold text-[#0f1e3c]">{row.courseCode}</td>) Tj ET
+BT /F3 7 Tf 44.00 235.00 Td ( 295                              <td className="min-w-56 px-4 py-3 text-gray-700">{row.courseName}</td>) Tj ET
+BT /F3 7 Tf 44.00 226.40 Td ( 296                              <td className="px-4 py-3 text-center text-gray-600">{row.credits}</td>) Tj ET
+BT /F3 7 Tf 44.00 217.80 Td ( 297                              <td className="px-4 py-3 text-center">) Tj ET
+BT /F3 7 Tf 44.00 209.20 Td ( 298                                <input) Tj ET
+BT /F3 7 Tf 44.00 200.60 Td ( 299                                  type="number") Tj ET
+BT /F3 7 Tf 44.00 192.00 Td ( 300                                  min="1") Tj ET
+BT /F3 7 Tf 44.00 183.40 Td ( 301                                  max="10") Tj ET
+BT /F3 7 Tf 44.00 174.80 Td ( 302                                  step="1") Tj ET
+BT /F3 7 Tf 44.00 166.20 Td ( 303                                  inputMode="numeric") Tj ET
+BT /F3 7 Tf 44.00 157.60 Td ( 304                                  value={draft.attemptNo}) Tj ET
+BT /F3 7 Tf 44.00 149.00 Td ( 305                                  onChange={\(event\) => setDraftRows\(\(current\) => \({) Tj ET
+BT /F3 7 Tf 44.00 140.40 Td ( 306                                    ...current,) Tj ET
+BT /F3 7 Tf 44.00 131.80 Td ( 307                                    [key]: { ...draft, attemptNo: event.target.value },) Tj ET
+BT /F3 7 Tf 44.00 123.20 Td ( 308                                  }\)\)}) Tj ET
+BT /F3 7 Tf 44.00 114.60 Td ( 309                                  className="w-20 rounded-lg border border-gray-200 px-3 py-2 text-center text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 f) Tj ET
+BT /F3 7 Tf 44.00 106.00 Td (      ocus:ring-[#2563eb]/30") Tj ET
+BT /F3 7 Tf 44.00 97.40 Td ( 310                                />) Tj ET
+BT /F3 7 Tf 44.00 88.80 Td ( 311                              </td>) Tj ET
+BT /F3 7 Tf 44.00 80.20 Td ( 312                              <td className="px-4 py-3">) Tj ET
+BT /F3 7 Tf 44.00 71.60 Td ( 313                                <select) Tj ET
+BT /F3 7 Tf 44.00 63.00 Td ( 314                                  value={draft.termCode}) Tj ET
+BT /F3 7 Tf 44.00 54.40 Td ( 315                                  onChange={\(event\) => setDraftRows\(\(current\) => \({) Tj ET
+BT /F3 7 Tf 44.00 45.80 Td ( 316                                    ...current,) Tj ET
+endstream
+endobj
+53 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 52 0 R >>
+endobj
+54 0 obj
+<< /Length 5361 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 317                                    [key]: { ...draft, termCode: event.target.value },) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 318                                  }\)\)}) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 319                                  className="w-44 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (      2563eb]/30") Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 320                                >) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 321                                  {termOptions.map\(\(term\) => \() Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 322                                    <option key={term.termCode} value={term.termCode}>{term.termLabel}</option>) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 323                                  \)\)}) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 324                                </select>) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 325                              </td>) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 326                              <td className="px-4 py-3">) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 327                                <input) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 328                                  type="number") Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 329                                  min="35") Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 330                                  max="99") Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 331                                  step="1") Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 332                                  inputMode="numeric") Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 333                                  value={draft.finalGrade}) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 334                                  onChange={\(event\) => setDraftRows\(\(current\) => \({) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 335                                    ...current,) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 336                                    [key]: { ...draft, finalGrade: event.target.value },) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 337                                  }\)\)}) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 338                                  className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (      2563eb]/30") Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 339                                />) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 340                                <button) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 341                                  type="button") Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 342                                  onClick={\(\) => setDraftRows\(\(current\) => \({) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 343                                    ...current,) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 344                                    [key]: { ...draft, finalGrade: '' },) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 345                                  }\)\)}) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 346                                  className="mt-2 text-xs font-semibold text-gray-500 transition-colors hover:text-[#2563eb]") Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 347                                >) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 348                                  Clear grade) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 349                                </button>) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 350                              </td>) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 351                              <td className="px-4 py-3 text-center">) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 352                                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${getStatusClass\(parsedGrade\)}`}>) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 353                                  {getStatusLabel\(parsedGrade\)}) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 354                                </span>) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 355                              </td>) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 356                            </tr>) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 357                          \);) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 358                        }\)}) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 359                      </tbody>) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 360                    </table>) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 361                  </div>) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 362                </div>) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 363              \)\)}) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 364            </div>) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 365          \) : \() Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 366            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-sm text-gray-500">) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 367              No transcript rows are available for this student yet.) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 368            </div>) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 369          \)}) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 370        </section>) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 371      </div>) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 372    \);) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 373  }) Tj ET
+endstream
+endobj
+55 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 54 0 R >>
+endobj
+56 0 obj
+<< /Length 4858 >>
+stream
+BT /F2 15 Tf 36.00 559.00 Td (15. AppData upsertTranscriptEntry: client validation, API call, local sync) Tj ET
+BT /F3 8.8 Tf 36.00 540.00 Td (Source: src/context/AppDataContext.tsx:1980-2054) Tj ET
+BT /F1 9.5 Tf 48.00 528.00 Td (- Normalizes status from the grade, revalidates against catalog and current transcript rows, then calls the) Tj ET
+BT /F1 9.5 Tf 48.00 516.00 Td (  admin API.) Tj ET
+BT /F1 9.5 Tf 48.00 504.00 Td (- After success, syncDerivedTranscriptState updates GPA, completed credits, and transcript state in the UI.) Tj ET
+BT /F2 8.5 Tf 36.00 492.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 481.00 Td (1980      const termLimit = getCreditLimitForTermCode\(input.termCode\);) Tj ET
+BT /F3 7 Tf 44.00 472.40 Td (1981      if \(nextTermHours > termLimit\) {) Tj ET
+BT /F3 7 Tf 44.00 463.80 Td (1982        return `${formatTermLabel\(input.termCode\)} cannot exceed ${termLimit} hours.`;) Tj ET
+BT /F3 7 Tf 44.00 455.20 Td (1983      }) Tj ET
+BT /F3 7 Tf 44.00 446.60 Td (1984  ) Tj ET
+BT /F3 7 Tf 44.00 438.00 Td (1985      const duplicatePassed = currentRows.some\(\(row\) =>) Tj ET
+BT /F3 7 Tf 44.00 429.40 Td (1986        row.studentId === input.studentId) Tj ET
+BT /F3 7 Tf 44.00 420.80 Td (1987        && row.courseCode === input.courseCode) Tj ET
+BT /F3 7 Tf 44.00 412.20 Td (1988        && row.status === 'passed') Tj ET
+BT /F3 7 Tf 44.00 403.60 Td (1989        && row.id !== input.id) Tj ET
+BT /F3 7 Tf 44.00 395.00 Td (1990      \);) Tj ET
+BT /F3 7 Tf 44.00 386.40 Td (1991      if \(input.status === 'passed' && duplicatePassed && input.attemptNo <= 1\) {) Tj ET
+BT /F3 7 Tf 44.00 377.80 Td (1992        return 'This course was already passed. Use attempt number 2 or higher for an intentional retake.';) Tj ET
+BT /F3 7 Tf 44.00 369.20 Td (1993      }) Tj ET
+BT /F3 7 Tf 44.00 360.60 Td (1994  ) Tj ET
+BT /F3 7 Tf 44.00 352.00 Td (1995      return null;) Tj ET
+BT /F3 7 Tf 44.00 343.40 Td (1996    }, [state.courses]\);) Tj ET
+BT /F3 7 Tf 44.00 334.80 Td (1997  ) Tj ET
+BT /F3 7 Tf 44.00 326.20 Td (1998    const upsertTranscriptEntry = useCallback\(async \(input: TranscriptEntryInput\): Promise<PlannerActionResult> => {) Tj ET
+BT /F3 7 Tf 44.00 317.60 Td (1999      const normalizedStatus = getTranscriptStatusForGrade\(input.finalGrade, input.status\);) Tj ET
+BT /F3 7 Tf 44.00 309.00 Td (2000      const normalizedInput = { ...input, status: normalizedStatus } satisfies TranscriptEntryInput;) Tj ET
+BT /F3 7 Tf 44.00 300.40 Td (2001      const validationError = validateTranscriptInput\(normalizedInput, state.transcriptRows\);) Tj ET
+BT /F3 7 Tf 44.00 291.80 Td (2002      if \(validationError\) {) Tj ET
+BT /F3 7 Tf 44.00 283.20 Td (2003        return { success: false, error: validationError };) Tj ET
+BT /F3 7 Tf 44.00 274.60 Td (2004      }) Tj ET
+BT /F3 7 Tf 44.00 266.00 Td (2005  ) Tj ET
+BT /F3 7 Tf 44.00 257.40 Td (2006      const course = state.courses.find\(\(item\) => item.code === normalizedInput.courseCode\);) Tj ET
+BT /F3 7 Tf 44.00 248.80 Td (2007      if \(!course\) {) Tj ET
+BT /F3 7 Tf 44.00 240.20 Td (2008        return { success: false, error: 'Course was not found.' };) Tj ET
+BT /F3 7 Tf 44.00 231.60 Td (2009      }) Tj ET
+BT /F3 7 Tf 44.00 223.00 Td (2010  ) Tj ET
+BT /F3 7 Tf 44.00 214.40 Td (2011      let entryId = normalizedInput.id ?? createId\(\);) Tj ET
+BT /F3 7 Tf 44.00 205.80 Td (2012  ) Tj ET
+BT /F3 7 Tf 44.00 197.20 Td (2013      if \(hasSupabaseConfig\(\)\) {) Tj ET
+BT /F3 7 Tf 44.00 188.60 Td (2014        try {) Tj ET
+BT /F3 7 Tf 44.00 180.00 Td (2015          const result = await callAdminDataEndpoint<{ id?: string }>\('/api/admin-upsert-transcript-entry', {) Tj ET
+BT /F3 7 Tf 44.00 171.40 Td (2016            id: entryId,) Tj ET
+BT /F3 7 Tf 44.00 162.80 Td (2017            existingEntry: Boolean\(normalizedInput.id\),) Tj ET
+BT /F3 7 Tf 44.00 154.20 Td (2018            studentId: normalizedInput.studentId,) Tj ET
+BT /F3 7 Tf 44.00 145.60 Td (2019            termCode: normalizedInput.termCode,) Tj ET
+BT /F3 7 Tf 44.00 137.00 Td (2020            courseCode: normalizedInput.courseCode,) Tj ET
+BT /F3 7 Tf 44.00 128.40 Td (2021            finalGrade: normalizedInput.finalGrade,) Tj ET
+BT /F3 7 Tf 44.00 119.80 Td (2022            status: normalizedStatus,) Tj ET
+BT /F3 7 Tf 44.00 111.20 Td (2023            attemptNo: normalizedInput.attemptNo,) Tj ET
+BT /F3 7 Tf 44.00 102.60 Td (2024          }\);) Tj ET
+BT /F3 7 Tf 44.00 94.00 Td (2025          entryId = result?.id ?? entryId;) Tj ET
+BT /F3 7 Tf 44.00 85.40 Td (2026        } catch \(error\) {) Tj ET
+BT /F3 7 Tf 44.00 76.80 Td (2027          return {) Tj ET
+BT /F3 7 Tf 44.00 68.20 Td (2028            success: false,) Tj ET
+BT /F3 7 Tf 44.00 59.60 Td (2029            error: error instanceof Error ? error.message : 'Unable to save transcript entry.',) Tj ET
+BT /F3 7 Tf 44.00 51.00 Td (2030          };) Tj ET
+endstream
+endobj
+57 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 56 0 R >>
+endobj
+58 0 obj
+<< /Length 4164 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (2031        }) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (2032      }) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (2033  ) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (2034      const nextRow = {) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (2035        id: entryId,) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (2036        studentId: normalizedInput.studentId,) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (2037        termCode: normalizedInput.termCode,) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (2038        termLabel: formatTermLabel\(normalizedInput.termCode\),) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (2039        termType: /summer/i.test\(normalizedInput.termCode\) ? 'summer' : 'regular',) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (2040        courseCode: course.code,) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (2041        courseName: course.name,) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (2042        credits: course.credits,) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (2043        finalGrade: normalizedInput.finalGrade,) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (2044        status: normalizedStatus,) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (2045        attemptNo: normalizedInput.attemptNo,) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (2046      } satisfies StudentTranscriptRow;) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (2047  ) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (2048      setState\(\(current\) => syncDerivedTranscriptState\(current, [) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (2049        ...current.transcriptRows.filter\(\(row\) => row.id !== entryId\),) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (2050        nextRow,) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (2051      ]\)\);) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (2052  ) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (2053      return { success: true };) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (2054    }, [state.courses, state.transcriptRows, validateTranscriptInput]\);) Tj ET
+BT /F2 15 Tf 36.00 345.60 Td (16. Admin Transcript API: service-role write with admin guard) Tj ET
+BT /F3 8.8 Tf 36.00 326.60 Td (Source: api/admin-upsert-transcript-entry.ts:17-201) Tj ET
+BT /F1 9.5 Tf 48.00 314.60 Td (- Uses the Supabase service-role client only on the server.) Tj ET
+BT /F1 9.5 Tf 48.00 302.60 Td (- Verifies the bearer token belongs to an admin app user before updating or upserting) Tj ET
+BT /F1 9.5 Tf 48.00 290.60 Td (  student_transcript_entries.) Tj ET
+BT /F2 8.5 Tf 36.00 278.60 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 267.60 Td (  17  function getSupabaseAdminClient\(\) {) Tj ET
+BT /F3 7 Tf 44.00 259.00 Td (  18    const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;) Tj ET
+BT /F3 7 Tf 44.00 250.40 Td (  19    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;) Tj ET
+BT /F3 7 Tf 44.00 241.80 Td (  20  ) Tj ET
+BT /F3 7 Tf 44.00 233.20 Td (  21    if \(!supabaseUrl || !serviceRoleKey\) {) Tj ET
+BT /F3 7 Tf 44.00 224.60 Td (  22      throw new Error\('Supabase admin environment is not configured.'\);) Tj ET
+BT /F3 7 Tf 44.00 216.00 Td (  23    }) Tj ET
+BT /F3 7 Tf 44.00 207.40 Td (  24  ) Tj ET
+BT /F3 7 Tf 44.00 198.80 Td (  25    return createClient\(supabaseUrl, serviceRoleKey, {) Tj ET
+BT /F3 7 Tf 44.00 190.20 Td (  26      auth: {) Tj ET
+BT /F3 7 Tf 44.00 181.60 Td (  27        autoRefreshToken: false,) Tj ET
+BT /F3 7 Tf 44.00 173.00 Td (  28        persistSession: false,) Tj ET
+BT /F3 7 Tf 44.00 164.40 Td (  29      },) Tj ET
+BT /F3 7 Tf 44.00 155.80 Td (  30    }\);) Tj ET
+BT /F3 7 Tf 44.00 147.20 Td (  31  }) Tj ET
+BT /F3 7 Tf 44.00 138.60 Td (  32  ) Tj ET
+BT /F3 7 Tf 44.00 130.00 Td (  33  function getErrorMessage\(error: unknown, fallback: string\) {) Tj ET
+BT /F3 7 Tf 44.00 121.40 Td (  34    if \(error instanceof Error\) {) Tj ET
+BT /F3 7 Tf 44.00 112.80 Td (  35      return error.message;) Tj ET
+BT /F3 7 Tf 44.00 104.20 Td (  36    }) Tj ET
+BT /F3 7 Tf 44.00 95.60 Td (  37  ) Tj ET
+BT /F3 7 Tf 44.00 87.00 Td (  38    if \(error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'\) {) Tj ET
+BT /F3 7 Tf 44.00 78.40 Td (  39      return error.message;) Tj ET
+BT /F3 7 Tf 44.00 69.80 Td (  40    }) Tj ET
+BT /F3 7 Tf 44.00 61.20 Td (  41  ) Tj ET
+BT /F3 7 Tf 44.00 52.60 Td (  42    return fallback;) Tj ET
+endstream
+endobj
+59 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 58 0 R >>
+endobj
+60 0 obj
+<< /Length 4649 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  43  }) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  44  ) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  45  async function requireAdmin\(request: VercelRequest, supabase: ReturnType<typeof getSupabaseAdminClient>\) {) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  46    const token = String\(request.headers.authorization ?? ''\).replace\(/^Bearer\\s+/i, ''\).trim\(\);) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  47    if \(!token\) {) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  48      throw new Error\('Missing admin session token.'\);) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  49    }) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  50  ) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (  51    const { data: authData, error: authError } = await supabase.auth.getUser\(token\);) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  52    if \(authError || !authData.user\) {) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (  53      throw new Error\('Invalid admin session token.'\);) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (  54    }) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (  55  ) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (  56    const { data: adminRows, error: profileError } = await supabase) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (  57      .from\('app_users'\)) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (  58      .select\('id,role'\)) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (  59      .or\(`auth_user_id.eq.${authData.user.id},email.eq.${authData.user.email ?? ''}`\)) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (  60      .eq\('role', 'admin'\)) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (  61      .limit\(1\);) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (  62  ) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (  63    if \(profileError || !adminRows || adminRows.length === 0\) {) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (  64      throw new Error\('Only admins can perform this operation.'\);) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (  65    }) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (  66  }) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td (  67  ) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td (  68  function getStatusForGrade\(finalGrade: number | null\): TranscriptStatus {) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td (  69    if \(finalGrade === null\) {) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td (  70      return 'in_progress';) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td (  71    }) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td (  72  ) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td (  73    return finalGrade >= 50 ? 'passed' : 'failed';) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td (  74  }) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td (  75  ) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td (  76  function validatePayload\(payload: TranscriptEntryPayload\) {) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td (  77    const studentId = String\(payload.studentId ?? ''\).trim\(\);) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td (  78    const termCode = String\(payload.termCode ?? ''\).trim\(\);) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td (  79    const courseCode = String\(payload.courseCode ?? ''\).trim\(\);) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td (  80    const finalGrade = payload.finalGrade ?? null;) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td (  81    const attemptNo = Number\(payload.attemptNo\);) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td (  82    const status = payload.status ?? 'in_progress';) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td (  83  ) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td (  84    if \(!studentId || !termCode || !courseCode\) {) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td (  85      return { error: 'Missing transcript entry fields.' };) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td (  86    }) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td (  87  ) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td (  88    if \(!['passed', 'failed', 'withdrawn', 'in_progress'].includes\(status\)\) {) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td (  89      return { error: 'Invalid transcript status.' };) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td (  90    }) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td (  91  ) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td (  92    if \(finalGrade !== null && \(!Number.isInteger\(finalGrade\) || finalGrade < 35 || finalGrade > 99\)\) {) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td (  93      return { error: 'Marks must be whole numbers from 35 to 99, or blank.' };) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td (  94    }) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td (  95  ) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td (  96    if \(!Number.isInteger\(attemptNo\) || attemptNo < 1 || attemptNo > 10\) {) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td (  97      return { error: 'Attempt number must be a whole number from 1 to 10.' };) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td (  98    }) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td (  99  ) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 100    return {) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 101      input: {) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 102        id: payload.id ? String\(payload.id\) : undefined,) Tj ET
+endstream
+endobj
+61 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 60 0 R >>
+endobj
+62 0 obj
+<< /Length 4213 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 103        existingEntry: payload.existingEntry === true,) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 104        studentId,) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 105        termCode,) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 106        courseCode,) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 107        finalGrade,) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 108        status: getStatusForGrade\(finalGrade\),) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 109        attemptNo,) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 110      },) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 111    };) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 112  }) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 113  ) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 114  export default async function handler\(request: VercelRequest, response: VercelResponse\) {) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 115    if \(request.method !== 'POST'\) {) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 116      response.status\(405\).json\({ success: false, error: 'Method not allowed.' }\);) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 117      return;) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 118    }) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 119  ) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 120    try {) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 121      const payload = typeof request.body === 'string') Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 122        ? JSON.parse\(request.body\) as TranscriptEntryPayload) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 123        : request.body as TranscriptEntryPayload;) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 124      const validation = validatePayload\(payload\);) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 125      if \('error' in validation\) {) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 126        response.status\(400\).json\({ success: false, error: validation.error }\);) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 127        return;) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 128      }) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 129  ) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 130      const supabase = getSupabaseAdminClient\(\);) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 131      await requireAdmin\(request, supabase\);) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 132  ) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 133      const { input } = validation;) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 134      const { data: student, error: studentError } = await supabase) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 135        .from\('app_users'\)) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 136        .select\('id'\)) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 137        .eq\('university_id', input.studentId\)) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 138        .eq\('role', 'student'\)) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 139        .maybeSingle\(\);) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 140  ) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 141      if \(studentError\) {) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 142        throw studentError;) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 143      }) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 144  ) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 145      if \(!student\) {) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 146        response.status\(404\).json\({ success: false, error: 'Student account was not found.' }\);) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 147        return;) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 148      }) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 149  ) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 150      const { data: course, error: courseError } = await supabase) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 151        .from\('courses'\)) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 152        .select\('id'\)) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 153        .eq\('course_code', input.courseCode\)) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 154        .maybeSingle\(\);) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 155  ) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 156      if \(courseError\) {) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 157        throw courseError;) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 158      }) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 159  ) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 160      if \(!course\) {) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 161        response.status\(404\).json\({ success: false, error: 'Course was not found.' }\);) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 162        return;) Tj ET
+endstream
+endobj
+63 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 62 0 R >>
+endobj
+64 0 obj
+<< /Length 4482 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 163      }) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 164  ) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 165      const transcriptPayload = {) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 166        id: input.id,) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 167        student_id: student.id,) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 168        term_code: input.termCode,) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 169        course_id: course.id,) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 170        final_grade: input.finalGrade,) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 171        status: input.status,) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 172        attempt_no: input.attemptNo,) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 173      };) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 174  ) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 175      const query = input.existingEntry && input.id) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 176        ? supabase) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 177            .from\('student_transcript_entries'\)) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 178            .update\(transcriptPayload\)) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 179            .eq\('id', input.id\)) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 180            .select\('id'\)) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 181            .single\(\)) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 182        : supabase) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 183            .from\('student_transcript_entries'\)) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 184            .upsert\(transcriptPayload, { onConflict: 'student_id,course_id,term_code,attempt_no' }\)) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 185            .select\('id'\)) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 186            .single\(\);) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 187  ) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 188      const { data: savedEntry, error: saveError } = await query;) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 189      if \(saveError\) {) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 190        throw saveError;) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 191      }) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 192  ) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 193      response.status\(200\).json\({ success: true, id: savedEntry.id }\);) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 194    } catch \(error\) {) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 195      console.error\('Admin transcript upsert failed.', error\);) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 196      response.status\(500\).json\({) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 197        success: false,) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 198        error: getErrorMessage\(error, 'Unable to save transcript entry.'\),) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 199      }\);) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 200    }) Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 201  }) Tj ET
+BT /F2 15 Tf 36.00 216.60 Td (17. Transcript Table and Mark Normalization) Tj ET
+BT /F3 8.8 Tf 36.00 197.60 Td (Source: supabase/007_transcript_first_academic_schema.sql:29-66) Tj ET
+BT /F1 9.5 Tf 48.00 185.60 Td (- Defines the canonical transcript table: student, term, course, final_grade, status, attempt_no.) Tj ET
+BT /F1 9.5 Tf 48.00 173.60 Td (- The unique key prevents duplicate student/course/term/attempt records.) Tj ET
+BT /F2 8.5 Tf 36.00 161.60 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td (  29  create table if not exists public.student_transcript_entries \() Tj ET
+BT /F3 7 Tf 44.00 142.00 Td (  30    id uuid primary key default gen_random_uuid\(\),) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td (  31    student_id uuid not null references public.app_users\(id\) on delete cascade,) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td (  32    term_code text not null,) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td (  33    course_id uuid not null references public.courses\(id\) on delete restrict,) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td (  34    final_grade numeric\(5,2\),) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td (  35    status text not null check \(status in \('passed', 'failed', 'withdrawn', 'in_progress'\)\),) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td (  36    attempt_no integer not null default 1 check \(attempt_no >= 1\),) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td (  37    created_at timestamptz not null default timezone\('utc', now\(\)\),) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td (  38    updated_at timestamptz not null default timezone\('utc', now\(\)\),) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td (  39    unique \(student_id, course_id, term_code, attempt_no\)) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td (  40  \);) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td (  41  ) Tj ET
+endstream
+endobj
+65 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 64 0 R >>
+endobj
+66 0 obj
+<< /Length 4706 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td (  42  create index if not exists idx_academic_terms_year_name) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td (  43    on public.academic_terms\(academic_year, term_name\);) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td (  44  ) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td (  45  create index if not exists idx_student_transcript_entries_student_term) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td (  46    on public.student_transcript_entries\(student_id, term_code\);) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td (  47  ) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td (  48  create index if not exists idx_student_transcript_entries_student_course) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td (  49    on public.student_transcript_entries\(student_id, course_id, attempt_no desc, term_code desc\);) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td (  50  ) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td (  51  drop trigger if exists trg_student_transcript_entries_updated_at on public.student_transcript_entries;) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td (  52  create trigger trg_student_transcript_entries_updated_at) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td (  53  before update on public.student_transcript_entries) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td (  54  for each row execute function public.set_updated_at\(\);) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td (  55  ) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td (  56  create or replace function public.normalize_transcript_mark\(input_mark numeric\)) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td (  57  returns numeric) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td (  58  language sql) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td (  59  immutable) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td (  60  as $$) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td (  61    select case) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td (  62      when input_mark is null then null) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td (  63      when input_mark < 35 then 35) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td (  64      else input_mark) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td (  65    end) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td (  66  $$;) Tj ET
+BT /F2 15 Tf 36.00 337.00 Td (18. Transcript and GPA-derived Views) Tj ET
+BT /F3 8.8 Tf 36.00 318.00 Td (Source: supabase/007_transcript_first_academic_schema.sql:215-330) Tj ET
+BT /F1 9.5 Tf 48.00 306.00 Td (- student_transcript_v exposes joined transcript rows to the app.) Tj ET
+BT /F1 9.5 Tf 48.00 294.00 Td (- student_dashboard_summary_v derives GPA and completed credits from transcript marks for dashboards.) Tj ET
+BT /F2 8.5 Tf 36.00 282.00 Td (Code snippet) Tj ET
+BT /F3 7 Tf 44.00 271.00 Td ( 215  create or replace view public.student_transcript_v as) Tj ET
+BT /F3 7 Tf 44.00 262.40 Td ( 216  select) Tj ET
+BT /F3 7 Tf 44.00 253.80 Td ( 217    ste.id,) Tj ET
+BT /F3 7 Tf 44.00 245.20 Td ( 218    ste.student_id,) Tj ET
+BT /F3 7 Tf 44.00 236.60 Td ( 219    ste.term_code,) Tj ET
+BT /F3 7 Tf 44.00 228.00 Td ( 220    coalesce\(at.term_type, public.term_type_from_term_name\(public.term_name_from_code\(ste.term_code\)\)\) as term_type,) Tj ET
+BT /F3 7 Tf 44.00 219.40 Td ( 221    c.course_code,) Tj ET
+BT /F3 7 Tf 44.00 210.80 Td ( 222    c.title as course_name,) Tj ET
+BT /F3 7 Tf 44.00 202.20 Td ( 223    c.credits,) Tj ET
+BT /F3 7 Tf 44.00 193.60 Td ( 224    ste.final_grade,) Tj ET
+BT /F3 7 Tf 44.00 185.00 Td ( 225    ste.status,) Tj ET
+BT /F3 7 Tf 44.00 176.40 Td ( 226    ste.attempt_no) Tj ET
+BT /F3 7 Tf 44.00 167.80 Td ( 227  from public.student_transcript_entries ste) Tj ET
+BT /F3 7 Tf 44.00 159.20 Td ( 228  join public.courses c on c.id = ste.course_id) Tj ET
+BT /F3 7 Tf 44.00 150.60 Td ( 229  left join public.academic_terms at on at.term_code = ste.term_code;) Tj ET
+BT /F3 7 Tf 44.00 142.00 Td ( 230  ) Tj ET
+BT /F3 7 Tf 44.00 133.40 Td ( 231  create or replace view public.student_term_metrics_v as) Tj ET
+BT /F3 7 Tf 44.00 124.80 Td ( 232  select) Tj ET
+BT /F3 7 Tf 44.00 116.20 Td ( 233    ste.student_id,) Tj ET
+BT /F3 7 Tf 44.00 107.60 Td ( 234    ste.term_code,) Tj ET
+BT /F3 7 Tf 44.00 99.00 Td ( 235    coalesce\(at.term_type, public.term_type_from_term_name\(public.term_name_from_code\(ste.term_code\)\)\) as term_type,) Tj ET
+BT /F3 7 Tf 44.00 90.40 Td ( 236    count\(*\)::integer as course_count,) Tj ET
+BT /F3 7 Tf 44.00 81.80 Td ( 237    coalesce\(sum\(case when ste.status = 'passed' then c.credits else 0 end\), 0\)::integer as completed_credits,) Tj ET
+BT /F3 7 Tf 44.00 73.20 Td ( 238    round\(\(avg\(public.normalize_transcript_mark\(ste.final_grade\)\) * 4 / 100.0\)::numeric, 2\) as gpa) Tj ET
+BT /F3 7 Tf 44.00 64.60 Td ( 239  from public.student_transcript_entries ste) Tj ET
+BT /F3 7 Tf 44.00 56.00 Td ( 240  join public.courses c on c.id = ste.course_id) Tj ET
+BT /F3 7 Tf 44.00 47.40 Td ( 241  left join public.academic_terms at on at.term_code = ste.term_code) Tj ET
+endstream
+endobj
+67 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 66 0 R >>
+endobj
+68 0 obj
+<< /Length 4147 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 242  group by) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 243    ste.student_id,) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 244    ste.term_code,) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 245    coalesce\(at.term_type, public.term_type_from_term_name\(public.term_name_from_code\(ste.term_code\)\)\);) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 246  ) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 247  create or replace view public.student_dashboard_summary_v as) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 248  with transcript_marks as \() Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 249    select) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 250      ste.student_id,) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 251      round\(\(avg\(public.normalize_transcript_mark\(ste.final_grade\)\) * 4 / 100.0\)::numeric, 2\) as gpa) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 252    from public.student_transcript_entries ste) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 253    where ste.final_grade is not null) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 254    group by ste.student_id) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 255  \),) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 256  completed_credit_totals as \() Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 257    select) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 258      passed.student_id,) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 259      coalesce\(sum\(c.credits\), 0\)::integer as completed_credits) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 260    from \() Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 261      select distinct student_id, course_id) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 262      from public.student_transcript_entries) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 263      where status = 'passed') Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 264    \) passed) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 265    join public.courses c on c.id = passed.course_id) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 266    group by passed.student_id) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 267  \),) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 268  latest_draft as \() Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 269    select distinct on \(student_id\)) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 270      id,) Tj ET
+BT /F3 7 Tf 44.00 309.60 Td ( 271      student_id,) Tj ET
+BT /F3 7 Tf 44.00 301.00 Td ( 272      name,) Tj ET
+BT /F3 7 Tf 44.00 292.40 Td ( 273      term_code,) Tj ET
+BT /F3 7 Tf 44.00 283.80 Td ( 274      status,) Tj ET
+BT /F3 7 Tf 44.00 275.20 Td ( 275      saved_at) Tj ET
+BT /F3 7 Tf 44.00 266.60 Td ( 276    from public.schedule_drafts) Tj ET
+BT /F3 7 Tf 44.00 258.00 Td ( 277    order by student_id, saved_at desc) Tj ET
+BT /F3 7 Tf 44.00 249.40 Td ( 278  \),) Tj ET
+BT /F3 7 Tf 44.00 240.80 Td ( 279  latest_evaluation as \() Tj ET
+BT /F3 7 Tf 44.00 232.20 Td ( 280    select distinct on \(student_id\)) Tj ET
+BT /F3 7 Tf 44.00 223.60 Td ( 281      id,) Tj ET
+BT /F3 7 Tf 44.00 215.00 Td ( 282      schedule_id,) Tj ET
+BT /F3 7 Tf 44.00 206.40 Td ( 283      student_id,) Tj ET
+BT /F3 7 Tf 44.00 197.80 Td ( 284      total_score,) Tj ET
+BT /F3 7 Tf 44.00 189.20 Td ( 285      risk_label,) Tj ET
+BT /F3 7 Tf 44.00 180.60 Td ( 286      total_credits,) Tj ET
+BT /F3 7 Tf 44.00 172.00 Td ( 287      recommendations,) Tj ET
+BT /F3 7 Tf 44.00 163.40 Td ( 288      explanation,) Tj ET
+BT /F3 7 Tf 44.00 154.80 Td ( 289      evaluated_at) Tj ET
+BT /F3 7 Tf 44.00 146.20 Td ( 290    from public.schedule_evaluations) Tj ET
+BT /F3 7 Tf 44.00 137.60 Td ( 291    order by student_id, evaluated_at desc) Tj ET
+BT /F3 7 Tf 44.00 129.00 Td ( 292  \)) Tj ET
+BT /F3 7 Tf 44.00 120.40 Td ( 293  select) Tj ET
+BT /F3 7 Tf 44.00 111.80 Td ( 294    student_user.id as student_id,) Tj ET
+BT /F3 7 Tf 44.00 103.20 Td ( 295    student_user.university_id,) Tj ET
+BT /F3 7 Tf 44.00 94.60 Td ( 296    student_user.full_name as student_name,) Tj ET
+BT /F3 7 Tf 44.00 86.00 Td ( 297    coalesce\(transcript_marks.gpa, 0\) as gpa,) Tj ET
+BT /F3 7 Tf 44.00 77.40 Td ( 298    coalesce\(completed_credit_totals.completed_credits, 0\) as completed_credits,) Tj ET
+BT /F3 7 Tf 44.00 68.80 Td ( 299    sp.admission_year,) Tj ET
+BT /F3 7 Tf 44.00 60.20 Td ( 300    sp.admission_term,) Tj ET
+BT /F3 7 Tf 44.00 51.60 Td ( 301    d.name as department_name,) Tj ET
+endstream
+endobj
+69 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 68 0 R >>
+endobj
+70 0 obj
+<< /Length 2689 >>
+stream
+BT /F3 7 Tf 44.00 559.00 Td ( 302    advisor_user.id as advisor_id,) Tj ET
+BT /F3 7 Tf 44.00 550.40 Td ( 303    advisor_user.full_name as advisor_name,) Tj ET
+BT /F3 7 Tf 44.00 541.80 Td ( 304    latest_draft.id as latest_draft_id,) Tj ET
+BT /F3 7 Tf 44.00 533.20 Td ( 305    latest_draft.name as latest_draft_name,) Tj ET
+BT /F3 7 Tf 44.00 524.60 Td ( 306    latest_draft.term_code as latest_draft_term_code,) Tj ET
+BT /F3 7 Tf 44.00 516.00 Td ( 307    latest_draft.status as latest_draft_status,) Tj ET
+BT /F3 7 Tf 44.00 507.40 Td ( 308    latest_draft.saved_at as latest_draft_saved_at,) Tj ET
+BT /F3 7 Tf 44.00 498.80 Td ( 309    latest_evaluation.id as latest_evaluation_id,) Tj ET
+BT /F3 7 Tf 44.00 490.20 Td ( 310    latest_evaluation.total_score as latest_total_score,) Tj ET
+BT /F3 7 Tf 44.00 481.60 Td ( 311    latest_evaluation.risk_label as latest_risk_label,) Tj ET
+BT /F3 7 Tf 44.00 473.00 Td ( 312    latest_evaluation.total_credits as latest_total_credits,) Tj ET
+BT /F3 7 Tf 44.00 464.40 Td ( 313    latest_evaluation.recommendations as latest_recommendations,) Tj ET
+BT /F3 7 Tf 44.00 455.80 Td ( 314    latest_evaluation.explanation as latest_explanation,) Tj ET
+BT /F3 7 Tf 44.00 447.20 Td ( 315    latest_evaluation.evaluated_at as latest_evaluated_at) Tj ET
+BT /F3 7 Tf 44.00 438.60 Td ( 316  from public.student_profiles sp) Tj ET
+BT /F3 7 Tf 44.00 430.00 Td ( 317  join public.app_users student_user on student_user.id = sp.user_id) Tj ET
+BT /F3 7 Tf 44.00 421.40 Td ( 318  join public.departments d on d.id = sp.department_id) Tj ET
+BT /F3 7 Tf 44.00 412.80 Td ( 319  left join public.app_users advisor_user on advisor_user.id = sp.advisor_id) Tj ET
+BT /F3 7 Tf 44.00 404.20 Td ( 320  left join transcript_marks on transcript_marks.student_id = sp.user_id) Tj ET
+BT /F3 7 Tf 44.00 395.60 Td ( 321  left join completed_credit_totals on completed_credit_totals.student_id = sp.user_id) Tj ET
+BT /F3 7 Tf 44.00 387.00 Td ( 322  left join latest_draft on latest_draft.student_id = sp.user_id) Tj ET
+BT /F3 7 Tf 44.00 378.40 Td ( 323  left join latest_evaluation on latest_evaluation.student_id = sp.user_id;) Tj ET
+BT /F3 7 Tf 44.00 369.80 Td ( 324  ) Tj ET
+BT /F3 7 Tf 44.00 361.20 Td ( 325  create or replace view public.advisor_advisee_summary_v as) Tj ET
+BT /F3 7 Tf 44.00 352.60 Td ( 326  select) Tj ET
+BT /F3 7 Tf 44.00 344.00 Td ( 327    summary.*,) Tj ET
+BT /F3 7 Tf 44.00 335.40 Td ( 328    public.get_dashboard_risk_status\(summary.latest_total_score, summary.gpa\) as risk_status) Tj ET
+BT /F3 7 Tf 44.00 326.80 Td ( 329  from public.student_dashboard_summary_v summary) Tj ET
+BT /F3 7 Tf 44.00 318.20 Td ( 330  where summary.advisor_id is not null;) Tj ET
+endstream
+endobj
+71 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 70 0 R >>
+endobj
+xref
+0 72
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000339 00000 n 
+0000000409 00000 n 
+0000000484 00000 n 
+0000000552 00000 n 
+0000004873 00000 n 
+0000005019 00000 n 
+0000009761 00000 n 
+0000009907 00000 n 
+0000014201 00000 n 
+0000014349 00000 n 
+0000018612 00000 n 
+0000018760 00000 n 
+0000023331 00000 n 
+0000023479 00000 n 
+0000028182 00000 n 
+0000028330 00000 n 
+0000032632 00000 n 
+0000032780 00000 n 
+0000036892 00000 n 
+0000037040 00000 n 
+0000042065 00000 n 
+0000042213 00000 n 
+0000047125 00000 n 
+0000047273 00000 n 
+0000051569 00000 n 
+0000051717 00000 n 
+0000058243 00000 n 
+0000058391 00000 n 
+0000063442 00000 n 
+0000063590 00000 n 
+0000068079 00000 n 
+0000068227 00000 n 
+0000072581 00000 n 
+0000072729 00000 n 
+0000077767 00000 n 
+0000077915 00000 n 
+0000082615 00000 n 
+0000082763 00000 n 
+0000088740 00000 n 
+0000088888 00000 n 
+0000094100 00000 n 
+0000094248 00000 n 
+0000099477 00000 n 
+0000099625 00000 n 
+0000104600 00000 n 
+0000104748 00000 n 
+0000109695 00000 n 
+0000109843 00000 n 
+0000114065 00000 n 
+0000114213 00000 n 
+0000120342 00000 n 
+0000120490 00000 n 
+0000125903 00000 n 
+0000126051 00000 n 
+0000130961 00000 n 
+0000131109 00000 n 
+0000135325 00000 n 
+0000135473 00000 n 
+0000140174 00000 n 
+0000140322 00000 n 
+0000144587 00000 n 
+0000144735 00000 n 
+0000149269 00000 n 
+0000149417 00000 n 
+0000154175 00000 n 
+0000154323 00000 n 
+0000158522 00000 n 
+0000158670 00000 n 
+0000161411 00000 n 
+trailer
+<< /Size 72 /Root 1 0 R >>
+startxref
+161559
+%%EOF
