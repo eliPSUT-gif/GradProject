@@ -264,15 +264,15 @@ insert into public.historical_course_stats (
 select
   c.id,
   term.term_code,
-  round(greatest(52, least(95, 94 - (c.internet_difficulty * 0.34) + term.grade_shift))::numeric, 2),
-  round(greatest(44, least(98, 97 - (c.internet_difficulty * 0.44) + term.pass_shift))::numeric, 2),
+  round(greatest(48, least(95, 96 - (c.internet_difficulty * 0.50) + term.grade_shift))::numeric, 2),
+  round(greatest(38, least(98, 99 - (c.internet_difficulty * 0.62) + term.pass_shift))::numeric, 2),
   round(
     greatest(
       2,
       least(
-        34,
+        55,
         100
-        - greatest(44, least(98, 97 - (c.internet_difficulty * 0.44) + term.pass_shift))
+        - greatest(38, least(98, 99 - (c.internet_difficulty * 0.62) + term.pass_shift))
         - case when c.course_type = 'practical' then 7 else 9 end
       )
     )::numeric,

@@ -313,11 +313,11 @@ export function getStatusStyle(status: RiskStatus) { if (status === 'at-risk') r
 export function getStatusLabel(status: RiskStatus) { if (status === 'at-risk') return 'At Risk'; if (status === 'monitor') return 'Monitor'; return 'Good'; }
 
 function deriveMetricsFromInternetDifficulty(course: CourseBlueprint, termShift: number) {
-  const avgGrade = clamp(94 - course.internetDifficulty * 0.34 + termShift, 52, 95);
-  const passRate = clamp(97 - course.internetDifficulty * 0.44 + termShift, 44, 98);
+  const avgGrade = clamp(96 - course.internetDifficulty * 0.5 + termShift, 48, 95);
+  const passRate = clamp(99 - course.internetDifficulty * 0.62 + termShift, 38, 98);
   const withdrawalBase = Math.round(course.internetDifficulty / 12) + (course.type === 'project' ? 2 : 0);
   const enrollmentBase = course.type === 'theoretical' ? 120 : course.type === 'hybrid' ? 96 : 78;
-  const failRate = clamp(100 - passRate - (course.type === 'practical' ? 7 : 9), 2, 34);
+  const failRate = clamp(100 - passRate - (course.type === 'practical' ? 7 : 9), 2, 55);
   return { avgGrade: Math.round(avgGrade), passRate: Math.round(passRate), failRate: Math.round(failRate), enrollmentCount: enrollmentBase + termShift * 3, withdrawals: clamp(withdrawalBase + termShift, 0, 18) };
 }
 

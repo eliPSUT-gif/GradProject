@@ -24,6 +24,7 @@ Why:
 - `008_gpa_only_cleanup.sql`: GPA-only cleanup for transcript-derived 4.00-scale GPA
 - `009_transcript_entry_ids_for_admin_editing.sql`: exposes transcript entry IDs/course IDs for admin transcript editing
 - `010_transcript_view_id_alias.sql`: keeps transcript entry IDs available as both `id` and `entry_id`
+- `011_recalibrate_difficulty_rates.sql`: recalibrates generated historical rates so hard courses can cross the `Hard` threshold without changing the formula
 
 ## Import Order
 
@@ -39,6 +40,7 @@ Why:
 10. Run `supabase/008_gpa_only_cleanup.sql`.
 11. Run `supabase/009_transcript_entry_ids_for_admin_editing.sql`.
 12. Run `supabase/010_transcript_view_id_alias.sql`.
+13. Run `supabase/011_recalibrate_difficulty_rates.sql`.
 
 ## What To Send Me After Import
 
